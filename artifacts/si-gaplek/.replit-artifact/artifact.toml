@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "SI GAPLEK"
+version = "1.0.0"
+id = "artifacts/si-gaplek"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23602
+
+[services.development]
+run = "pnpm --filter @workspace/si-gaplek run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/si-gaplek", "run", "build" ]
+publicDir = "artifacts/si-gaplek/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23602"
+BASE_PATH = "/"
