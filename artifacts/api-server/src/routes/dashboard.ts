@@ -74,7 +74,7 @@ router.get("/dashboard/low-stock", requireAuth, async (_req, res): Promise<void>
 });
 
 router.get("/dashboard/stock-movement", requireAuth, async (_req, res): Promise<void> => {
-  const result = [];
+  const result: { date: string; stockIn: number; stockOut: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
