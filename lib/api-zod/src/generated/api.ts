@@ -331,6 +331,67 @@ export const DeleteWarehouseParams = zod.object({
 });
 
 /**
+ * @summary List projects
+ */
+export const ListProjectsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  code: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  address: zod.string().nullish(),
+  status: zod.string(),
+  description: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
+
+/**
+ * @summary Create project
+ */
+export const CreateProjectBody = zod.object({
+  name: zod.string(),
+  code: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  address: zod.string().nullish(),
+  status: zod.string().nullish(),
+  description: zod.string().nullish(),
+});
+
+/**
+ * @summary Update project
+ */
+export const UpdateProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateProjectBody = zod.object({
+  name: zod.string(),
+  code: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  address: zod.string().nullish(),
+  status: zod.string().nullish(),
+  description: zod.string().nullish(),
+});
+
+export const UpdateProjectResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  code: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  address: zod.string().nullish(),
+  status: zod.string(),
+  description: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete project
+ */
+export const DeleteProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary List locations
  */
 export const ListLocationsQueryParams = zod.object({
@@ -702,6 +763,7 @@ export const ListStockOutResponse = zod.array(ListStockOutResponseItem);
  */
 export const CreateStockOutBody = zod.object({
   departmentId: zod.number().nullish(),
+  projectId: zod.number().nullish(),
   requestedBy: zod.string().nullish(),
   notes: zod.string().nullish(),
   transactionDate: zod.string(),

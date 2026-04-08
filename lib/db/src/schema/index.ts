@@ -14,4 +14,8 @@ export * from "./opname";
 export * from "./audit-logs";
 export * from "./serial-numbers";
 export * from "./returns";
-
+export * from "./projects";
+export * from "./item-batches";
+export * from "./job-types";
+export * from "./borrowing";
+export * from "./entrusted-goods";

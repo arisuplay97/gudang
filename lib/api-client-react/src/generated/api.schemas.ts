@@ -346,6 +346,8 @@ export interface CreateStockOutBody {
   /** @nullable */
   departmentId?: number | null;
   /** @nullable */
+  projectId?: number | null;
+  /** @nullable */
   requestedBy?: string | null;
   /** @nullable */
   notes?: string | null;
@@ -573,6 +575,35 @@ export interface ImportResult {
   success: number;
   failed: number;
   errors: string[];
+}
+
+export interface Project {
+  id: number;
+  name: string;
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  address?: string | null;
+  status: string;
+  /** @nullable */
+  description?: string | null;
+  createdAt: string;
+}
+
+export interface CreateProjectBody {
+  name: string;
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  description?: string | null;
 }
 
 export type ListLocationsParams = {

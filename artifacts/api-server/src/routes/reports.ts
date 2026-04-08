@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db, itemsTable, categoriesTable, unitsTable, stockInTable, stockOutTable, mutationsTable, auditLogsTable, usersTable } from "@workspace/db";
+import { db, itemsTable, categoriesTable, unitsTable, stockInTable, stockOutTable, mutationsTable, auditLogsTable, usersTable, itemBatchesTable } from "@workspace/db";
 import { GetStockReportQueryParams, GetTransactionReportQueryParams, ListAuditLogsQueryParams } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 
@@ -96,22 +96,28 @@ router.get("/reports/transactions", requireAuth, async (req, res): Promise<void>
 router.get("/reports/inventory-value", requireAuth, async (_req, res): Promise<void> => {
   const items = await db
     .select({
+      id: itemsTable.id,
       categoryName: categoriesTable.name,
       currentStock: itemsTable.currentStock,
-      unitPrice: itemsTable.unitPrice,
     })
     .from(itemsTable)
     .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id));
 
+  const batches = await db.select().from(itemBatchesTable).where(sql`${itemBatchesTable.remainingQuantity} > 0`);
+
   const totalItems = items.length;
-  const totalValue = items.reduce((sum, i) => sum + i.currentStock * parseFloat(i.unitPrice), 0);
+  let totalValue = 0;
 
   const byCategory: Record<string, { itemCount: number; totalValue: number }> = {};
   for (const item of items) {
     const cat = item.categoryName ?? "Tanpa Kategori";
     if (!byCategory[cat]) byCategory[cat] = { itemCount: 0, totalValue: 0 };
     byCategory[cat].itemCount++;
-    byCategory[cat].totalValue += item.currentStock * parseFloat(item.unitPrice);
+
+    const itemBatches = batches.filter(b => b.itemId === item.id);
+    const itemValue = itemBatches.reduce((acc, b) => acc + (b.remainingQuantity * parseFloat(String(b.unitPrice))), 0);
+    byCategory[cat].totalValue += itemValue;
+    totalValue += itemValue;
   }
 
   res.json({

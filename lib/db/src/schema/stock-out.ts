@@ -5,10 +5,17 @@ import { departmentsTable } from "./departments";
 import { usersTable } from "./users";
 import { itemsTable } from "./items";
 import { locationsTable } from "./locations";
+import { projectsTable } from "./projects";
+import { itemBatchesTable } from "./item-batches";
+import { jobTypesTable } from "./job-types";
 
 // status: draft | pending | approved | released
 export const stockOutTable = pgTable("stock_out", {
   id: serial("id").primaryKey(),
+  bppNumber: text("bpp_number").unique(),
+  bppType: text("bpp_type"), // 'SR' | 'NON_SR'
+  jobTypeId: integer("job_type_id").references(() => jobTypesTable.id),
+  projectId: integer("project_id").references(() => projectsTable.id),
   referenceNo: text("reference_no").notNull().unique(),
   departmentId: integer("department_id").references(() => departmentsTable.id),
   requestedBy: text("requested_by"),
@@ -42,4 +49,15 @@ export const insertStockOutItemSchema = createInsertSchema(stockOutItemsTable).o
 export type InsertStockOut = z.infer<typeof insertStockOutSchema>;
 export type StockOut = typeof stockOutTable.$inferSelect;
 export type StockOutItem = typeof stockOutItemsTable.$inferSelect;
+
+export const bppBatchAllocationsTable = pgTable("bpp_batch_allocations", {
+  id: serial("id").primaryKey(),
+  stockOutItemId: integer("stock_out_item_id").notNull().references(() => stockOutItemsTable.id),
+  itemBatchId: integer("item_batch_id").notNull().references(() => itemBatchesTable.id),
+  allocatedQuantity: integer("allocated_quantity").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertBppBatchAllocationSchema = createInsertSchema(bppBatchAllocationsTable).omit({ id: true, createdAt: true });
+export type BppBatchAllocation = typeof bppBatchAllocationsTable.$inferSelect;
 

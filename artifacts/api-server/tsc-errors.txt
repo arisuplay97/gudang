@@ -1,0 +1,17 @@
+src/routes/borrowing.ts(3,59): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/borrowing.ts(35,23): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/entrusted.ts(3,69): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/entrusted.ts(34,23): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/job-types.ts(3,56): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/job-types.ts(32,23): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/job-types.ts(51,23): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/projects.ts(3,35): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/projects.ts(4,35): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/api-zod/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/api-zod/src/index.ts'.
+src/routes/projects.ts(32,23): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/projects.ts(51,23): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.

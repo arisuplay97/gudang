@@ -13,6 +13,10 @@ import opnameRouter from "./opname";
 import reportsRouter from "./reports";
 import dashboardRouter from "./dashboard";
 import returnsRouter from "./returns";
+import projectsRouter from "./projects";
+import jobTypesRouter from "./job-types";
+import borrowingRouter from "./borrowing";
+import entrustedRouter from "./entrusted";
 
 const router: IRouter = Router();
 
@@ -29,5 +33,9 @@ router.use(opnameRouter);
 router.use(reportsRouter);
 router.use(dashboardRouter);
 router.use(returnsRouter);
+router.use(projectsRouter);
+router.use(jobTypesRouter);
+router.use(borrowingRouter);
+router.use(entrustedRouter);
 
 export default router;

@@ -1,0 +1,6 @@
+src/routes/borrowing.ts(3,107): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/borrowing.ts(4,40): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/entrusted.ts(3,95): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/job-types.ts(3,56): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/projects.ts(3,35): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/db/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/db/src/index.ts'.
+src/routes/projects.ts(4,35): error TS6305: Output file 'D:/ari/gudang-main/gudang-main/lib/api-zod/dist/index.d.ts' has not been built from source file 'D:/ari/gudang-main/gudang-main/lib/api-zod/src/index.ts'.

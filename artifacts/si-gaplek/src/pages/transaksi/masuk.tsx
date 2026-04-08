@@ -5,8 +5,8 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { GlassModal } from "@/components/custom/glass-modal";
+import { AnimatedCard } from "@/components/custom/animated-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -137,31 +137,30 @@ export default function BarangMasukPage() {
         <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Transaksi Baru</Button>
       </div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Supplier</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+      <AnimatedCard className="p-0 border-none shadow-none bg-transparent">
+        <Table className="bg-card rounded-md border">
+          <TableHeader><TableRow><TableHead>No. Referensi (LPB)</TableHead><TableHead>Tanggal</TableHead><TableHead>Supplier</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
              !stockIns?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><PackagePlus className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada transaksi masuk</p></TableCell></TableRow> :
              stockIns.map(s => (
-              <TableRow key={s.id}>
+              <TableRow key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setViewId(s.id)}>
                 <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
                 <TableCell>{formatDate(s.createdAt)}</TableCell>
                 <TableCell>{s.supplierName ?? "-"}</TableCell>
                 <TableCell className="text-right">{s.itemCount ?? 0} item</TableCell>
-                <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
+                <TableCell><Badge variant={s.status === "finalized" ? "default" : "secondary"}>{s.status === "finalized" ? "Selesai" : "Draft"}</Badge></TableCell>
                 <TableCell className="text-right">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setViewId(s.id); }}><Eye className="w-4 h-4" /></Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </CardContent></Card>
+      </AnimatedCard>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Transaksi Barang Masuk</DialogTitle></DialogHeader>
+      <GlassModal open={dialogOpen} onOpenChange={setDialogOpen} title="Transaksi / Penerimaan Barang Masuk (LPB)" description="Isi form persetujuan penerimaan barang dan input qty yang akan dimasukkan ke stok"
+        footer={<><Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button><Button onClick={() => saveMutation.mutate()} disabled={details.length === 0 || saveMutation.isPending}>{saveMutation.isPending ? "Menyimpan..." : "Simpan Penerimaan"}</Button></>}>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>No. Referensi *</Label><Input value={form.referenceNumber} onChange={e => setForm(f => ({ ...f, referenceNumber: e.target.value }))} /></div>
@@ -215,35 +214,24 @@ export default function BarangMasukPage() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}>
-              {saveMutation.isPending ? "Menyimpan..." : "Simpan Transaksi"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </GlassModal>
 
-      <Dialog open={viewId !== null} onOpenChange={o => !o && setViewId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Detail Transaksi Masuk</DialogTitle></DialogHeader>
+      <GlassModal open={viewId !== null} onOpenChange={o => !o && setViewId(null)} title="Detail Laporan Penerimaan Barang (LPB)" footer={<Button onClick={() => setViewId(null)}>Tutup</Button>}>
           {viewData && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-muted-foreground">No. Referensi:</span><p className="font-mono font-medium">{viewData.stockIn.referenceNumber}</p></div>
-                <div><span className="text-muted-foreground">Tanggal:</span><p>{formatDate(viewData.stockIn.createdAt)}</p></div>
-                <div><span className="text-muted-foreground">Supplier:</span><p>{viewData.stockIn.supplierName ?? "-"}</p></div>
-                <div><span className="text-muted-foreground">Status:</span><Badge>{viewData.stockIn.status}</Badge></div>
+              <div className="grid grid-cols-2 gap-2 text-sm bg-muted/40 p-3 rounded-lg">
+                <div><span className="text-muted-foreground block text-xs">No. LPB:</span><p className="font-mono font-bold text-base text-primary">{viewData.stockIn.referenceNumber}</p></div>
+                <div><span className="text-muted-foreground block text-xs">Tanggal:</span><p className="font-medium">{formatDate(viewData.stockIn.createdAt)}</p></div>
+                <div><span className="text-muted-foreground block text-xs">Supplier:</span><p className="font-medium">{viewData.stockIn.supplierName ?? "-"}</p></div>
+                <div><span className="text-muted-foreground block text-xs">Status:</span><Badge variant={viewData.stockIn.status === "finalized" ? "default" : "secondary"}>{viewData.stockIn.status}</Badge></div>
               </div>
-              <Table>
-                <TableHeader><TableRow><TableHead>Barang</TableHead><TableHead className="text-right">Qty</TableHead></TableRow></TableHeader>
-                <TableBody>{viewData.details?.map((d, i) => <TableRow key={i}><TableCell>{(d as any).itemName ?? d.itemId}</TableCell><TableCell className="text-right">{d.quantity}</TableCell></TableRow>)}</TableBody>
+              <Table className="border rounded-md">
+                <TableHeader className="bg-muted"><TableRow><TableHead>Barang</TableHead><TableHead className="text-right">Qty</TableHead></TableRow></TableHeader>
+                <TableBody>{viewData.details?.map((d, i) => <TableRow key={i}><TableCell className="font-medium">{(d as any).itemName ?? d.itemId}</TableCell><TableCell className="text-right">{d.quantity}</TableCell></TableRow>)}</TableBody>
               </Table>
             </div>
           )}
-          <DialogFooter><Button onClick={() => setViewId(null)}>Tutup</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </GlassModal>
     </div>
   );
 }

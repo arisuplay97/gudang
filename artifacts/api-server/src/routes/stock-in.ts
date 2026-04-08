@@ -1,10 +1,11 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, stockInTable, stockInItemsTable, itemsTable, suppliersTable, usersTable, locationsTable, auditLogsTable } from "@workspace/db";
+import { db, stockInTable, stockInItemsTable, itemsTable, suppliersTable, usersTable, locationsTable, auditLogsTable, itemBatchesTable } from "@workspace/db";
 import { CreateStockInBody, ListStockInQueryParams, GetStockInParams, FinalizeStockInParams } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { generateRefNo } from "../lib/refgen";
+import { like, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -62,7 +63,21 @@ router.post("/stock-in", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateStockInBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const refNo = generateRefNo("BM");
+  const now = new Date();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const y = now.getFullYear();
+  const lastDoc = await db.select()
+    .from(stockInTable)
+    .where(like(stockInTable.referenceNo, `% - ${m}/${y}`))
+    .orderBy(desc(stockInTable.referenceNo))
+    .limit(1);
+
+  let nextNum = 1;
+  if (lastDoc.length > 0) {
+    const match = lastDoc[0].referenceNo.match(/LPB (\d+) - /);
+    if (match) nextNum = parseInt(match[1]) + 1;
+  }
+  const refNo = `LPB ${String(nextNum).padStart(4, "0")} - ${m}/${y}`;
   const [header] = await db.insert(stockInTable).values({
     referenceNo: refNo,
     supplierId: parsed.data.supplierId ?? null,
@@ -162,6 +177,15 @@ router.post("/stock-in/:id/finalize", requireAuth, async (req, res): Promise<voi
       await tx.update(itemsTable)
         .set({ currentStock: (current?.currentStock ?? 0) + item.quantity })
         .where(eq(itemsTable.id, item.itemId));
+
+      await tx.insert(itemBatchesTable).values({
+        itemId: item.itemId,
+        stockInId: header.id,
+        receivedDate: header.transactionDate instanceof Date ? header.transactionDate : new Date(header.transactionDate),
+        initialQuantity: item.quantity,
+        remainingQuantity: item.quantity,
+        unitPrice: String(item.unitPrice),
+      });
     }
     await tx.update(stockInTable).set({ status: "finalized" }).where(eq(stockInTable.id, header.id));
   });

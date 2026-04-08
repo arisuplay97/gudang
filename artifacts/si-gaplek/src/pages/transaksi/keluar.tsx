@@ -15,9 +15,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Eye, Trash2, PackageMinus, ScanBarcode } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface StockOut { id: number; referenceNumber: string; departmentId: number | null; notes: string | null; status: string; createdAt: string; departmentName?: string; itemCount?: number; }
+import { GlassModal } from "@/components/custom/glass-modal";
+import { AnimatedCard } from "@/components/custom/animated-card";
+
+interface StockOut { id: number; referenceNumber: string; bppNumber: string; bppType?: string; departmentId: number | null; notes: string | null; status: string; createdAt: string; departmentName?: string; projectName?: string; itemCount?: number; }
 interface Item { id: number; code: string; name: string; currentStock: number; unitName?: string; barcode?: string | null; }
 interface Department { id: number; name: string; code: string; }
+interface JobType { id: number; name: string; }
+interface Project { id: number; name: string; }
 interface DetailEntry { itemId: number; quantity: number; notes: string | null; _item?: Item; }
 
 export default function BarangKeluarPage() {
@@ -25,7 +30,7 @@ export default function BarangKeluarPage() {
   const [viewId, setViewId] = useState<number | null>(null);
   const [details, setDetails] = useState<DetailEntry[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
-  const [form, setForm] = useState({ referenceNumber: "", departmentId: "", notes: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ bppType: "NON_SR", jobTypeId: "", projectId: "", departmentId: "", notes: "", transactionDate: new Date().toISOString().split("T")[0] });
   const [detailForm, setDetailForm] = useState({ itemId: "", quantity: "1" });
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -33,25 +38,30 @@ export default function BarangKeluarPage() {
   const { data: stockOuts, isLoading } = useQuery({ queryKey: ["stock-out"], queryFn: () => apiFetch<StockOut[]>("/api/stock-out") });
   const { data: items } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[]>("/api/items") });
   const { data: departments } = useQuery({ queryKey: ["departments"], queryFn: () => apiFetch<Department[]>("/api/departments") });
+  const { data: jobTypes } = useQuery({ queryKey: ["job-types"], queryFn: () => apiFetch<JobType[]>("/api/job-types") });
+  const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: () => apiFetch<Project[]>("/api/projects") });
   const { data: viewData } = useQuery({ queryKey: ["stock-out", viewId], queryFn: () => apiFetch<{ stockOut: StockOut; details: DetailEntry[] }>(`/api/stock-out/${viewId}`), enabled: !!viewId });
 
   const saveMutation = useMutation({
     mutationFn: () => apiFetch("/api/stock-out", {
       method: "POST",
       body: JSON.stringify({
-        referenceNumber: form.referenceNumber,
+        bppType: form.bppType,
+        jobTypeId: form.jobTypeId ? parseInt(form.jobTypeId) : null,
+        projectId: form.projectId ? parseInt(form.projectId) : null,
         departmentId: form.departmentId ? parseInt(form.departmentId) : null,
         notes: form.notes || null,
-        details: details.map(d => ({ itemId: d.itemId, quantity: d.quantity, notes: d.notes })),
+        transactionDate: form.transactionDate,
+        items: details.map(d => ({ itemId: d.itemId, quantity: d.quantity, notes: d.notes })),
       }),
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["stock-out"] }); qc.invalidateQueries({ queryKey: ["items"] }); setDialogOpen(false); toast({ title: "Barang keluar disimpan" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["stock-out"] }); qc.invalidateQueries({ queryKey: ["items"] }); setDialogOpen(false); toast({ title: "BPP Berhasil dibuat" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const openCreate = () => {
     setDetails([]);
-    setForm({ referenceNumber: `BK-${Date.now().toString().slice(-6)}`, departmentId: "", notes: "", date: new Date().toISOString().split("T")[0] });
+    setForm({ bppType: "NON_SR", jobTypeId: "", projectId: "", departmentId: "", notes: "", transactionDate: new Date().toISOString().split("T")[0] });
     setDetailForm({ itemId: "", quantity: "1" });
     setDialogOpen(true);
   };
@@ -93,43 +103,58 @@ export default function BarangKeluarPage() {
         <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Transaksi Baru</Button>
       </div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Departemen</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+      <AnimatedCard className="p-0 border-none shadow-none bg-transparent">
+        <Table className="bg-card rounded-md border">
+          <TableHeader><TableRow><TableHead>No. BPP</TableHead><TableHead>Tanggal</TableHead><TableHead>Jenis BPP</TableHead><TableHead>Proyek</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
-            {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !stockOuts?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><PackageMinus className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada transaksi keluar</p></TableCell></TableRow> :
+            {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+             !stockOuts?.length ? <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><PackageMinus className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada transaksi BPP</p></TableCell></TableRow> :
              stockOuts.map(s => (
-              <TableRow key={s.id}>
-                <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
+              <TableRow key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setViewId(s.id)}>
+                <TableCell className="font-mono font-medium">{s.bppNumber}</TableCell>
                 <TableCell>{formatDate(s.createdAt)}</TableCell>
-                <TableCell>{s.departmentName ?? "-"}</TableCell>
+                <TableCell><Badge variant="outline">{s.bppType || "BPP"}</Badge></TableCell>
+                <TableCell>{s.projectName ?? "-"}</TableCell>
                 <TableCell className="text-right">{s.itemCount ?? 0} item</TableCell>
-                <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
-                <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button></TableCell>
+                <TableCell><Badge variant={s.status === "finalized" ? "default" : "secondary"}>{s.status === "finalized" ? "Selesai" : "Draft"}</Badge></TableCell>
+                <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setViewId(s.id); }}><Eye className="w-4 h-4" /></Button></TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </CardContent></Card>
+      </AnimatedCard>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Transaksi Barang Keluar</DialogTitle></DialogHeader>
+      <GlassModal open={dialogOpen} onOpenChange={setDialogOpen} title="Transaksi Bukti Permintaan Barang (BPP)" description="Buat dokumen pengajuan pengeluaran gudang"
+        footer={<><Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button><Button onClick={() => saveMutation.mutate()} disabled={details.length === 0 || saveMutation.isPending}>{saveMutation.isPending ? "Menyimpan..." : "Buat BPP"}</Button></>}>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label>No. Referensi *</Label><Input value={form.referenceNumber} onChange={e => setForm(f => ({ ...f, referenceNumber: e.target.value }))} /></div>
-              <div className="space-y-1.5"><Label>Tanggal</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Tipe BPP</Label>
+                <Select value={form.bppType} onValueChange={v => setForm(f => ({ ...f, bppType: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Pilih Jenis BPP" /></SelectTrigger>
+                  <SelectContent><SelectItem value="SR">BPP SR (Sambungan Rumah)</SelectItem><SelectItem value="NON_SR">BPP Non-SR</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Tanggal Transaksi</Label><Input type="date" value={form.transactionDate} onChange={e => setForm(f => ({ ...f, transactionDate: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1.5"><Label>Departemen Penerima</Label>
-              <Select value={form.departmentId} onValueChange={v => setForm(f => ({ ...f, departmentId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Pilih departemen" /></SelectTrigger>
-                <SelectContent>{departments?.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name} ({d.code})</SelectItem>)}</SelectContent>
-              </Select>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label>Proyek (Opsional)</Label>
+                <Select value={form.projectId} onValueChange={v => setForm(f => ({ ...f, projectId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Pilih proyek" /></SelectTrigger>
+                  <SelectContent>{projects?.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Jenis Pekerjaan</Label>
+                <Select value={form.jobTypeId} onValueChange={v => setForm(f => ({ ...f, jobTypeId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Pilih jenis pekerjaan" /></SelectTrigger>
+                  <SelectContent>{jobTypes?.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
+
             <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
 
-            <div className="border rounded-lg p-3 space-y-3">
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
               <p className="font-medium text-sm flex items-center gap-2"><ScanBarcode className="w-4 h-4" /> Scan Barcode / Tambah Barang</p>
               <Input value={barcodeInput} onChange={e => setBarcodeInput(e.target.value)} onKeyDown={handleBarcodeKey} placeholder="Scan barcode atau kode barang, tekan Enter..." className="font-mono" />
               <div className="flex gap-2">
@@ -159,33 +184,24 @@ export default function BarangKeluarPage() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}>{saveMutation.isPending ? "Menyimpan..." : "Simpan Transaksi"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </GlassModal>
 
-      <Dialog open={viewId !== null} onOpenChange={o => !o && setViewId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Detail Transaksi Keluar</DialogTitle></DialogHeader>
+      <GlassModal open={viewId !== null} onOpenChange={o => !o && setViewId(null)} title="Detail Transaksi BPP" footer={<Button onClick={() => setViewId(null)}>Tutup</Button>}>
           {viewData && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-muted-foreground">No. Referensi:</span><p className="font-mono font-medium">{viewData.stockOut.referenceNumber}</p></div>
-                <div><span className="text-muted-foreground">Tanggal:</span><p>{formatDate(viewData.stockOut.createdAt)}</p></div>
-                <div><span className="text-muted-foreground">Departemen:</span><p>{viewData.stockOut.departmentName ?? "-"}</p></div>
-                <div><span className="text-muted-foreground">Status:</span><Badge>{viewData.stockOut.status}</Badge></div>
+              <div className="grid grid-cols-2 gap-2 text-sm bg-muted/40 p-3 rounded-lg">
+                <div><span className="text-muted-foreground block text-xs">No. BPP:</span><p className="font-mono font-bold text-base text-primary">{viewData.stockOut.bppNumber}</p></div>
+                <div><span className="text-muted-foreground block text-xs">Tanggal:</span><p className="font-medium">{formatDate(viewData.stockOut.createdAt)}</p></div>
+                <div><span className="text-muted-foreground block text-xs">Proyek:</span><p className="font-medium">{viewData.stockOut.projectName ?? "-"}</p></div>
+                <div><span className="text-muted-foreground block text-xs">Status:</span><Badge variant={viewData.stockOut.status === "finalized" ? "default" : "secondary"}>{viewData.stockOut.status}</Badge></div>
               </div>
-              <Table>
-                <TableHeader><TableRow><TableHead>Barang</TableHead><TableHead className="text-right">Qty</TableHead></TableRow></TableHeader>
-                <TableBody>{viewData.details?.map((d, i) => <TableRow key={i}><TableCell>{(d as any).itemName ?? d.itemId}</TableCell><TableCell className="text-right">{d.quantity}</TableCell></TableRow>)}</TableBody>
+              <Table className="border rounded-md">
+                <TableHeader className="bg-muted"><TableRow><TableHead>Barang</TableHead><TableHead className="text-right">Qty</TableHead></TableRow></TableHeader>
+                <TableBody>{viewData.details?.map((d, i) => <TableRow key={i}><TableCell className="font-medium">{(d as any).itemName ?? d.itemId}</TableCell><TableCell className="text-right">{d.quantity}</TableCell></TableRow>)}</TableBody>
               </Table>
             </div>
           )}
-          <DialogFooter><Button onClick={() => setViewId(null)}>Tutup</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </GlassModal>
     </div>
   );
 }

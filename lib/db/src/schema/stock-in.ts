@@ -27,6 +27,8 @@ export const stockInItemsTable = pgTable("stock_in_items", {
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 15, scale: 2 }).notNull().default("0"),
   locationId: integer("location_id").references(() => locationsTable.id),
+  batchNumber: text("batch_number"),
+  expiryDate: timestamp("expiry_date", { withTimezone: true }),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

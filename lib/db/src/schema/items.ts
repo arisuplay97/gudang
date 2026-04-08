@@ -17,6 +17,10 @@ export const itemsTable = pgTable("items", {
   currentStock: integer("current_stock").notNull().default(0),
   unitPrice: numeric("unit_price", { precision: 15, scale: 2 }).notNull().default("0"),
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
+  photoUrl: text("photo_url"),
+  condition: text("condition").default("baik"),
+  trackBatch: boolean("track_batch").notNull().default(false),
+  trackExpiredDate: boolean("track_expired_date").notNull().default(false),
   // Lokasi rak spesifik
   shelfRow: text("shelf_row"),
   shelfColumn: text("shelf_column"),

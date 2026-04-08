@@ -43,7 +43,8 @@ tags:
     description: Audit logs
   - name: dashboard
     description: Dashboard summaries
-
+  - name: projects
+    description: Project and Customer connections (SR)
 paths:
   /healthz:
     get:
@@ -478,6 +479,76 @@ paths:
       operationId: deleteWarehouse
       tags: [warehouses]
       summary: Delete warehouse
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{id}:
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete project
       parameters:
         - name: id
           in: path
@@ -1894,6 +1965,8 @@ components:
       properties:
         departmentId:
           type: ["integer", "null"]
+        projectId:
+          type: ["integer", "null"]
         requestedBy:
           type: ["string", "null"]
         notes:
@@ -2420,3 +2493,46 @@ components:
         - success
         - failed
         - errors
+
+    Project:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: ["string", "null"]
+        customerName:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        status:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    CreateProjectBody:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        code:
+          type: ["string", "null"]
+        customerName:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
