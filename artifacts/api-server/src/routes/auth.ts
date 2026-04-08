@@ -79,6 +79,23 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
 
 router.get("/auth/seed-users", async (req, res): Promise<void> => {
   try {
+    // Force initialize connect-pg-simple session table synchronously
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL
+      ) WITH (OIDS=FALSE);
+    `);
+    
+    // Add primary key if it doesn't already exist (catching the error if it does)
+    try {
+      await db.execute(`ALTER TABLE "session" ADD CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE;`);
+      await db.execute(`CREATE INDEX "IDX_session_expire" ON "session" ("expire");`);
+    } catch {
+      // Primary key / index likely already exists, ignore
+    }
+
     const defaultPasswordHash = await hashPassword("password");
     const usersToSeed = [
       { username: "admin", fullName: "Administrator", role: "admin", passwordHash: defaultPasswordHash },
@@ -98,9 +115,9 @@ router.get("/auth/seed-users", async (req, res): Promise<void> => {
       processedCounts++;
     }
     
-    res.json({ message: `Sistem berhasil mereset dan membuat ulang ${processedCounts} kredensial dasar!` });
+    res.json({ message: `Sistem berhasil inisialisasi tabel sesi & mereset ${processedCounts} kredensial dasar!` });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
