@@ -6,12 +6,19 @@ import { usersTable } from "./users";
 import { itemsTable } from "./items";
 import { locationsTable } from "./locations";
 
+// status: draft | pending | approved | released
 export const stockOutTable = pgTable("stock_out", {
   id: serial("id").primaryKey(),
   referenceNo: text("reference_no").notNull().unique(),
   departmentId: integer("department_id").references(() => departmentsTable.id),
   requestedBy: text("requested_by"),
   status: text("status").notNull().default("draft"),
+  // Approval berjenjang
+  approvalStatus: text("approval_status").notNull().default("draft"), // draft | pending | approved | released
+  approvedBy: integer("approved_by").references(() => usersTable.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  // Foto bukti surat jalan
+  photoUrl: text("photo_url"),
   notes: text("notes"),
   createdBy: integer("created_by").references(() => usersTable.id),
   transactionDate: timestamp("transaction_date", { withTimezone: true }).notNull(),
@@ -35,3 +42,4 @@ export const insertStockOutItemSchema = createInsertSchema(stockOutItemsTable).o
 export type InsertStockOut = z.infer<typeof insertStockOutSchema>;
 export type StockOut = typeof stockOutTable.$inferSelect;
 export type StockOutItem = typeof stockOutItemsTable.$inferSelect;
+

@@ -38,6 +38,7 @@ import {
   FileSpreadsheet,
   ScrollText,
   ChevronRight,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/auth-context";
@@ -81,6 +82,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Mutasi Barang", href: "/transaksi/mutasi", icon: ArrowLeftRight, roles: ["admin", "gudang"] },
       { label: "Penyesuaian Stok", href: "/transaksi/penyesuaian", icon: ClipboardList, roles: ["admin", "gudang"] },
       { label: "Stock Opname", href: "/transaksi/opname", icon: ScanBarcode, roles: ["admin", "gudang"] },
+      { label: "Retur Barang", href: "/transaksi/retur", icon: RotateCcw, roles: ["admin", "gudang"] },
     ],
   },
   {

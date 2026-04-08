@@ -12,3 +12,6 @@ export * from "./mutations";
 export * from "./adjustments";
 export * from "./opname";
 export * from "./audit-logs";
+export * from "./serial-numbers";
+export * from "./returns";
+

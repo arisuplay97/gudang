@@ -18,6 +18,7 @@ import BarangKeluarPage from "@/pages/transaksi/keluar";
 import MutasiPage from "@/pages/transaksi/mutasi";
 import PenyesuaianPage from "@/pages/transaksi/penyesuaian";
 import OpnamePage from "@/pages/transaksi/opname";
+import ReturPage from "@/pages/transaksi/retur";
 import LaporanStokPage from "@/pages/laporan/stok";
 import LaporanTransaksiPage from "@/pages/laporan/transaksi";
 import LaporanNilaiPage from "@/pages/laporan/nilai";
@@ -71,6 +72,7 @@ function AppRouter() {
         <Route path="/transaksi/mutasi" component={MutasiPage} />
         <Route path="/transaksi/penyesuaian" component={PenyesuaianPage} />
         <Route path="/transaksi/opname" component={OpnamePage} />
+        <Route path="/transaksi/retur" component={ReturPage} />
         <Route path="/laporan/stok" component={LaporanStokPage} />
         <Route path="/laporan/transaksi" component={LaporanTransaksiPage} />
         <Route path="/laporan/nilai" component={LaporanNilaiPage} />

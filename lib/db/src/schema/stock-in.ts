@@ -11,6 +11,8 @@ export const stockInTable = pgTable("stock_in", {
   referenceNo: text("reference_no").notNull().unique(),
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
   status: text("status").notNull().default("draft"),
+  // Foto bukti LPB (Laporan Penerimaan Barang)
+  photoUrl: text("photo_url"),
   notes: text("notes"),
   createdBy: integer("created_by").references(() => usersTable.id),
   transactionDate: timestamp("transaction_date", { withTimezone: true }).notNull(),
@@ -34,3 +36,4 @@ export const insertStockInItemSchema = createInsertSchema(stockInItemsTable).omi
 export type InsertStockIn = z.infer<typeof insertStockInSchema>;
 export type StockIn = typeof stockInTable.$inferSelect;
 export type StockInItem = typeof stockInItemsTable.$inferSelect;
+
