@@ -57,4 +57,12 @@ app.use(
 
 app.use("/api", router);
 
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  logger.error(err);
+  const errorMessage = err.message || "Internal Server Error";
+  res.status(err.status || 500).json({ 
+    error: errorMessage + (err.code ? ` (Kode PG: ${err.code})` : ""),
+  });
+});
+
 export default app;
