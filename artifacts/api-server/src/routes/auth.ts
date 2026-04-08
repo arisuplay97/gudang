@@ -32,22 +32,30 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   req.session.userRole = user.role;
   req.session.username = user.username;
 
-  res.json({
-    user: {
-      id: user.id,
-      username: user.username,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-      isActive: user.isActive,
-      createdAt: user.createdAt.toISOString(),
-    },
-    message: "Login berhasil",
+  req.session.save((err) => {
+    if (err) {
+      console.error("Session save error:", err);
+      res.status(500).json({ error: "Failed to save session" });
+      return;
+    }
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt.toISOString(),
+      },
+      message: "Login berhasil",
+    });
   });
 });
 
 router.post("/auth/logout", (req, res): void => {
   req.session.destroy(() => {
+    res.clearCookie("connect.sid");
     res.json({ message: "Logout berhasil" });
   });
 });
