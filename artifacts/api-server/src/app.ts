@@ -11,6 +11,7 @@ import { pool } from "@workspace/db";
 const PgSession = connectPgSimple(session);
 
 const app = express() as any;
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
@@ -49,6 +50,7 @@ app.use(
       maxAge: 8 * 60 * 60 * 1000,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
     },
   }),
 );
