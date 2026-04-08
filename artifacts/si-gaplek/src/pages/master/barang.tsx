@@ -66,7 +66,8 @@ export default function BarangPage() {
         supplierId: form.supplierId ? parseInt(form.supplierId) : null,
         description: form.description || null,
         minimumStock: parseInt(form.minimumStock) || 0,
-        unitPrice: form.unitPrice || null,
+        currentStock: 0,
+        unitPrice: form.unitPrice ? parseFloat(form.unitPrice.replace(/\./g, "").replace(/,/g, ".")) : 0,
       };
       if (editing) {
         return apiFetch(`/api/items/${editing.id}`, { method: "PUT", body: JSON.stringify(body) });
