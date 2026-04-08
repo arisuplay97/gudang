@@ -10,8 +10,9 @@ export async function apiFetch<T = unknown>(
     ...options,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err?.message ?? "Terjadi kesalahan");
+    const err = await res.json().catch(() => ({ message: res.statusText || `HTTP Error ${res.status}` }));
+    const errorMessage = err?.error || err?.message || `Terjadi kesalahan (Kode: ${res.status})`;
+    throw new Error(errorMessage);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
