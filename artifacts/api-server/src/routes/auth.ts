@@ -69,4 +69,31 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+router.get("/auth/seed-users", async (req, res): Promise<void> => {
+  try {
+    const defaultPasswordHash = await hashPassword("password");
+    const usersToSeed = [
+      { username: "admin", fullName: "Administrator", role: "admin", passwordHash: defaultPasswordHash },
+      { username: "gudang1", fullName: "Staf Gudang", role: "gudang", passwordHash: defaultPasswordHash },
+      { username: "keuangan1", fullName: "Staf Keuangan", role: "keuangan", passwordHash: defaultPasswordHash },
+      { username: "pimpinan1", fullName: "Pimpinan/Manajer", role: "pimpinan", passwordHash: defaultPasswordHash },
+    ];
+    
+    let processedCounts = 0;
+    for (const u of usersToSeed) {
+      const existing = await db.select().from(usersTable).where(eq(usersTable.username, u.username));
+      if (existing.length === 0) {
+        await db.insert(usersTable).values(u);
+      } else {
+        await db.update(usersTable).set({ passwordHash: defaultPasswordHash }).where(eq(usersTable.username, u.username));
+      }
+      processedCounts++;
+    }
+    
+    res.json({ message: `Sistem berhasil mereset dan membuat ulang ${processedCounts} kredensial dasar!` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
