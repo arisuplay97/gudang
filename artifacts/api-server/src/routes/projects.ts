@@ -19,7 +19,8 @@ router.get("/projects", requireAuth, async (_req, res): Promise<void> => {
 });
 
 router.post("/projects", requireAuth, async (req, res): Promise<void> => {
-  const parsed = insertProjectSchema.partial().safeParse(req.body);
+  // Use non-partial schema for insert — 'name' is required
+  const parsed = insertProjectSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
