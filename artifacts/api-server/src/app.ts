@@ -41,7 +41,7 @@ app.use(
   session({
     store: new PgSession({
       pool,
-      createTableIfMissing: true,
+      createTableIfMissing: false,
     }),
     secret: process.env.SESSION_SECRET ?? "si-gaplek-secret",
     resave: false,
