@@ -1,0 +1,9 @@
+Scope: all 9 workspace projects
+Lockfile is up to date, resolution step is skipped
+Already up to date
+
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+. preinstall: 'sh' is not recognized as an internal or external command,
+. preinstall: operable program or batch file.
+. preinstall: Failed
+ΓÇëELIFECYCLEΓÇë Command failed with exit code 1.

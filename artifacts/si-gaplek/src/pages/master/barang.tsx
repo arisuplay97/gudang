@@ -13,7 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, ScanBarcode } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, ScanBarcode, Wand2 } from "lucide-react";
+import QRCode from "react-qr-code";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { useToast } from "@/hooks/use-toast";
 
 interface Item {
@@ -156,9 +158,17 @@ export default function BarangPage() {
                       <div>
                         <p className="font-medium">{item.name}</p>
                         {item.barcode && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <ScanBarcode className="w-3 h-3" /> {item.barcode}
-                          </p>
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 cursor-pointer hover:text-primary transition-colors">
+                                <ScanBarcode className="w-3 h-3" /> QR Tersedia
+                              </p>
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-auto p-4 flex flex-col items-center gap-2">
+                              <QRCode value={item.barcode} size={120} />
+                              <span className="text-xs text-muted-foreground font-mono">{item.barcode}</span>
+                            </HoverCardContent>
+                          </HoverCard>
                         )}
                       </div>
                     </TableCell>
@@ -200,8 +210,13 @@ export default function BarangPage() {
               <Input value={form.code} onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))} placeholder="ATK-001" />
             </div>
             <div className="space-y-1.5">
-              <Label>Barcode</Label>
-              <Input value={form.barcode} onChange={(e) => setForm(f => ({ ...f, barcode: e.target.value }))} placeholder="Scan atau ketik" />
+              <div className="flex justify-between">
+                <Label>QR Code</Label>
+                <button type="button" tabIndex={-1} className="text-xs text-primary flex items-center gap-1 hover:underline cursor-pointer" onClick={() => setForm(f => ({ ...f, barcode: `QR-${form.code || Math.floor(Math.random()*10000)}` }))}>
+                  <Wand2 className="w-3 h-3"/> Auto Generate
+                </button>
+              </div>
+              <Input value={form.barcode} onChange={(e) => setForm(f => ({ ...f, barcode: e.target.value }))} placeholder="Scan atau Generate" />
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Nama Barang *</Label>

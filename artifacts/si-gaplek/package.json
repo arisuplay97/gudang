@@ -59,6 +59,7 @@
     "lucide-react": "catalog:",
     "next-themes": "^0.4.6",
     "react": "catalog:",
+    "react-qr-code": "^2.0.15",
     "react-day-picker": "^9.11.1",
     "react-dom": "catalog:",
     "react-hook-form": "^7.55.0",
