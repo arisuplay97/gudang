@@ -1,0 +1,283 @@
+
+> @workspace/api-server@0.0.0 build D:\ari\gudang-main\gudang-main\artifacts\api-server
+> node ./build.mjs
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "LoginBody"
+
+    src/routes/auth.ts:5:9:
+      5 Γöé import { LoginBody } from "@workspace/api-zod";
+        Γò╡          ~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateUserBody"
+
+    src/routes/users.ts:5:9:
+      5 Γöé import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserP...
+        Γò╡          ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "UpdateUserBody"
+
+    src/routes/users.ts:5:25:
+      5 Γöé import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserP...
+        Γò╡                          ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateCategoryBody"
+
+    src/routes/masters.ts:6:2:
+      6 Γöé   CreateCategoryBody, UpdateCategoryBody, UpdateCategoryParams, Del...
+        Γò╡   ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateUnitBody"
+
+    src/routes/masters.ts:7:2:
+      7 Γöé   CreateUnitBody, UpdateUnitBody, UpdateUnitParams, DeleteUnitParams,
+        Γò╡   ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateSupplierBody"
+
+    src/routes/masters.ts:8:2:
+      8 Γöé   CreateSupplierBody, UpdateSupplierBody, UpdateSupplierParams, Del...
+        Γò╡   ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateWarehouseBody"
+
+    src/routes/masters.ts:9:2:
+      9 Γöé   CreateWarehouseBody, UpdateWarehouseBody, UpdateWarehouseParams, ...
+        Γò╡   ~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateLocationBody"
+
+    src/routes/masters.ts:10:28:
+      10 Γöé ...tLocationsQueryParams, CreateLocationBody, UpdateLocationBody, ...
+         Γò╡                           ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateDepartmentBody"
+
+    src/routes/masters.ts:11:2:
+      11 Γöé   CreateDepartmentBody, UpdateDepartmentBody, UpdateDepartmentPara...
+         Γò╡   ~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateItemBody"
+
+    src/routes/items.ts:9:24:
+      9 Γöé   ListItemsQueryParams, CreateItemBody, GetItemParams, UpdateItemPa...
+        Γò╡                         ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "UpdateItemBody"
+
+    src/routes/items.ts:9:73:
+      9 Γöé ...s, CreateItemBody, GetItemParams, UpdateItemParams, UpdateItemBody,
+        Γò╡                                                        ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateStockInBody"
+
+    src/routes/stock-in.ts:5:9:
+      5 Γöé import { CreateStockInBody, ListStockInQueryParams, GetStockInParam...
+        Γò╡          ~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "FinalizeStockOutParams"
+
+    src/routes/stock-out.ts:5:73:
+      5 Γöé ..., GetStockOutParams, FinalizeStockOutParams } from "@workspace/a...
+        Γò╡                         ~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateMutationBody"
+
+    src/routes/mutations.ts:5:9:
+      5 Γöé import { CreateMutationBody, ListMutationsQueryParams, FinalizeMuta...
+        Γò╡          ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "ListMutationsQueryParams"
+
+    src/routes/mutations.ts:5:29:
+      5 Γöé ...CreateMutationBody, ListMutationsQueryParams, FinalizeMutationPa...
+        Γò╡                        ~~~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "FinalizeMutationParams"
+
+    src/routes/mutations.ts:5:55:
+      5 Γöé ...utationsQueryParams, FinalizeMutationParams } from "@workspace/a...
+        Γò╡                         ~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateAdjustmentBody"
+
+    src/routes/adjustments.ts:5:9:
+      5 Γöé import { CreateAdjustmentBody, ApproveAdjustmentParams } from "@wor...
+        Γò╡          ~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "ApproveAdjustmentParams"
+
+    src/routes/adjustments.ts:5:31:
+      5 Γöé ...reateAdjustmentBody, ApproveAdjustmentParams } from "@workspace/...
+        Γò╡                         ~~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateOpnameBody"
+
+    src/routes/opname.ts:5:9:
+      5 Γöé import { CreateOpnameBody, GetOpnameParams, FinalizeOpnameParams } ...
+        Γò╡          ~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "GetOpnameParams"
+
+    src/routes/opname.ts:5:27:
+      5 Γöé import { CreateOpnameBody, GetOpnameParams, FinalizeOpnameParams } ...
+        Γò╡                            ~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "FinalizeOpnameParams"
+
+    src/routes/opname.ts:5:44:
+      5 Γöé ...ody, GetOpnameParams, FinalizeOpnameParams } from "@workspace/ap...
+        Γò╡                          ~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "LoginBody"
+
+    src/routes/auth.ts:5:9:
+      5 Γöé import { LoginBody } from "@workspace/api-zod";
+        Γò╡          ~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateUserBody"
+
+    src/routes/users.ts:5:9:
+      5 Γöé import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserP...
+        Γò╡          ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "UpdateUserBody"
+
+    src/routes/users.ts:5:25:
+      5 Γöé import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserP...
+        Γò╡                          ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateCategoryBody"
+
+    src/routes/masters.ts:6:2:
+      6 Γöé   CreateCategoryBody, UpdateCategoryBody, UpdateCategoryParams, Del...
+        Γò╡   ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateUnitBody"
+
+    src/routes/masters.ts:7:2:
+      7 Γöé   CreateUnitBody, UpdateUnitBody, UpdateUnitParams, DeleteUnitParams,
+        Γò╡   ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateSupplierBody"
+
+    src/routes/masters.ts:8:2:
+      8 Γöé   CreateSupplierBody, UpdateSupplierBody, UpdateSupplierParams, Del...
+        Γò╡   ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateWarehouseBody"
+
+    src/routes/masters.ts:9:2:
+      9 Γöé   CreateWarehouseBody, UpdateWarehouseBody, UpdateWarehouseParams, ...
+        Γò╡   ~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateLocationBody"
+
+    src/routes/masters.ts:10:28:
+      10 Γöé ...tLocationsQueryParams, CreateLocationBody, UpdateLocationBody, ...
+         Γò╡                           ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateDepartmentBody"
+
+    src/routes/masters.ts:11:2:
+      11 Γöé   CreateDepartmentBody, UpdateDepartmentBody, UpdateDepartmentPara...
+         Γò╡   ~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateItemBody"
+
+    src/routes/items.ts:9:24:
+      9 Γöé   ListItemsQueryParams, CreateItemBody, GetItemParams, UpdateItemPa...
+        Γò╡                         ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "UpdateItemBody"
+
+    src/routes/items.ts:9:73:
+      9 Γöé ...s, CreateItemBody, GetItemParams, UpdateItemParams, UpdateItemBody,
+        Γò╡                                                        ~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateStockInBody"
+
+    src/routes/stock-in.ts:5:9:
+      5 Γöé import { CreateStockInBody, ListStockInQueryParams, GetStockInParam...
+        Γò╡          ~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "FinalizeStockOutParams"
+
+    src/routes/stock-out.ts:5:73:
+      5 Γöé ..., GetStockOutParams, FinalizeStockOutParams } from "@workspace/a...
+        Γò╡                         ~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateMutationBody"
+
+    src/routes/mutations.ts:5:9:
+      5 Γöé import { CreateMutationBody, ListMutationsQueryParams, FinalizeMuta...
+        Γò╡          ~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "ListMutationsQueryParams"
+
+    src/routes/mutations.ts:5:29:
+      5 Γöé ...CreateMutationBody, ListMutationsQueryParams, FinalizeMutationPa...
+        Γò╡                        ~~~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "FinalizeMutationParams"
+
+    src/routes/mutations.ts:5:55:
+      5 Γöé ...utationsQueryParams, FinalizeMutationParams } from "@workspace/a...
+        Γò╡                         ~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateAdjustmentBody"
+
+    src/routes/adjustments.ts:5:9:
+      5 Γöé import { CreateAdjustmentBody, ApproveAdjustmentParams } from "@wor...
+        Γò╡          ~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "ApproveAdjustmentParams"
+
+    src/routes/adjustments.ts:5:31:
+      5 Γöé ...reateAdjustmentBody, ApproveAdjustmentParams } from "@workspace/...
+        Γò╡                         ~~~~~~~~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "CreateOpnameBody"
+
+    src/routes/opname.ts:5:9:
+      5 Γöé import { CreateOpnameBody, GetOpnameParams, FinalizeOpnameParams } ...
+        Γò╡          ~~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "GetOpnameParams"
+
+    src/routes/opname.ts:5:27:
+      5 Γöé import { CreateOpnameBody, GetOpnameParams, FinalizeOpnameParams } ...
+        Γò╡                            ~~~~~~~~~~~~~~~
+
+X [ERROR] No matching export in "../../lib/api-zod/src/index.ts" for import "FinalizeOpnameParams"
+
+    src/routes/opname.ts:5:44:
+      5 Γöé ...ody, GetOpnameParams, FinalizeOpnameParams } from "@workspace/ap...
+        Γò╡                          ~~~~~~~~~~~~~~~~~~~~
+
+42 errors
+
+  dist\pino-worker.mjs           153.4kb
+  dist\pino-file.mjs             142.1kb
+  dist\pino-pretty.mjs           114.6kb
+  dist\thread-stream-worker.mjs    7.3kb
+  dist\pino-worker.mjs.map       256.9kb
+  ...and 3 more output files...
+
+Done in 3762ms
+Error: Build failed with 42 errors:
+src/routes/adjustments.ts:5:9: ERROR: No matching export in "../../lib/api-zod/src/index.ts" for import "CreateAdjustmentBody"
+src/routes/adjustments.ts:5:9: ERROR: No matching export in "../../lib/api-zod/src/index.ts" for import "CreateAdjustmentBody"
+src/routes/adjustments.ts:5:31: ERROR: No matching export in "../../lib/api-zod/src/index.ts" for import "ApproveAdjustmentParams"
+src/routes/adjustments.ts:5:31: ERROR: No matching export in "../../lib/api-zod/src/index.ts" for import "ApproveAdjustmentParams"
+src/routes/auth.ts:5:9: ERROR: No matching export in "../../lib/api-zod/src/index.ts" for import "LoginBody"
+...
+    at failureErrorWithLog (D:\ari\gudang-main\gudang-main\node_modules\.pnpm\esbuild@0.27.3\node_modules\esbuild\lib\main.js:1467:15)
+    at D:\ari\gudang-main\gudang-main\node_modules\.pnpm\esbuild@0.27.3\node_modules\esbuild\lib\main.js:926:25
+    at D:\ari\gudang-main\gudang-main\node_modules\.pnpm\esbuild@0.27.3\node_modules\esbuild\lib\main.js:1345:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+  errors: [Getter/Setter],
+  warnings: [Getter/Setter]
+}
+D:\ari\gudang-main\gudang-main\artifacts\api-server:
+ΓÇëERR_PNPM_RECURSIVE_RUN_FIRST_FAILΓÇë @workspace/api-server@0.0.0 build: `node ./build.mjs`
+Exit status 1
