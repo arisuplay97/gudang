@@ -1,2 +1,47 @@
-export * from "./generated/api";
+// Export all type definitions (interfaces/types from generated types)
 export * from "./generated/types";
+
+// Re-export only the Zod validation schemas from api.ts that are NOT already in types/
+// We import and re-export specific query params and response schemas not in types
+export {
+  HealthCheckResponse,
+  LogoutResponse,
+  GetMeResponse,
+  ListUsersResponseItem, ListUsersResponse,
+  GetUserParams, GetUserResponse,
+  UpdateUserParams, UpdateUserResponse,
+  DeleteUserParams,
+  ListCategoriesResponseItem, ListCategoriesResponse,
+  UpdateCategoryParams, UpdateCategoryBody, UpdateCategoryResponse,
+  DeleteCategoryParams,
+  ListUnitsResponseItem, ListUnitsResponse,
+  UpdateUnitParams, UpdateUnitBody, UpdateUnitResponse,
+  DeleteUnitParams,
+  ListSuppliersResponseItem, ListSuppliersResponse,
+  UpdateSupplierParams, UpdateSupplierBody, UpdateSupplierResponse,
+  DeleteSupplierParams,
+  ListWarehousesResponseItem, ListWarehousesResponse,
+  UpdateWarehouseParams, UpdateWarehouseBody, UpdateWarehouseResponse,
+  DeleteWarehouseParams,
+  ListProjectsResponseItem, ListProjectsResponse,
+  UpdateProjectParams, UpdateProjectBody, UpdateProjectResponse,
+  DeleteProjectParams,
+  ListLocationsQueryParams, ListLocationsResponseItem, ListLocationsResponse,
+  UpdateLocationParams, UpdateLocationBody, UpdateLocationResponse,
+  DeleteLocationParams,
+  ListDepartmentsResponseItem, ListDepartmentsResponse,
+  UpdateDepartmentParams, UpdateDepartmentBody, UpdateDepartmentResponse,
+  DeleteDepartmentParams,
+  ListItemsQueryParams, ListItemsResponseItem, ListItemsResponse,
+  GetItemParams, GetItemResponse,
+  UpdateItemParams, UpdateItemResponse,
+  DeleteItemParams,
+  GetItemByBarcodeParams, GetItemByBarcodeResponse,
+  ListStockInQueryParams, ListStockInResponseItem, ListStockInResponse,
+  GetStockInParams, GetStockInResponse,
+  FinalizeStockInParams, FinalizeStockInResponse,
+  ListStockOutQueryParams, ListStockOutResponseItem, ListStockOutResponse,
+  GetStockOutParams, GetStockOutResponse,
+  GetStockReportQueryParams, GetTransactionReportQueryParams, ListAuditLogsQueryParams,
+} from "./generated/api";
+

@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, projectsTable } from "@workspace/db";
-import { CreateProjectBody } from "@workspace/api-zod";
+import { db, projectsTable, insertProjectSchema } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
+
 
 const router: IRouter = Router();
 
@@ -19,7 +19,7 @@ router.get("/projects", requireAuth, async (_req, res): Promise<void> => {
 });
 
 router.post("/projects", requireAuth, async (req, res): Promise<void> => {
-  const parsed = CreateProjectBody.safeParse(req.body);
+  const parsed = insertProjectSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -34,7 +34,7 @@ router.patch("/projects/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid ID" });
     return;
   }
-  const parsed = CreateProjectBody.safeParse(req.body);
+  const parsed = insertProjectSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
