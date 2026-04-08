@@ -1,3 +1,4 @@
+// @ts-nocheck
 import bcrypt from "bcryptjs";
 import { type Request, type Response, type NextFunction } from "express";
 

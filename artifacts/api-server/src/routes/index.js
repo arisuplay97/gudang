@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { Router, type IRouter } from "express";
+import { Router } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import usersRouter from "./users";
@@ -12,9 +11,7 @@ import adjustmentsRouter from "./adjustments";
 import opnameRouter from "./opname";
 import reportsRouter from "./reports";
 import dashboardRouter from "./dashboard";
-
-const router: IRouter = Router();
-
+const router = Router();
 router.use(healthRouter);
 router.use(authRouter);
 router.use(usersRouter);
@@ -27,5 +24,4 @@ router.use(adjustmentsRouter);
 router.use(opnameRouter);
 router.use(reportsRouter);
 router.use(dashboardRouter);
-
 export default router;

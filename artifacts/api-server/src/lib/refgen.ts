@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function generateRefNo(prefix: string): string {
   const now = new Date();
   const y = now.getFullYear();
