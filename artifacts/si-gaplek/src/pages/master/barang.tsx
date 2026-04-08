@@ -100,7 +100,8 @@ export default function BarangPage() {
       code: item.code, name: item.name, barcode: item.barcode ?? "",
       categoryId: item.categoryId?.toString() ?? "", unitId: item.unitId?.toString() ?? "",
       supplierId: item.supplierId?.toString() ?? "", description: item.description ?? "",
-      minimumStock: item.minimumStock.toString(), unitPrice: item.unitPrice ?? "",
+      minimumStock: item.minimumStock.toString(), 
+      unitPrice: item.unitPrice ? parseInt(item.unitPrice).toLocaleString("id-ID") : "",
     });
     setDialogOpen(true);
   };
@@ -233,7 +234,20 @@ export default function BarangPage() {
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Harga Satuan (Rp)</Label>
-              <Input type="number" min="0" value={form.unitPrice} onChange={(e) => setForm(f => ({ ...f, unitPrice: e.target.value }))} placeholder="0" />
+              <Input 
+                type="text" 
+                value={form.unitPrice} 
+                onChange={(e) => {
+                  const rawValue = e.target.value.replace(/\D/g, "");
+                  if (!rawValue) {
+                    setForm(f => ({ ...f, unitPrice: "" }));
+                  } else {
+                    const formatted = parseInt(rawValue, 10).toLocaleString("id-ID");
+                    setForm(f => ({ ...f, unitPrice: formatted }));
+                  }
+                }} 
+                placeholder="0" 
+              />
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Deskripsi</Label>

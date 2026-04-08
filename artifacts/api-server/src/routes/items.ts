@@ -148,7 +148,12 @@ router.post("/items", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateItemBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [row] = await db.insert(itemsTable).values({ ...parsed.data, unitPrice: String(parsed.data.unitPrice) }).returning();
+  const dataToInsert = { ...parsed.data };
+  if (!dataToInsert.barcode || dataToInsert.barcode.trim() === "") {
+    dataToInsert.barcode = null;
+  }
+
+  const [row] = await db.insert(itemsTable).values({ ...dataToInsert, unitPrice: String(dataToInsert.unitPrice) }).returning();
   const [full] = await joinedItems().where(eq(itemsTable.id, row.id));
 
   await db.insert(auditLogsTable).values({ entityType: "item", entityId: row.id, action: "create", description: `Barang ${row.name} ditambahkan`, userId: req.session.userId, username: req.session.username });
@@ -164,6 +169,7 @@ router.patch("/items/:id", requireAuth, async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const updateData: Record<string, unknown> = { ...parsed.data };
+  if (updateData.barcode === "") updateData.barcode = null;
   if (parsed.data.unitPrice != null) updateData.unitPrice = String(parsed.data.unitPrice);
 
   const [updated] = await db.update(itemsTable).set(updateData).where(eq(itemsTable.id, params.data.id)).returning();
