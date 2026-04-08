@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "pnpm run build",
+  "buildCommand": "pnpm run typecheck:libs && pnpm --filter @workspace/si-gaplek run typecheck && pnpm --filter @workspace/si-gaplek run build",
   "outputDirectory": "artifacts/si-gaplek/dist/public",
   "rewrites": [
     {
