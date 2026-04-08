@@ -96,7 +96,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-blue-300 text-xs mt-6">
-          &copy; {new Date().getFullYear()} Sistem Informasi Pemerintah
+          &copy; {new Date().getFullYear()} Tirta Ardhia Rinjani
         </p>
       </div>
     </div>
