@@ -29,7 +29,7 @@ export default function MutasiPage() {
   const { data: mutations, isLoading } = useQuery({ queryKey: ["mutations"], queryFn: () => apiFetch<Mutation[]>("/api/mutations") });
   const { data: items } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[]>("/api/items") });
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => apiFetch<Warehouse[]>("/api/warehouses") });
-  const { data: viewData } = useQuery({ queryKey: ["mutations", viewId], queryFn: () => apiFetch(`/api/mutations/${viewId}`), enabled: !!viewId });
+  const { data: viewData } = useQuery({ queryKey: ["mutations", viewId], queryFn: () => apiFetch<any>(`/api/mutations/${viewId}`), enabled: !!viewId });
 
   const saveMutation = useMutation({
     mutationFn: () => apiFetch("/api/mutations", {

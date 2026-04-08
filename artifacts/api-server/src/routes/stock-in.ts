@@ -7,7 +7,7 @@ import { generateRefNo } from "../lib/refgen";
 
 const router: IRouter = Router();
 
-function fmtStockIn(row: typeof stockInTable.$inferSelect, extras: { supplierName?: string | null; createdByName?: string | null; totalItems?: number }) {
+function fmtStockIn(row: any, extras: { supplierName?: string | null; createdByName?: string | null; totalItems?: number }) {
   return {
     id: row.id,
     referenceNo: row.referenceNo,
@@ -17,8 +17,8 @@ function fmtStockIn(row: typeof stockInTable.$inferSelect, extras: { supplierNam
     notes: row.notes,
     createdByName: extras.createdByName ?? null,
     totalItems: extras.totalItems ?? 0,
-    transactionDate: row.transactionDate.toISOString(),
-    createdAt: row.createdAt.toISOString(),
+    transactionDate: row.transactionDate instanceof Date ? row.transactionDate.toISOString() : new Date(row.transactionDate).toISOString(),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
   };
 }
 
@@ -124,7 +124,6 @@ router.get("/stock-in/:id", requireAuth, async (req, res): Promise<void> => {
       itemName: itemsTable.name,
       quantity: stockInItemsTable.quantity,
       unitPrice: stockInItemsTable.unitPrice,
-      unitName: null as null,
       locationId: stockInItemsTable.locationId,
       locationName: locationsTable.name,
       notes: stockInItemsTable.notes,
@@ -136,9 +135,9 @@ router.get("/stock-in/:id", requireAuth, async (req, res): Promise<void> => {
 
   res.json({
     ...header,
-    transactionDate: header.transactionDate.toISOString(),
-    createdAt: header.createdAt.toISOString(),
-    items: items.map(i => ({ ...i, unitPrice: parseFloat(i.unitPrice) })),
+    transactionDate: header.transactionDate instanceof Date ? header.transactionDate.toISOString() : new Date(header.transactionDate).toISOString(),
+    createdAt: header.createdAt instanceof Date ? header.createdAt.toISOString() : new Date(header.createdAt).toISOString(),
+    items: items.map(i => ({ ...i, unitName: null, unitPrice: parseFloat(String(i.unitPrice)) })),
   });
 });
 

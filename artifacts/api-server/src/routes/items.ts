@@ -76,7 +76,7 @@ router.get("/items", requireAuth, async (req, res): Promise<void> => {
       const s = qp.data.search.toLowerCase();
       filtered = filtered.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s) || (r.barcode && r.barcode.toLowerCase().includes(s)));
     }
-    if (qp.data.lowStock === "true" || qp.data.lowStock === true) {
+    if (qp.data.lowStock === true) {
       filtered = filtered.filter(r => r.currentStock <= r.minimumStock);
     }
   }

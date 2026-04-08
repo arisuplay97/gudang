@@ -32,7 +32,7 @@ export default function OpnamePage() {
   const { data: opnames, isLoading } = useQuery({ queryKey: ["opnames"], queryFn: () => apiFetch<Opname[]>("/api/opname") });
   const { data: items } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[]>("/api/items") });
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => apiFetch<Warehouse[]>("/api/warehouses") });
-  const { data: viewData } = useQuery({ queryKey: ["opname", viewId], queryFn: () => apiFetch(`/api/opname/${viewId}`), enabled: !!viewId });
+  const { data: viewData } = useQuery({ queryKey: ["opname", viewId], queryFn: () => apiFetch<any>(`/api/opname/${viewId}`), enabled: !!viewId });
 
   const saveMutation = useMutation({
     mutationFn: () => apiFetch("/api/opname", {

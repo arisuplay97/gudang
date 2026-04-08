@@ -7,7 +7,7 @@ import { generateRefNo } from "../lib/refgen";
 
 const router: IRouter = Router();
 
-function fmtOpname(row: typeof opnameTable.$inferSelect, extras: { warehouseName?: string | null; createdByName?: string | null }) {
+function fmtOpname(row: any, extras: { warehouseName?: string | null; createdByName?: string | null }) {
   return {
     id: row.id,
     referenceNo: row.referenceNo,
@@ -16,9 +16,9 @@ function fmtOpname(row: typeof opnameTable.$inferSelect, extras: { warehouseName
     status: row.status,
     notes: row.notes,
     createdByName: extras.createdByName ?? null,
-    startDate: row.startDate.toISOString(),
-    endDate: row.endDate?.toISOString() ?? null,
-    createdAt: row.createdAt.toISOString(),
+    startDate: row.startDate instanceof Date ? row.startDate.toISOString() : new Date(row.startDate).toISOString(),
+    endDate: row.endDate ? (row.endDate instanceof Date ? row.endDate.toISOString() : new Date(row.endDate).toISOString()) : null,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
   };
 }
 
