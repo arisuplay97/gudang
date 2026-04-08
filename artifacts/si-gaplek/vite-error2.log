@@ -1,0 +1,13 @@
+failed to load config from D:\ari\gudang-main\gudang-main\artifacts\si-gaplek\vite.config.local.ts
+error when starting dev server:
+Error: Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.
+    at Object.<anonymous> (D:\ari\gudang-main\gudang-main\node_modules\.pnpm\@tailwindcss+oxide@4.2.1\node_modules\@tailwindcss\oxide\index.js:559:11)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at loadCJSModuleWithModuleLoad (node:internal/modules/esm/translators:339:3)
+    at ModuleWrap.<anonymous> (node:internal/modules/esm/translators:242:7)
+    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)

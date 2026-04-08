@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "buildCommand": "pnpm run typecheck && pnpm --filter @workspace/si-gaplek run build && pnpm --filter @workspace/api-server run build",
+  "outputDirectory": "artifacts/si-gaplek/dist/public",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

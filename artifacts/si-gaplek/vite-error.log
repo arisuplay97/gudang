@@ -1,0 +1,15 @@
+failed to load config from D:\ari\gudang-main\gudang-main\artifacts\si-gaplek\vite.config.local.ts
+error when starting dev server:
+Error: Cannot find module '../lightningcss.win32-x64-msvc.node'
+Require stack:
+- D:\ari\gudang-main\gudang-main\node_modules\.pnpm\lightningcss@1.31.1\node_modules\lightningcss\node\index.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1421:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1059:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1064:22)
+    at Module._load (node:internal/modules/cjs/loader:1227:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.require (node:internal/modules/cjs/loader:1504:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (D:\ari\gudang-main\gudang-main\node_modules\.pnpm\lightningcss@1.31.1\node_modules\lightningcss\node\index.js:22:22)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)

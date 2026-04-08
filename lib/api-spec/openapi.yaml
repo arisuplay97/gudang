@@ -1,0 +1,2422 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: SI GAPLEK - Sistem Gudang dan Pengelolaan Logistik Kantor API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: categories
+    description: Item categories
+  - name: units
+    description: Units of measurement
+  - name: suppliers
+    description: Supplier management
+  - name: warehouses
+    description: Warehouse management
+  - name: locations
+    description: Warehouse locations
+  - name: departments
+    description: Department management
+  - name: items
+    description: Item/product management
+  - name: stock-in
+    description: Stock in transactions
+  - name: stock-out
+    description: Stock out transactions
+  - name: mutations
+    description: Stock mutations between locations
+  - name: adjustments
+    description: Stock adjustments
+  - name: opname
+    description: Stock opname
+  - name: reports
+    description: Reporting
+  - name: audit-logs
+    description: Audit logs
+  - name: dashboard
+    description: Dashboard summaries
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List categories
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /units:
+    get:
+      operationId: listUnits
+      tags: [units]
+      summary: List units
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Unit"
+    post:
+      operationId: createUnit
+      tags: [units]
+      summary: Create unit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUnitBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+
+  /units/{id}:
+    patch:
+      operationId: updateUnit
+      tags: [units]
+      summary: Update unit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUnitBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+    delete:
+      operationId: deleteUnit
+      tags: [units]
+      summary: Delete unit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [suppliers]
+      summary: List suppliers
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supplier"
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Create supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /suppliers/{id}:
+    patch:
+      operationId: updateSupplier
+      tags: [suppliers]
+      summary: Update supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    delete:
+      operationId: deleteSupplier
+      tags: [suppliers]
+      summary: Delete supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /warehouses:
+    get:
+      operationId: listWarehouses
+      tags: [warehouses]
+      summary: List warehouses
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Warehouse"
+    post:
+      operationId: createWarehouse
+      tags: [warehouses]
+      summary: Create warehouse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWarehouseBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warehouse"
+
+  /warehouses/{id}:
+    patch:
+      operationId: updateWarehouse
+      tags: [warehouses]
+      summary: Update warehouse
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWarehouseBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warehouse"
+    delete:
+      operationId: deleteWarehouse
+      tags: [warehouses]
+      summary: Delete warehouse
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /locations:
+    get:
+      operationId: listLocations
+      tags: [locations]
+      summary: List locations
+      parameters:
+        - name: warehouseId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Location"
+    post:
+      operationId: createLocation
+      tags: [locations]
+      summary: Create location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+
+  /locations/{id}:
+    patch:
+      operationId: updateLocation
+      tags: [locations]
+      summary: Update location
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+    delete:
+      operationId: deleteLocation
+      tags: [locations]
+      summary: Delete location
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /departments:
+    get:
+      operationId: listDepartments
+      tags: [departments]
+      summary: List departments
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Department"
+    post:
+      operationId: createDepartment
+      tags: [departments]
+      summary: Create department
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDepartmentBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+
+  /departments/{id}:
+    patch:
+      operationId: updateDepartment
+      tags: [departments]
+      summary: Update department
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDepartmentBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+    delete:
+      operationId: deleteDepartment
+      tags: [departments]
+      summary: Delete department
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /items:
+    get:
+      operationId: listItems
+      tags: [items]
+      summary: List items
+      parameters:
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: lowStock
+          in: query
+          required: false
+          schema:
+            type: ["boolean", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Item"
+    post:
+      operationId: createItem
+      tags: [items]
+      summary: Create item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItemBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+
+  /items/{id}:
+    get:
+      operationId: getItem
+      tags: [items]
+      summary: Get an item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateItem
+      tags: [items]
+      summary: Update item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateItemBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+    delete:
+      operationId: deleteItem
+      tags: [items]
+      summary: Delete item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /items/barcode/{barcode}:
+    get:
+      operationId: getItemByBarcode
+      tags: [items]
+      summary: Get item by barcode
+      parameters:
+        - name: barcode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stock-in:
+    get:
+      operationId: listStockIn
+      tags: [stock-in]
+      summary: List stock-in transactions
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockIn"
+    post:
+      operationId: createStockIn
+      tags: [stock-in]
+      summary: Create stock-in transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStockInBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockIn"
+
+  /stock-in/{id}:
+    get:
+      operationId: getStockIn
+      tags: [stock-in]
+      summary: Get a stock-in transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stock-in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockInDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stock-in/{id}/finalize:
+    post:
+      operationId: finalizeStockIn
+      tags: [stock-in]
+      summary: Finalize stock-in (updates stock)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockIn"
+        "400":
+          description: Already finalized or error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stock-out:
+    get:
+      operationId: listStockOut
+      tags: [stock-out]
+      summary: List stock-out transactions
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockOut"
+    post:
+      operationId: createStockOut
+      tags: [stock-out]
+      summary: Create stock-out transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStockOutBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockOut"
+
+  /stock-out/{id}:
+    get:
+      operationId: getStockOut
+      tags: [stock-out]
+      summary: Get a stock-out transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stock-out detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockOutDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stock-out/{id}/finalize:
+    post:
+      operationId: finalizeStockOut
+      tags: [stock-out]
+      summary: Finalize stock-out (decrements stock)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockOut"
+        "400":
+          description: Insufficient stock or already finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /mutations:
+    get:
+      operationId: listMutations
+      tags: [mutations]
+      summary: List stock mutations
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Mutation"
+    post:
+      operationId: createMutation
+      tags: [mutations]
+      summary: Create stock mutation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMutationBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mutation"
+
+  /mutations/{id}/finalize:
+    post:
+      operationId: finalizeMutation
+      tags: [mutations]
+      summary: Finalize mutation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mutation"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /adjustments:
+    get:
+      operationId: listAdjustments
+      tags: [adjustments]
+      summary: List stock adjustments
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Adjustment"
+    post:
+      operationId: createAdjustment
+      tags: [adjustments]
+      summary: Create stock adjustment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdjustmentBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Adjustment"
+
+  /adjustments/{id}/approve:
+    post:
+      operationId: approveAdjustment
+      tags: [adjustments]
+      summary: Approve stock adjustment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Adjustment"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /opname:
+    get:
+      operationId: listOpname
+      tags: [opname]
+      summary: List stock opname sessions
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Opname"
+    post:
+      operationId: createOpname
+      tags: [opname]
+      summary: Create stock opname session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOpnameBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Opname"
+
+  /opname/{id}:
+    get:
+      operationId: getOpname
+      tags: [opname]
+      summary: Get opname session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Opname
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpnameDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /opname/{id}/finalize:
+    post:
+      operationId: finalizeOpname
+      tags: [opname]
+      summary: Finalize opname session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Opname"
+
+  /reports/stock:
+    get:
+      operationId: getStockReport
+      tags: [reports]
+      summary: Stock report
+      parameters:
+        - name: warehouseId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Stock report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockReportItem"
+
+  /reports/transactions:
+    get:
+      operationId: getTransactionReport
+      tags: [reports]
+      summary: Transaction report
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Transaction report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TransactionReportItem"
+
+  /reports/inventory-value:
+    get:
+      operationId: getInventoryValueReport
+      tags: [reports]
+      summary: Inventory value report
+      responses:
+        "200":
+          description: Inventory value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryValueReport"
+
+  /audit-logs:
+    get:
+      operationId: listAuditLogs
+      tags: [audit-logs]
+      summary: List audit logs
+      parameters:
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLog"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Dashboard summary stats
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent-transactions:
+    get:
+      operationId: getDashboardRecentTransactions
+      tags: [dashboard]
+      summary: Recent transactions
+      responses:
+        "200":
+          description: Recent transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecentTransaction"
+
+  /dashboard/low-stock:
+    get:
+      operationId: getDashboardLowStock
+      tags: [dashboard]
+      summary: Low stock items
+      responses:
+        "200":
+          description: Low stock items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LowStockItem"
+
+  /dashboard/stock-movement:
+    get:
+      operationId: getDashboardStockMovement
+      tags: [dashboard]
+      summary: Stock movement chart data (last 7 days)
+      responses:
+        "200":
+          description: Stock movement
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockMovementDay"
+
+  /import/items:
+    post:
+      operationId: importItems
+      tags: [items]
+      summary: Import items from CSV/Excel data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportItemsBody"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    LoginBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        message:
+          type: string
+      required:
+        - user
+        - message
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: ["string", "null"]
+        role:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - username
+        - fullName
+        - role
+        - isActive
+        - createdAt
+
+    CreateUserBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: ["string", "null"]
+        role:
+          type: string
+        isActive:
+          type: boolean
+      required:
+        - username
+        - password
+        - fullName
+        - role
+
+    UpdateUserBody:
+      type: object
+      properties:
+        fullName:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        role:
+          type: ["string", "null"]
+        isActive:
+          type: ["boolean", "null"]
+        password:
+          type: ["string", "null"]
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - createdAt
+
+    CreateCategoryBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+      required:
+        - name
+
+    Unit:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        abbreviation:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - abbreviation
+        - createdAt
+
+    CreateUnitBody:
+      type: object
+      properties:
+        name:
+          type: string
+        abbreviation:
+          type: string
+      required:
+        - name
+        - abbreviation
+
+    Supplier:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        contact:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - createdAt
+
+    CreateSupplierBody:
+      type: object
+      properties:
+        name:
+          type: string
+        contact:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+      required:
+        - name
+
+    Warehouse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        address:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - code
+        - createdAt
+
+    CreateWarehouseBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        address:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+      required:
+        - name
+        - code
+
+    Location:
+      type: object
+      properties:
+        id:
+          type: integer
+        warehouseId:
+          type: integer
+        warehouseName:
+          type: ["string", "null"]
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - warehouseId
+        - name
+        - code
+        - createdAt
+
+    CreateLocationBody:
+      type: object
+      properties:
+        warehouseId:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+      required:
+        - warehouseId
+        - name
+        - code
+
+    Department:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - code
+        - createdAt
+
+    CreateDepartmentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+      required:
+        - name
+        - code
+
+    Item:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        barcode:
+          type: ["string", "null"]
+        categoryId:
+          type: ["integer", "null"]
+        categoryName:
+          type: ["string", "null"]
+        unitId:
+          type: ["integer", "null"]
+        unitName:
+          type: ["string", "null"]
+        unitAbbreviation:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        minimumStock:
+          type: integer
+        currentStock:
+          type: integer
+        unitPrice:
+          type: number
+        supplierId:
+          type: ["integer", "null"]
+        supplierName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - code
+        - name
+        - minimumStock
+        - currentStock
+        - unitPrice
+        - createdAt
+
+    CreateItemBody:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        barcode:
+          type: ["string", "null"]
+        categoryId:
+          type: ["integer", "null"]
+        unitId:
+          type: ["integer", "null"]
+        description:
+          type: ["string", "null"]
+        minimumStock:
+          type: integer
+        currentStock:
+          type: integer
+        unitPrice:
+          type: number
+        supplierId:
+          type: ["integer", "null"]
+      required:
+        - code
+        - name
+        - minimumStock
+        - currentStock
+        - unitPrice
+
+    UpdateItemBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        barcode:
+          type: ["string", "null"]
+        categoryId:
+          type: ["integer", "null"]
+        unitId:
+          type: ["integer", "null"]
+        description:
+          type: ["string", "null"]
+        minimumStock:
+          type: ["integer", "null"]
+        unitPrice:
+          type: ["number", "null"]
+        supplierId:
+          type: ["integer", "null"]
+
+    StockIn:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        supplierId:
+          type: ["integer", "null"]
+        supplierName:
+          type: ["string", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        totalItems:
+          type: integer
+        transactionDate:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - referenceNo
+        - status
+        - totalItems
+        - transactionDate
+        - createdAt
+
+    StockInDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        supplierId:
+          type: ["integer", "null"]
+        supplierName:
+          type: ["string", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        transactionDate:
+          type: string
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTransactionItem"
+      required:
+        - id
+        - referenceNo
+        - status
+        - transactionDate
+        - createdAt
+        - items
+
+    CreateStockInBody:
+      type: object
+      properties:
+        supplierId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+        transactionDate:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTransactionItemInput"
+      required:
+        - transactionDate
+        - items
+
+    StockOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        requestedBy:
+          type: ["string", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        totalItems:
+          type: integer
+        transactionDate:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - referenceNo
+        - status
+        - totalItems
+        - transactionDate
+        - createdAt
+
+    StockOutDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        requestedBy:
+          type: ["string", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        transactionDate:
+          type: string
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTransactionItem"
+      required:
+        - id
+        - referenceNo
+        - status
+        - transactionDate
+        - createdAt
+        - items
+
+    CreateStockOutBody:
+      type: object
+      properties:
+        departmentId:
+          type: ["integer", "null"]
+        requestedBy:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        transactionDate:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTransactionItemInput"
+      required:
+        - transactionDate
+        - items
+
+    StockTransactionItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        itemCode:
+          type: string
+        itemName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        unitName:
+          type: ["string", "null"]
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - id
+        - itemId
+        - itemCode
+        - itemName
+        - quantity
+        - unitPrice
+
+    StockTransactionItemInput:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        locationId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - itemId
+        - quantity
+        - unitPrice
+
+    Mutation:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        itemId:
+          type: integer
+        itemName:
+          type: string
+        itemCode:
+          type: string
+        fromLocationId:
+          type: ["integer", "null"]
+        fromLocationName:
+          type: ["string", "null"]
+        toLocationId:
+          type: ["integer", "null"]
+        toLocationName:
+          type: ["string", "null"]
+        quantity:
+          type: integer
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        transactionDate:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - referenceNo
+        - itemId
+        - itemName
+        - itemCode
+        - quantity
+        - status
+        - transactionDate
+        - createdAt
+
+    CreateMutationBody:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        fromLocationId:
+          type: ["integer", "null"]
+        toLocationId:
+          type: ["integer", "null"]
+        quantity:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        transactionDate:
+          type: string
+      required:
+        - itemId
+        - quantity
+        - transactionDate
+
+    Adjustment:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        itemId:
+          type: integer
+        itemName:
+          type: string
+        itemCode:
+          type: string
+        adjustmentType:
+          type: string
+        quantityBefore:
+          type: integer
+        quantityAdjusted:
+          type: integer
+        quantityAfter:
+          type: integer
+        reason:
+          type: string
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - referenceNo
+        - itemId
+        - itemName
+        - itemCode
+        - adjustmentType
+        - quantityBefore
+        - quantityAdjusted
+        - quantityAfter
+        - reason
+        - status
+        - createdAt
+
+    CreateAdjustmentBody:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        adjustmentType:
+          type: string
+        quantityAdjusted:
+          type: integer
+        reason:
+          type: string
+        notes:
+          type: ["string", "null"]
+      required:
+        - itemId
+        - adjustmentType
+        - quantityAdjusted
+        - reason
+
+    Opname:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        warehouseId:
+          type: ["integer", "null"]
+        warehouseName:
+          type: ["string", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        startDate:
+          type: string
+        endDate:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - referenceNo
+        - status
+        - startDate
+        - createdAt
+
+    OpnameDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        warehouseId:
+          type: ["integer", "null"]
+        warehouseName:
+          type: ["string", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        startDate:
+          type: string
+        endDate:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpnameItem"
+      required:
+        - id
+        - referenceNo
+        - status
+        - startDate
+        - createdAt
+        - items
+
+    OpnameItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        itemCode:
+          type: string
+        itemName:
+          type: string
+        systemQty:
+          type: integer
+        actualQty:
+          type: ["integer", "null"]
+        difference:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - id
+        - itemId
+        - itemCode
+        - itemName
+        - systemQty
+
+    CreateOpnameBody:
+      type: object
+      properties:
+        warehouseId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+        startDate:
+          type: string
+        itemIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - startDate
+        - itemIds
+
+    StockReportItem:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        itemCode:
+          type: string
+        itemName:
+          type: string
+        categoryName:
+          type: ["string", "null"]
+        unitName:
+          type: ["string", "null"]
+        currentStock:
+          type: integer
+        minimumStock:
+          type: integer
+        unitPrice:
+          type: number
+        totalValue:
+          type: number
+        status:
+          type: string
+      required:
+        - itemId
+        - itemCode
+        - itemName
+        - currentStock
+        - minimumStock
+        - unitPrice
+        - totalValue
+        - status
+
+    TransactionReportItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        totalItems:
+          type: integer
+        transactionDate:
+          type: string
+        createdByName:
+          type: ["string", "null"]
+      required:
+        - id
+        - referenceNo
+        - type
+        - status
+        - totalItems
+        - transactionDate
+
+    InventoryValueReport:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+        totalValue:
+          type: number
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryValue"
+      required:
+        - totalItems
+        - totalValue
+        - byCategory
+
+    CategoryValue:
+      type: object
+      properties:
+        categoryName:
+          type: string
+        itemCount:
+          type: integer
+        totalValue:
+          type: number
+      required:
+        - categoryName
+        - itemCount
+        - totalValue
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        entityType:
+          type: string
+        entityId:
+          type: ["integer", "null"]
+        action:
+          type: string
+        description:
+          type: string
+        userId:
+          type: ["integer", "null"]
+        userName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - entityType
+        - action
+        - description
+        - createdAt
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+        totalStockIn:
+          type: integer
+        totalStockOut:
+          type: integer
+        lowStockCount:
+          type: integer
+        pendingTransactions:
+          type: integer
+        inventoryValue:
+          type: number
+        todayStockIn:
+          type: integer
+        todayStockOut:
+          type: integer
+      required:
+        - totalItems
+        - totalStockIn
+        - totalStockOut
+        - lowStockCount
+        - pendingTransactions
+        - inventoryValue
+        - todayStockIn
+        - todayStockOut
+
+    RecentTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        referenceNo:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - referenceNo
+        - type
+        - status
+        - description
+        - createdAt
+
+    LowStockItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        currentStock:
+          type: integer
+        minimumStock:
+          type: integer
+        unitName:
+          type: ["string", "null"]
+        categoryName:
+          type: ["string", "null"]
+      required:
+        - id
+        - code
+        - name
+        - currentStock
+        - minimumStock
+
+    StockMovementDay:
+      type: object
+      properties:
+        date:
+          type: string
+        stockIn:
+          type: integer
+        stockOut:
+          type: integer
+      required:
+        - date
+        - stockIn
+        - stockOut
+
+    ImportItemsBody:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateItemBody"
+      required:
+        - items
+
+    ImportResult:
+      type: object
+      properties:
+        success:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+      required:
+        - success
+        - failed
+        - errors
