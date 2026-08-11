@@ -14,4 +14,18 @@ export * from "./opname";
 export * from "./audit-logs";
 export * from "./serial-numbers";
 export * from "./returns";
+export * from "./racks";
+export * from "./stock-balances";
+export * from "./stock-movements";
+export * from "./tool-loans";
+export * from "./consignments";
+// SI GAPLEK new tables
+export * from "./branches";
+export * from "./material-tracking";
+export * from "./material-receipts";
+export * from "./installation-allocations";
+export * from "./installation-evidence";
+export * from "./material-verifications";
+export * from "./material-tracking-events";
+export * from "./spi-findings";
 

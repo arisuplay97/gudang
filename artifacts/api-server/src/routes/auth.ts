@@ -31,6 +31,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   req.session.userId = user.id;
   req.session.userRole = user.role;
   req.session.username = user.username;
+  req.session.branchId = user.branchId;
 
   res.json({
     user: {
@@ -39,6 +40,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
+      branchId: user.branchId,
       isActive: user.isActive,
       createdAt: user.createdAt.toISOString(),
     },
@@ -73,12 +75,12 @@ router.get("/auth/seed-users", async (req, res): Promise<void> => {
   try {
     const defaultPasswordHash = await hashPassword("password");
     const usersToSeed = [
-      { username: "admin", fullName: "Administrator", role: "admin", passwordHash: defaultPasswordHash },
-      { username: "gudang1", fullName: "Staf Gudang", role: "gudang", passwordHash: defaultPasswordHash },
-      { username: "keuangan1", fullName: "Staf Keuangan", role: "keuangan", passwordHash: defaultPasswordHash },
-      { username: "pimpinan1", fullName: "Pimpinan/Manajer", role: "pimpinan", passwordHash: defaultPasswordHash },
+      { username: "admin", fullName: "Administrator Server", role: "ADMIN", passwordHash: defaultPasswordHash },
+      { username: "gudang", fullName: "Admin Gudang Pusat", role: "GUDANG", passwordHash: defaultPasswordHash },
+      { username: "cabang_utara", fullName: "Admin Cabang Utara", role: "CABANG", passwordHash: defaultPasswordHash }, // Note: branchId should be assigned manually later
+      { username: "spi", fullName: "Auditor SPI", role: "SPI", passwordHash: defaultPasswordHash },
     ];
-    
+
     let processedCounts = 0;
     for (const u of usersToSeed) {
       const existing = await db.select().from(usersTable).where(eq(usersTable.username, u.username));
@@ -89,7 +91,7 @@ router.get("/auth/seed-users", async (req, res): Promise<void> => {
       }
       processedCounts++;
     }
-    
+
     res.json({ message: `Sistem berhasil mereset dan membuat ulang ${processedCounts} kredensial dasar!` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

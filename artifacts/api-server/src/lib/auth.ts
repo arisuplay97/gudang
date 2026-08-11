@@ -5,8 +5,9 @@ import { type Request, type Response, type NextFunction } from "express";
 declare module "express-session" {
   interface SessionData {
     userId: number;
-    userRole: string;
+    userRole: string; // GUDANG | CABANG | SPI | ADMIN
     username: string;
+    branchId?: number | null;
   }
 }
 

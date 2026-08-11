@@ -1,23 +1,30 @@
-import { pgTable, text, serial, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, jsonb, uuid as pgUuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 
+/**
+ * audit_logs — immutable audit trail (Section 24).
+ * Application role must not UPDATE/DELETE audit events.
+ */
 export const auditLogsTable = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
-  entityType: text("entity_type").notNull(), // items | stock_in | stock_out | users | returns
+  uuid: pgUuid("uuid").notNull().unique().defaultRandom(),
+  entityType: text("entity_type").notNull(), // table_name
   entityId: integer("entity_id"),
-  action: text("action").notNull(),          // create | update | delete | approve | login | logout
+  recordUuid: text("record_uuid"), // UUID of the record being audited
+  action: text("action").notNull(),
   description: text("description").notNull(),
   userId: integer("user_id").references(() => usersTable.id),
-  username: text("username"),               // cache nama user saat log dibuat
+  username: text("username"),
   ipAddress: text("ip_address"),
-  oldValues: jsonb("old_values"),           // nilai sebelum perubahan
-  newValues: jsonb("new_values"),           // nilai sesudah perubahan
+  oldValues: jsonb("old_values"),
+  newValues: jsonb("new_values"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({ id: true, createdAt: true });
+export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({ id: true, uuid: true, createdAt: true });
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogsTable.$inferSelect;
+
 

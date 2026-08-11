@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { apiFetch } from "./api";
 
-export type Role = "admin" | "gudang" | "keuangan" | "pimpinan";
+export type Role = "ADMIN" | "GUDANG" | "CABANG" | "SPI";
 
 export interface CurrentUser {
   id: number;
@@ -9,8 +9,10 @@ export interface CurrentUser {
   fullName: string;
   email: string | null;
   role: Role;
+  branchId?: number | null;
   isActive: boolean;
 }
+
 
 interface AuthContextValue {
   user: CurrentUser | null;

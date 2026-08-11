@@ -9,6 +9,7 @@ import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 const PgSession = connectPgSimple(session);
 const app = express();
+app.set("trust proxy", 1);
 app.use(pinoHttp({
     logger,
     serializers: {
@@ -41,7 +42,15 @@ app.use(session({
         maxAge: 8 * 60 * 60 * 1000,
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
     },
 }));
 app.use("/api", router);
+app.use((err, req, res, next) => {
+    logger.error(err);
+    const errorMessage = err.message || "Internal Server Error";
+    res.status(err.status || 500).json({
+        error: errorMessage + (err.code ? ` (Kode PG: ${err.code})` : ""),
+    });
+});
 export default app;

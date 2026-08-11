@@ -564,6 +564,158 @@ paths:
         "204":
           description: Deleted
 
+  /racks:
+    get:
+      operationId: listRacks
+      tags: [racks]
+      summary: List racks
+      parameters:
+        - name: locationId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Rack"
+    post:
+      operationId: createRack
+      tags: [racks]
+      summary: Create rack
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRackBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rack"
+
+  /racks/{id}:
+    patch:
+      operationId: updateRack
+      tags: [racks]
+      summary: Update rack
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRackBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rack"
+    delete:
+      operationId: deleteRack
+      tags: [racks]
+      summary: Delete rack
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /racks:
+    get:
+      operationId: listRacks
+      tags: [racks]
+      summary: List racks
+      parameters:
+        - name: locationId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Rack"
+    post:
+      operationId: createRack
+      tags: [racks]
+      summary: Create rack
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRackBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rack"
+
+  /racks/{id}:
+    patch:
+      operationId: updateRack
+      tags: [racks]
+      summary: Update rack
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRackBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rack"
+    delete:
+      operationId: deleteRack
+      tags: [racks]
+      summary: Delete rack
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /departments:
     get:
       operationId: listDepartments
@@ -1613,6 +1765,46 @@ components:
         - warehouseId
         - name
         - code
+
+    CreateRackBody:
+      type: object
+      properties:
+        locationId:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+      required:
+        - locationId
+        - name
+        - code
+
+    Rack:
+      type: object
+      properties:
+        id:
+          type: integer
+        locationId:
+          type: integer
+        locationName:
+          type: ["string", "null"]
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - locationId
+        - name
+        - code
+        - createdAt
 
     Department:
       type: object

@@ -13,6 +13,11 @@ import opnameRouter from "./opname";
 import reportsRouter from "./reports";
 import dashboardRouter from "./dashboard";
 import returnsRouter from "./returns";
+// SI GAPLEK Routers
+import branchesRouter from "./branches";
+import trackingRouter from "./tracking";
+import branchOpsRouter from "./branch-ops";
+import spiRouter from "./spi";
 
 const router: IRouter = Router();
 
@@ -29,5 +34,11 @@ router.use(opnameRouter);
 router.use(reportsRouter);
 router.use(dashboardRouter);
 router.use(returnsRouter);
+// SI GAPLEK Routes
+router.use(branchesRouter);
+router.use(trackingRouter);
+router.use(branchOpsRouter);
+router.use(spiRouter);
 
 export default router;
+

@@ -3,7 +3,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import { LoginBody } from "@workspace/api-zod";
-import { comparePassword, requireAuth } from "../lib/auth";
+import { hashPassword, comparePassword, requireAuth } from "../lib/auth";
 const router = Router();
 router.post("/auth/login", async (req, res) => {
     const parsed = LoginBody.safeParse(req.body);
@@ -58,5 +58,31 @@ router.get("/auth/me", requireAuth, async (req, res) => {
         isActive: user.isActive,
         createdAt: user.createdAt.toISOString(),
     });
+});
+router.get("/auth/seed-users", async (req, res) => {
+    try {
+        const defaultPasswordHash = await hashPassword("password");
+        const usersToSeed = [
+            { username: "admin", fullName: "Administrator", role: "admin", passwordHash: defaultPasswordHash },
+            { username: "gudang1", fullName: "Staf Gudang", role: "gudang", passwordHash: defaultPasswordHash },
+            { username: "keuangan1", fullName: "Staf Keuangan", role: "keuangan", passwordHash: defaultPasswordHash },
+            { username: "pimpinan1", fullName: "Pimpinan/Manajer", role: "pimpinan", passwordHash: defaultPasswordHash },
+        ];
+        let processedCounts = 0;
+        for (const u of usersToSeed) {
+            const existing = await db.select().from(usersTable).where(eq(usersTable.username, u.username));
+            if (existing.length === 0) {
+                await db.insert(usersTable).values(u);
+            }
+            else {
+                await db.update(usersTable).set({ passwordHash: defaultPasswordHash }).where(eq(usersTable.username, u.username));
+            }
+            processedCounts++;
+        }
+        res.json({ message: `Sistem berhasil mereset dan membuat ulang ${processedCounts} kredensial dasar!` });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 export default router;
