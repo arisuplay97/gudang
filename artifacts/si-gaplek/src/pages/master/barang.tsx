@@ -66,10 +66,11 @@ export default function BarangPage() {
         supplierId: form.supplierId ? parseInt(form.supplierId) : null,
         description: form.description || null,
         minimumStock: parseInt(form.minimumStock) || 0,
-        unitPrice: form.unitPrice || null,
+        currentStock: 0, // Required by Zod schema
+        unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : 0, // Required as number
       };
       if (editing) {
-        return apiFetch(`/api/items/${editing.id}`, { method: "PUT", body: JSON.stringify(body) });
+        return apiFetch(`/api/items/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) });
       }
       return apiFetch("/api/items", { method: "POST", body: JSON.stringify(body) });
     },
@@ -209,21 +210,33 @@ export default function BarangPage() {
               <Label>Kategori</Label>
               <Select value={form.categoryId} onValueChange={(v) => setForm(f => ({ ...f, categoryId: v }))}>
                 <SelectTrigger><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
-                <SelectContent>{categories?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectContent className="z-[100]">
+                  {categories && categories.length > 0
+                    ? categories.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)
+                    : <SelectItem disabled value="empty">Belum ada kategori</SelectItem>}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Satuan</Label>
               <Select value={form.unitId} onValueChange={(v) => setForm(f => ({ ...f, unitId: v }))}>
                 <SelectTrigger><SelectValue placeholder="Pilih satuan" /></SelectTrigger>
-                <SelectContent>{units?.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>)}</SelectContent>
+                <SelectContent className="z-[100]">
+                  {units && units.length > 0
+                    ? units.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>)
+                    : <SelectItem disabled value="empty">Belum ada satuan</SelectItem>}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Supplier</Label>
               <Select value={form.supplierId} onValueChange={(v) => setForm(f => ({ ...f, supplierId: v }))}>
                 <SelectTrigger><SelectValue placeholder="Pilih supplier" /></SelectTrigger>
-                <SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
+                <SelectContent className="z-[100]">
+                  {suppliers && suppliers.length > 0
+                    ? suppliers.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)
+                    : <SelectItem disabled value="empty">Belum ada supplier</SelectItem>}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
