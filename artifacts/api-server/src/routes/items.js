@@ -146,7 +146,10 @@ router.post("/items", requireAuth, async (req, res) => {
         res.status(400).json({ error: parsed.error.message });
         return;
     }
-    const [row] = await db.insert(itemsTable).values({ ...parsed.data, unitPrice: String(parsed.data.unitPrice) }).returning();
+    const insertData = { ...parsed.data, unitPrice: String(parsed.data.unitPrice) };
+    if (insertData.barcode === "")
+        insertData.barcode = null;
+    const [row] = await db.insert(itemsTable).values(insertData).returning();
     const [full] = await joinedItems().where(eq(itemsTable.id, row.id));
     await db.insert(auditLogsTable).values({ entityType: "item", entityId: row.id, action: "create", description: `Barang ${row.name} ditambahkan`, userId: req.session.userId, username: req.session.username });
     res.status(201).json(fmtItem(full));
@@ -166,6 +169,8 @@ router.patch("/items/:id", requireAuth, async (req, res) => {
     const updateData = { ...parsed.data };
     if (parsed.data.unitPrice != null)
         updateData.unitPrice = String(parsed.data.unitPrice);
+    if (updateData.barcode === "")
+        updateData.barcode = null;
     const [updated] = await db.update(itemsTable).set(updateData).where(eq(itemsTable.id, params.data.id)).returning();
     if (!updated) {
         res.status(404).json({ error: "Barang tidak ditemukan" });
