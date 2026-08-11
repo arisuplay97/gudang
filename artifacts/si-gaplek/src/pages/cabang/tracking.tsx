@@ -31,8 +31,8 @@ export default function CabangTrackingPage() {
     const getSlaIndicator = (slaStatus: string) => {
         switch (slaStatus) {
             case "NORMAL": return <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50"><CheckCircle2 className="w-3 h-3 mr-1" /> Aman</Badge>;
-            case "WARNING": return <Badge variant="outline" className="text-yellow-600 border-yellow-300 bg-yellow-50"><Clock className="w-3 h-3 mr-1" /> < 48 Jam</Badge>;
-            case "KRITIS": return <Badge variant="destructive" className="bg-red-500"><ShieldAlert className="w-3 h-3 mr-1" /> < 24 Jam</Badge>;
+            case "WARNING": return <Badge variant="outline" className="text-yellow-600 border-yellow-300 bg-yellow-50"><Clock className="w-3 h-3 mr-1" /> &lt; 48 Jam</Badge>;
+            case "KRITIS": return <Badge variant="destructive" className="bg-red-500"><ShieldAlert className="w-3 h-3 mr-1" /> &lt; 24 Jam</Badge>;
             case "OVERDUE": return <Badge variant="destructive" className="bg-black text-white border-black"><ShieldAlert className="w-3 h-3 mr-1" /> SLA LEWAT</Badge>;
             default: return null;
         }
