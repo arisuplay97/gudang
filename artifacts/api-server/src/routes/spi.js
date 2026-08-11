@@ -1,0 +1,255 @@
+// @ts-nocheck
+/**
+ * SPI Verification & GIS API (Sections 14, 16, 17, 34, 35, 36)
+ */
+import { Router } from "express";
+import { eq, and, sql } from "drizzle-orm";
+import { db, materialTrackingTable, materialTrackingEventsTable, materialVerificationsTable, installationAllocationsTable, installationEvidenceTable, stockOutTable, stockOutItemsTable, itemsTable, branchesTable, } from "@workspace/db";
+import { requireAuth, requireRole } from "../lib/auth";
+const router = Router();
+// ─── SPI DASHBOARD DATA (Section 32) ───
+router.get("/spi/dashboard", requireAuth, requireRole("SPI", "ADMIN"), async (req, res) => {
+    const statusCounts = await db
+        .select({
+        status: materialTrackingTable.status,
+        count: sql `count(*)`,
+    })
+        .from(materialTrackingTable)
+        .groupBy(materialTrackingTable.status);
+    const statusMap = {};
+    statusCounts.forEach(r => { statusMap[r.status] = Number(r.count); });
+    // Overdue count (SLA passed, not verified)
+    const [overdueResult] = await db.select({
+        count: sql `count(*)`
+    }).from(materialTrackingTable)
+        .where(and(sql `${materialTrackingTable.slaDeadlineAt} < NOW()`, sql `${materialTrackingTable.status} NOT IN ('TERVERIFIKASI')`));
+    // Location mismatch count
+    const [mismatchResult] = await db.select({
+        count: sql `count(*)`
+    }).from(installationEvidenceTable)
+        .where(eq(installationEvidenceTable.locationMismatch, true));
+    // Partial installation count
+    const partialQuery = await db
+        .select({
+        trackingId: materialTrackingTable.id,
+        totalQty: stockOutItemsTable.quantity,
+        allocatedQty: sql `COALESCE((
+        SELECT SUM(ia.quantity) FROM installation_allocations ia WHERE ia.tracking_id = ${materialTrackingTable.id}
+      ), 0)`,
+    })
+        .from(materialTrackingTable)
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .where(eq(materialTrackingTable.status, "MENUNGGU_PEMASANGAN"));
+    const partialCount = partialQuery.filter(r => {
+        const allocated = Number(r.allocatedQty);
+        return allocated > 0 && allocated < r.totalQty;
+    }).length;
+    // Branch performance
+    const branchPerformance = await db
+        .select({
+        branchId: materialTrackingTable.branchId,
+        branchName: branchesTable.name,
+        total: sql `count(*)`,
+        verified: sql `count(*) FILTER (WHERE ${materialTrackingTable.status} = 'TERVERIFIKASI')`,
+        overdue: sql `count(*) FILTER (WHERE ${materialTrackingTable.slaDeadlineAt} < NOW() AND ${materialTrackingTable.status} NOT IN ('TERVERIFIKASI'))`,
+    })
+        .from(materialTrackingTable)
+        .leftJoin(branchesTable, eq(materialTrackingTable.branchId, branchesTable.id))
+        .groupBy(materialTrackingTable.branchId, branchesTable.name);
+    res.json({
+        cards: {
+            totalTracked: Object.values(statusMap).reduce((a, b) => a + b, 0),
+            menungguDiterima: statusMap["MENUNGGU_DITERIMA"] ?? 0,
+            diterimaCabang: statusMap["DITERIMA_CABANG"] ?? 0,
+            menungguPemasangan: statusMap["MENUNGGU_PEMASANGAN"] ?? 0,
+            terpasangSebagian: partialCount,
+            terpasang: statusMap["TERPASANG"] ?? 0,
+            menungguVerifikasi: statusMap["MENUNGGU_VERIFIKASI"] ?? 0,
+            terverifikasi: statusMap["TERVERIFIKASI"] ?? 0,
+            overdue: Number(overdueResult?.count ?? 0),
+            locationMismatch: Number(mismatchResult?.count ?? 0),
+        },
+        branchPerformance,
+    });
+});
+// ─── LIST PENDING VERIFICATIONS ───
+router.get("/spi/pending", requireAuth, requireRole("SPI", "ADMIN"), async (req, res) => {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const [{ count }] = await db.select({ count: sql `count(*)` })
+        .from(installationEvidenceTable)
+        .where(eq(installationEvidenceTable.status, "PENDING"));
+    const rows = await db
+        .select({
+        evidenceId: installationEvidenceTable.id,
+        evidenceUuid: installationEvidenceTable.uuid,
+        photoUrl: installationEvidenceTable.photoUrl,
+        latitude: installationEvidenceTable.latitude,
+        longitude: installationEvidenceTable.longitude,
+        gpsAccuracy: installationEvidenceTable.gpsAccuracy,
+        locationMismatch: installationEvidenceTable.locationMismatch,
+        locationDeviationMeters: installationEvidenceTable.locationDeviationMeters,
+        allocationQuantity: installationAllocationsTable.quantity,
+        plannedLatitude: installationAllocationsTable.plannedLatitude,
+        plannedLongitude: installationAllocationsTable.plannedLongitude,
+        trackingUuid: materialTrackingTable.uuid,
+        trackingStatus: materialTrackingTable.status,
+        branchName: branchesTable.name,
+        itemName: itemsTable.name,
+        itemCode: itemsTable.code,
+        referenceNo: stockOutTable.referenceNo,
+        createdAt: installationEvidenceTable.createdAt,
+    })
+        .from(installationEvidenceTable)
+        .innerJoin(installationAllocationsTable, eq(installationEvidenceTable.allocationId, installationAllocationsTable.id))
+        .innerJoin(materialTrackingTable, eq(installationEvidenceTable.trackingId, materialTrackingTable.id))
+        .innerJoin(branchesTable, eq(installationEvidenceTable.branchId, branchesTable.id))
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .where(eq(installationEvidenceTable.status, "PENDING"))
+        .orderBy(installationEvidenceTable.createdAt)
+        .limit(limit)
+        .offset(offset);
+    res.json({ data: rows, pagination: { page, limit, total: Number(count), totalPages: Math.ceil(Number(count) / limit) } });
+});
+// ─── VERIFY EVIDENCE (Section 34, 35) ───
+router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI"), async (req, res) => {
+    const { status, notes } = req.body; // TERVERIFIKASI | DITOLAK
+    if (!["TERVERIFIKASI", "DITOLAK"].includes(status)) {
+        res.status(400).json({ error: "Status harus TERVERIFIKASI atau DITOLAK" });
+        return;
+    }
+    if (status === "DITOLAK" && !notes) {
+        res.status(400).json({ error: "Alasan penolakan wajib diisi" });
+        return;
+    }
+    const [evidence] = await db.select().from(installationEvidenceTable)
+        .where(eq(installationEvidenceTable.uuid, req.params.evidenceUuid));
+    if (!evidence) {
+        res.status(404).json({ error: "Evidence tidak ditemukan" });
+        return;
+    }
+    if (evidence.status !== "PENDING") {
+        res.status(400).json({ error: "Evidence sudah diverifikasi/ditolak" });
+        return;
+    }
+    const [tracking] = await db.select().from(materialTrackingTable)
+        .where(eq(materialTrackingTable.id, evidence.trackingId));
+    if (!tracking) {
+        res.status(404).json({ error: "Tracking tidak ditemukan" });
+        return;
+    }
+    await db.transaction(async (tx) => {
+        // Update evidence status
+        await tx.update(installationEvidenceTable).set({
+            status,
+            rejectionReason: status === "DITOLAK" ? notes : null,
+        }).where(eq(installationEvidenceTable.id, evidence.id));
+        // Create verification record
+        const [verification] = await tx.insert(materialVerificationsTable).values({
+            trackingId: tracking.id,
+            evidenceId: evidence.id,
+            verifiedBy: req.session.userId,
+            status,
+            notes: notes ?? null,
+            // Snapshot of verified location (Section 35)
+            verifiedLatitude: status === "TERVERIFIKASI" ? evidence.latitude : null,
+            verifiedLongitude: status === "TERVERIFIKASI" ? evidence.longitude : null,
+        }).returning();
+        // Update tracking status
+        if (status === "TERVERIFIKASI") {
+            // Check if ALL allocations for this tracking are now verified
+            // For now, update tracking status
+            await tx.update(materialTrackingTable).set({
+                status: "TERVERIFIKASI",
+                verifiedAt: new Date(),
+                verifiedBy: req.session.userId,
+            }).where(eq(materialTrackingTable.id, tracking.id));
+            // Update allocation status
+            await tx.update(installationAllocationsTable).set({
+                status: "VERIFIED",
+            }).where(eq(installationAllocationsTable.id, evidence.allocationId));
+        }
+        else {
+            // DITOLAK — revert to MENUNGGU_PEMASANGAN
+            await tx.update(materialTrackingTable).set({
+                status: "MENUNGGU_PEMASANGAN",
+            }).where(eq(materialTrackingTable.id, tracking.id));
+            await tx.update(installationAllocationsTable).set({
+                status: "REJECTED",
+            }).where(eq(installationAllocationsTable.id, evidence.allocationId));
+        }
+        // Record event
+        await tx.insert(materialTrackingEventsTable).values({
+            trackingId: tracking.id,
+            eventType: status === "TERVERIFIKASI" ? "VERIFIED" : "REJECTED",
+            userId: req.session.userId,
+            metadata: {
+                evidenceId: evidence.id,
+                verificationId: verification.id,
+                notes,
+            },
+        });
+    });
+    res.json({ message: status === "TERVERIFIKASI" ? "Evidence terverifikasi" : "Evidence ditolak" });
+});
+// ─── GIS ENDPOINT — VERIFIED EVIDENCE ONLY (Section 16, 36) ───
+router.get("/gis/material-locations", requireAuth, async (req, res) => {
+    // Only return verified evidence locations (Section 16)
+    const locations = await db
+        .select({
+        evidenceId: installationEvidenceTable.id,
+        evidenceUuid: installationEvidenceTable.uuid,
+        latitude: installationEvidenceTable.latitude,
+        longitude: installationEvidenceTable.longitude,
+        gpsAccuracy: installationEvidenceTable.gpsAccuracy,
+        allocationQuantity: installationAllocationsTable.quantity,
+        itemName: itemsTable.name,
+        itemCode: itemsTable.code,
+        referenceNo: stockOutTable.referenceNo,
+        branchName: branchesTable.name,
+        verifiedAt: materialVerificationsTable.verifiedAt,
+        verifiedLatitude: materialVerificationsTable.verifiedLatitude,
+        verifiedLongitude: materialVerificationsTable.verifiedLongitude,
+        trackingStatus: materialTrackingTable.status,
+        installedAt: materialTrackingTable.installedAt,
+        slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
+        locationMismatch: installationEvidenceTable.locationMismatch,
+        locationDeviationMeters: installationEvidenceTable.locationDeviationMeters,
+    })
+        .from(installationEvidenceTable)
+        .innerJoin(installationAllocationsTable, eq(installationEvidenceTable.allocationId, installationAllocationsTable.id))
+        .innerJoin(materialTrackingTable, eq(installationEvidenceTable.trackingId, materialTrackingTable.id))
+        .innerJoin(branchesTable, eq(materialTrackingTable.branchId, branchesTable.id))
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .leftJoin(materialVerificationsTable, and(eq(materialVerificationsTable.evidenceId, installationEvidenceTable.id), eq(materialVerificationsTable.status, "TERVERIFIKASI")))
+        .where(eq(installationEvidenceTable.status, "TERVERIFIKASI"));
+    // Convert to GeoJSON FeatureCollection
+    const features = locations.map(loc => ({
+        type: "Feature",
+        geometry: {
+            type: "Point",
+            coordinates: [parseFloat(String(loc.longitude)), parseFloat(String(loc.latitude))],
+        },
+        properties: {
+            evidenceId: loc.evidenceId,
+            itemName: loc.itemName,
+            itemCode: loc.itemCode,
+            quantity: loc.allocationQuantity,
+            referenceNo: loc.referenceNo,
+            branchName: loc.branchName,
+            verifiedAt: loc.verifiedAt,
+            locationMismatch: loc.locationMismatch,
+            deviationMeters: loc.locationDeviationMeters,
+        },
+    }));
+    res.json({
+        type: "FeatureCollection",
+        features,
+    });
+});
+export default router;

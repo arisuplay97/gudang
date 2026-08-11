@@ -7,6 +7,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -38,6 +43,9 @@ import {
   FileSpreadsheet,
   ScrollText,
   ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -98,7 +106,17 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-function NavLink({ item, depth = 0, onNavigate }: { item: NavItem; depth?: number; onNavigate?: () => void }) {
+function NavLink({
+  item,
+  depth = 0,
+  collapsed = false,
+  onNavigate,
+}: {
+  item: NavItem;
+  depth?: number;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
@@ -110,6 +128,53 @@ function NavLink({ item, depth = 0, onNavigate }: { item: NavItem; depth?: numbe
     : item.children?.some((c) => c.href && location.startsWith(c.href));
 
   if (item.children) {
+    if (collapsed && depth === 0) {
+      // When collapsed, show a dropdown menu for group items
+      return (
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "w-full flex items-center justify-center p-2.5 rounded-lg text-sm transition-colors",
+                    "hover:bg-accent hover:text-accent-foreground",
+                    isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"
+                  )}
+                >
+                  <item.icon className="w-5 h-5 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {item.label}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent side="right" align="start" className="w-48">
+            <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {item.children.map((child) => {
+              if (!user || !child.roles.includes(user.role)) return null;
+              const childActive = child.href && location.startsWith(child.href);
+              return (
+                <DropdownMenuItem key={child.href} asChild>
+                  <Link href={child.href!}>
+                    <button
+                      onClick={onNavigate}
+                      className={cn("w-full flex items-center gap-2 text-sm", childActive && "font-medium text-primary")}
+                    >
+                      <child.icon className="w-4 h-4" />
+                      <span>{child.label}</span>
+                    </button>
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
     return (
       <div>
         <button
@@ -127,7 +192,7 @@ function NavLink({ item, depth = 0, onNavigate }: { item: NavItem; depth?: numbe
         {open && (
           <div className="ml-4 mt-1 space-y-0.5">
             {item.children.map((child) => (
-              <NavLink key={child.href} item={child} depth={depth + 1} onNavigate={onNavigate} />
+              <NavLink key={child.href} item={child} depth={depth + 1} collapsed={collapsed} onNavigate={onNavigate} />
             ))}
           </div>
         )}
@@ -135,26 +200,42 @@ function NavLink({ item, depth = 0, onNavigate }: { item: NavItem; depth?: numbe
     );
   }
 
-  return (
-    <Link href={item.href!}>
-      <button
-        onClick={onNavigate}
-        className={cn(
-          "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-          "hover:bg-accent hover:text-accent-foreground",
-          isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"
-        )}
-      >
-        <item.icon className="w-4 h-4 shrink-0" />
-        <span>{item.label}</span>
-      </button>
-    </Link>
+  // Leaf nav item
+  const linkContent = (
+    <button
+      onClick={onNavigate}
+      className={cn(
+        "w-full flex items-center gap-3 rounded-lg text-sm transition-colors",
+        "hover:bg-accent hover:text-accent-foreground",
+        collapsed && depth === 0 ? "justify-center p-2.5" : "px-3 py-2",
+        isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"
+      )}
+    >
+      <item.icon className={cn("shrink-0", collapsed && depth === 0 ? "w-5 h-5" : "w-4 h-4")} />
+      {(!collapsed || depth > 0) && <span>{item.label}</span>}
+    </button>
   );
+
+  if (collapsed && depth === 0) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link href={item.href!}>{linkContent}</Link>
+        </TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>
+          {item.label}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return <Link href={item.href!}>{linkContent}</Link>;
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   if (!user) return null;
 
@@ -165,54 +246,118 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     .join("")
     .toUpperCase();
 
-  const SidebarContent = () => (
+  const SidebarContent = ({ isCollapsed }: { isCollapsed: boolean }) => (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
-        <div className="flex items-center gap-3">
+      <div className={cn("border-b", isCollapsed ? "p-3" : "p-4")}>
+        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
           <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center shrink-0">
             <Package className="w-5 h-5 text-primary-foreground" />
           </div>
-          <div className="min-w-0">
-            <p className="font-bold text-sm leading-tight">SI GAPLEK</p>
-            <p className="text-xs text-muted-foreground truncate">Logistik Kantor</p>
-          </div>
+          {!isCollapsed && (
+            <div className="min-w-0">
+              <p className="font-bold text-sm leading-tight">SI GAPLEK</p>
+              <p className="text-xs text-muted-foreground truncate">Logistik Kantor</p>
+            </div>
+          )}
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+      <nav className={cn("flex-1 overflow-y-auto space-y-1", isCollapsed ? "p-2" : "p-3")}>
         {NAV_ITEMS.map((item) => (
-          <NavLink key={item.label} item={item} onNavigate={() => setSidebarOpen(false)} />
+          <NavLink
+            key={item.label}
+            item={item}
+            collapsed={isCollapsed}
+            onNavigate={() => setSidebarOpen(false)}
+          />
         ))}
       </nav>
 
-      <div className="p-3 border-t">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-3">
-              <Avatar className="w-8 h-8 shrink-0">
-                <AvatarFallback className="text-xs bg-primary text-primary-foreground">{initials}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-medium truncate">{user.fullName}</p>
-                <Badge variant="secondary" className="text-xs h-4 px-1.5 mt-0.5">
-                  {roleLabel(user.role)}
-                </Badge>
-              </div>
-              <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+      <div className={cn("border-t", isCollapsed ? "p-2" : "p-3")}>
+        {/* Toggle button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setCollapsed(!isCollapsed)}
+              className={cn("w-full mb-2 hidden lg:flex", isCollapsed ? "justify-center" : "justify-start gap-2 px-3")}
+            >
+              {isCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4" />
+              ) : (
+                <>
+                  <PanelLeftClose className="w-4 h-4" />
+                  <span className="text-xs text-muted-foreground">Kecilkan</span>
+                </>
+              )}
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>
-              <p className="font-medium">{user.fullName}</p>
-              <p className="text-xs text-muted-foreground font-normal">@{user.username}</p>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
-              <LogOut className="w-4 h-4 mr-2" />
-              Keluar
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </TooltipTrigger>
+          {isCollapsed && (
+            <TooltipContent side="right" sideOffset={8}>
+              Perbesar Sidebar
+            </TooltipContent>
+          )}
+        </Tooltip>
+
+        {/* User profile */}
+        {isCollapsed ? (
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="w-full">
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback className="text-xs bg-primary text-primary-foreground">{initials}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {user.fullName}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent side="right" align="end" className="w-52">
+              <DropdownMenuLabel>
+                <p className="font-medium">{user.fullName}</p>
+                <p className="text-xs text-muted-foreground font-normal">@{user.username}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
+                <LogOut className="w-4 h-4 mr-2" />
+                Keluar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-3">
+                <Avatar className="w-8 h-8 shrink-0">
+                  <AvatarFallback className="text-xs bg-primary text-primary-foreground">{initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm font-medium truncate">{user.fullName}</p>
+                  <Badge variant="secondary" className="text-xs h-4 px-1.5 mt-0.5">
+                    {roleLabel(user.role)}
+                  </Badge>
+                </div>
+                <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>
+                <p className="font-medium">{user.fullName}</p>
+                <p className="text-xs text-muted-foreground font-normal">@{user.username}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
+                <LogOut className="w-4 h-4 mr-2" />
+                Keluar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );
@@ -220,8 +365,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-60 border-r flex-col shrink-0">
-        <SidebarContent />
+      <aside
+        className={cn(
+          "hidden lg:flex border-r flex-col shrink-0 transition-all duration-300 ease-in-out",
+          collapsed ? "w-[68px]" : "w-60"
+        )}
+      >
+        <SidebarContent isCollapsed={collapsed} />
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -229,7 +379,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
           <aside className="relative z-10 w-64 bg-background border-r flex flex-col">
-            <SidebarContent />
+            <SidebarContent isCollapsed={false} />
           </aside>
         </div>
       )}

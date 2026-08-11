@@ -13,14 +13,12 @@ import BarangKeluarPage from "@/pages/transaksi/keluar";
 import LaporanStokPage from "@/pages/laporan/stok";
 import PenggunaPage from "@/pages/pengguna";
 import NotFound from "@/pages/not-found";
-
-// New SI GAPLEK Placeholders
-const CabangReceivePage = () => <div className="p-8">Penerimaan (Scan QR) Component</div>;
-const CabangPemasanganPage = () => <div className="p-8">Pemasangan Material Component</div>;
-const CabangTrackingPage = () => <div className="p-8">Tracking Status Component</div>;
-const SpiDashboardPage = () => <div className="p-8">Dashboard Audit SPI Component</div>;
-const SpiVerifikasiPage = () => <div className="p-8">Verifikasi Pemasangan Component</div>;
-const SpiGisPage = () => <div className="p-8">Peta Material (GIS) Component</div>;
+import CabangReceivePage from "@/pages/cabang/receive";
+import CabangPemasanganPage from "@/pages/cabang/pemasangan";
+import CabangTrackingPage from "@/pages/cabang/tracking";
+import SpiDashboardPage from "@/pages/spi/dashboard";
+import SpiVerifikasiPage from "@/pages/spi/verifikasi";
+import SpiGisPage from "@/pages/spi/gis";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
