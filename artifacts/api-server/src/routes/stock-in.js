@@ -1,33 +1,44 @@
 // @ts-nocheck
 import { Router } from "express";
-import { eq } from "drizzle-orm";
-import { db, stockInTable, stockInItemsTable, itemsTable, suppliersTable, usersTable, locationsTable, auditLogsTable } from "@workspace/db";
-import { CreateStockInBody, ListStockInQueryParams, GetStockInParams, FinalizeStockInParams } from "@workspace/api-zod";
+import { eq, and, gte, lte, ilike, sql, desc } from "drizzle-orm";
+import { db, stockInTable, stockInItemsTable, itemsTable, suppliersTable, usersTable, locationsTable, warehousesTable, auditLogsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { generateRefNo } from "../lib/refgen";
+import { StockService } from "../lib/stock-service";
 const router = Router();
-function fmtStockIn(row, extras) {
-    return {
-        id: row.id,
-        referenceNo: row.referenceNo,
-        supplierId: row.supplierId,
-        supplierName: extras.supplierName ?? null,
-        status: row.status,
-        notes: row.notes,
-        createdByName: extras.createdByName ?? null,
-        totalItems: extras.totalItems ?? 0,
-        transactionDate: row.transactionDate instanceof Date ? row.transactionDate.toISOString() : new Date(row.transactionDate).toISOString(),
-        createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
-    };
-}
+// ─── LIST ───
 router.get("/stock-in", requireAuth, async (req, res) => {
-    const qp = ListStockInQueryParams.safeParse(req.query);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const { status, startDate, endDate, search, supplierId, warehouseId } = req.query;
+    // Build WHERE conditions
+    const conditions = [];
+    if (status)
+        conditions.push(eq(stockInTable.status, status));
+    if (supplierId)
+        conditions.push(eq(stockInTable.supplierId, parseInt(supplierId)));
+    if (warehouseId)
+        conditions.push(eq(stockInTable.warehouseId, parseInt(warehouseId)));
+    if (startDate)
+        conditions.push(gte(stockInTable.transactionDate, new Date(startDate)));
+    if (endDate)
+        conditions.push(lte(stockInTable.transactionDate, new Date(endDate)));
+    if (search)
+        conditions.push(ilike(stockInTable.referenceNo, `%${search}%`));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    // Count total
+    const [{ count }] = await db.select({ count: sql `count(*)` }).from(stockInTable).where(whereClause);
+    const total = Number(count);
+    // Fetch paginated
     const rows = await db
         .select({
         id: stockInTable.id,
         referenceNo: stockInTable.referenceNo,
         supplierId: stockInTable.supplierId,
         supplierName: suppliersTable.name,
+        warehouseId: stockInTable.warehouseId,
+        warehouseName: warehousesTable.name,
         status: stockInTable.status,
         notes: stockInTable.notes,
         createdBy: stockInTable.createdBy,
@@ -37,44 +48,53 @@ router.get("/stock-in", requireAuth, async (req, res) => {
     })
         .from(stockInTable)
         .leftJoin(suppliersTable, eq(stockInTable.supplierId, suppliersTable.id))
+        .leftJoin(warehousesTable, eq(stockInTable.warehouseId, warehousesTable.id))
         .leftJoin(usersTable, eq(stockInTable.createdBy, usersTable.id))
-        .orderBy(stockInTable.createdAt);
-    let filtered = rows;
-    if (qp.success) {
-        if (qp.data.status)
-            filtered = filtered.filter(r => r.status === qp.data.status);
-        if (qp.data.startDate)
-            filtered = filtered.filter(r => r.transactionDate >= new Date(qp.data.startDate));
-        if (qp.data.endDate)
-            filtered = filtered.filter(r => r.transactionDate <= new Date(qp.data.endDate));
-    }
-    const result = await Promise.all(filtered.map(async (row) => {
-        const items = await db.select().from(stockInItemsTable).where(eq(stockInItemsTable.stockInId, row.id));
-        return { ...fmtStockIn(row, { supplierName: row.supplierName, createdByName: row.createdByName }), totalItems: items.length };
+        .where(whereClause)
+        .orderBy(desc(stockInTable.createdAt))
+        .limit(limit)
+        .offset(offset);
+    // Get item counts per transaction
+    const result = await Promise.all(rows.map(async (row) => {
+        const [itemCount] = await db.select({ count: sql `count(*)` }).from(stockInItemsTable).where(eq(stockInItemsTable.stockInId, row.id));
+        return {
+            ...row,
+            totalItems: Number(itemCount.count),
+            transactionDate: row.transactionDate instanceof Date ? row.transactionDate.toISOString() : new Date(row.transactionDate).toISOString(),
+            createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
+        };
     }));
-    res.json(result);
+    res.json({ data: result, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 });
+// ─── CREATE ───
 router.post("/stock-in", requireAuth, async (req, res) => {
-    const parsed = CreateStockInBody.safeParse(req.body);
-    if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.message });
+    const { supplierId, warehouseId, notes, transactionDate, items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ error: "Minimal 1 item harus diisi" });
+        return;
+    }
+    if (!transactionDate) {
+        res.status(400).json({ error: "Tanggal transaksi wajib diisi" });
         return;
     }
     const refNo = generateRefNo("BM");
     const [header] = await db.insert(stockInTable).values({
         referenceNo: refNo,
-        supplierId: parsed.data.supplierId ?? null,
-        notes: parsed.data.notes ?? null,
+        supplierId: supplierId ?? null,
+        warehouseId: warehouseId ?? null,
+        notes: notes ?? null,
         createdBy: req.session.userId ?? null,
-        transactionDate: new Date(parsed.data.transactionDate),
+        transactionDate: new Date(transactionDate),
         status: "draft",
     }).returning();
-    for (const item of parsed.data.items) {
+    for (const item of items) {
+        if (!item.itemId || !item.quantity || item.quantity <= 0)
+            continue;
         await db.insert(stockInItemsTable).values({
             stockInId: header.id,
             itemId: item.itemId,
             quantity: item.quantity,
-            unitPrice: String(item.unitPrice),
+            unitPrice: String(item.unitPrice || 0),
             locationId: item.locationId ?? null,
             notes: item.notes ?? null,
         });
@@ -86,12 +106,13 @@ router.post("/stock-in", requireAuth, async (req, res) => {
         description: `Barang masuk ${refNo} dibuat`,
         userId: req.session.userId,
     });
-    res.status(201).json(fmtStockIn(header, { totalItems: parsed.data.items.length }));
+    res.status(201).json({ ...header, referenceNo: refNo });
 });
+// ─── GET DETAIL ───
 router.get("/stock-in/:id", requireAuth, async (req, res) => {
-    const params = GetStockInParams.safeParse(req.params);
-    if (!params.success) {
-        res.status(400).json({ error: params.error.message });
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+        res.status(400).json({ error: "ID tidak valid" });
         return;
     }
     const [header] = await db
@@ -100,6 +121,8 @@ router.get("/stock-in/:id", requireAuth, async (req, res) => {
         referenceNo: stockInTable.referenceNo,
         supplierId: stockInTable.supplierId,
         supplierName: suppliersTable.name,
+        warehouseId: stockInTable.warehouseId,
+        warehouseName: warehousesTable.name,
         status: stockInTable.status,
         notes: stockInTable.notes,
         createdByName: usersTable.fullName,
@@ -108,8 +131,9 @@ router.get("/stock-in/:id", requireAuth, async (req, res) => {
     })
         .from(stockInTable)
         .leftJoin(suppliersTable, eq(stockInTable.supplierId, suppliersTable.id))
+        .leftJoin(warehousesTable, eq(stockInTable.warehouseId, warehousesTable.id))
         .leftJoin(usersTable, eq(stockInTable.createdBy, usersTable.id))
-        .where(eq(stockInTable.id, params.data.id));
+        .where(eq(stockInTable.id, id));
     if (!header) {
         res.status(404).json({ error: "Tidak ditemukan" });
         return;
@@ -129,21 +153,22 @@ router.get("/stock-in/:id", requireAuth, async (req, res) => {
         .from(stockInItemsTable)
         .leftJoin(itemsTable, eq(stockInItemsTable.itemId, itemsTable.id))
         .leftJoin(locationsTable, eq(stockInItemsTable.locationId, locationsTable.id))
-        .where(eq(stockInItemsTable.stockInId, params.data.id));
+        .where(eq(stockInItemsTable.stockInId, id));
     res.json({
         ...header,
         transactionDate: header.transactionDate instanceof Date ? header.transactionDate.toISOString() : new Date(header.transactionDate).toISOString(),
         createdAt: header.createdAt instanceof Date ? header.createdAt.toISOString() : new Date(header.createdAt).toISOString(),
-        items: items.map(i => ({ ...i, unitName: null, unitPrice: parseFloat(String(i.unitPrice)) })),
+        items: items.map(i => ({ ...i, unitPrice: parseFloat(String(i.unitPrice)) })),
     });
 });
+// ─── FINALIZE (changes stock) ───
 router.post("/stock-in/:id/finalize", requireAuth, async (req, res) => {
-    const params = FinalizeStockInParams.safeParse(req.params);
-    if (!params.success) {
-        res.status(400).json({ error: params.error.message });
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+        res.status(400).json({ error: "ID tidak valid" });
         return;
     }
-    const [header] = await db.select().from(stockInTable).where(eq(stockInTable.id, params.data.id));
+    const [header] = await db.select().from(stockInTable).where(eq(stockInTable.id, id));
     if (!header) {
         res.status(404).json({ error: "Tidak ditemukan" });
         return;
@@ -152,16 +177,29 @@ router.post("/stock-in/:id/finalize", requireAuth, async (req, res) => {
         res.status(400).json({ error: "Sudah difinalisasi" });
         return;
     }
+    if (header.status === "void") {
+        res.status(400).json({ error: "Transaksi sudah dibatalkan" });
+        return;
+    }
     const items = await db.select().from(stockInItemsTable).where(eq(stockInItemsTable.stockInId, header.id));
+    if (items.length === 0) {
+        res.status(400).json({ error: "Tidak ada item dalam transaksi" });
+        return;
+    }
+    const warehouseId = header.warehouseId;
+    if (!warehouseId) {
+        res.status(400).json({ error: "Gudang belum dipilih" });
+        return;
+    }
     await db.transaction(async (tx) => {
         for (const item of items) {
-            await tx.update(itemsTable)
-                .set({ currentStock: itemsTable.currentStock })
-                .where(eq(itemsTable.id, item.itemId));
-            const [current] = await tx.select({ currentStock: itemsTable.currentStock }).from(itemsTable).where(eq(itemsTable.id, item.itemId));
-            await tx.update(itemsTable)
-                .set({ currentStock: (current?.currentStock ?? 0) + item.quantity })
-                .where(eq(itemsTable.id, item.itemId));
+            await StockService.increaseStock(tx, item.itemId, warehouseId, item.quantity, {
+                referenceType: "stock_in",
+                referenceId: header.id,
+                referenceNo: header.referenceNo,
+                userId: req.session.userId,
+                movementDate: header.transactionDate,
+            });
         }
         await tx.update(stockInTable).set({ status: "finalized" }).where(eq(stockInTable.id, header.id));
     });
@@ -169,10 +207,51 @@ router.post("/stock-in/:id/finalize", requireAuth, async (req, res) => {
         entityType: "stock_in",
         entityId: header.id,
         action: "finalize",
-        description: `Barang masuk ${header.referenceNo} difinalisasi`,
+        description: `Barang masuk ${header.referenceNo} difinalisasi, stok bertambah`,
         userId: req.session.userId,
     });
-    const [updated] = await db.select().from(stockInTable).where(eq(stockInTable.id, header.id));
-    res.json(fmtStockIn(updated, { totalItems: items.length }));
+    res.json({ message: "Berhasil difinalisasi" });
+});
+// ─── VOID (reverse stock) ───
+router.post("/stock-in/:id/void", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+        res.status(400).json({ error: "ID tidak valid" });
+        return;
+    }
+    const [header] = await db.select().from(stockInTable).where(eq(stockInTable.id, id));
+    if (!header) {
+        res.status(404).json({ error: "Tidak ditemukan" });
+        return;
+    }
+    if (header.status === "void") {
+        res.status(400).json({ error: "Sudah dibatalkan" });
+        return;
+    }
+    const warehouseId = header.warehouseId;
+    const wasFinalized = header.status === "finalized";
+    await db.transaction(async (tx) => {
+        if (wasFinalized && warehouseId) {
+            // Reverse the stock
+            const items = await tx.select().from(stockInItemsTable).where(eq(stockInItemsTable.stockInId, header.id));
+            for (const item of items) {
+                await StockService.reverseStock(tx, item.itemId, warehouseId, item.quantity, "in", {
+                    referenceType: "stock_in",
+                    referenceId: header.id,
+                    referenceNo: header.referenceNo,
+                    userId: req.session.userId,
+                });
+            }
+        }
+        await tx.update(stockInTable).set({ status: "void" }).where(eq(stockInTable.id, header.id));
+    });
+    await db.insert(auditLogsTable).values({
+        entityType: "stock_in",
+        entityId: header.id,
+        action: "void",
+        description: `Barang masuk ${header.referenceNo} dibatalkan${wasFinalized ? ", stok dikembalikan" : ""}`,
+        userId: req.session.userId,
+    });
+    res.json({ message: "Berhasil dibatalkan" });
 });
 export default router;
