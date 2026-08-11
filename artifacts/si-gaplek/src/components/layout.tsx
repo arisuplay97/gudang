@@ -254,11 +254,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Package className="w-5 h-5 text-primary-foreground" />
           </div>
           {!isCollapsed && (
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-bold text-sm leading-tight">SI GAPLEK</p>
               <p className="text-xs text-muted-foreground truncate">Logistik Kantor</p>
             </div>
           )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setCollapsed(!isCollapsed)}
+                className="hidden lg:flex items-center justify-center w-7 h-7 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {isCollapsed ? "Perbesar Sidebar" : "Kecilkan Sidebar"}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -274,31 +287,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </nav>
 
       <div className={cn("border-t", isCollapsed ? "p-2" : "p-3")}>
-        {/* Toggle button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCollapsed(!isCollapsed)}
-              className={cn("w-full mb-2 hidden lg:flex", isCollapsed ? "justify-center" : "justify-start gap-2 px-3")}
-            >
-              {isCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4" />
-              ) : (
-                <>
-                  <PanelLeftClose className="w-4 h-4" />
-                  <span className="text-xs text-muted-foreground">Kecilkan</span>
-                </>
-              )}
-            </Button>
-          </TooltipTrigger>
-          {isCollapsed && (
-            <TooltipContent side="right" sideOffset={8}>
-              Perbesar Sidebar
-            </TooltipContent>
-          )}
-        </Tooltip>
 
         {/* User profile */}
         {isCollapsed ? (
