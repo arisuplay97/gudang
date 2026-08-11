@@ -27,7 +27,7 @@ export default function GudangPage() {
   const save = useMutation({
     mutationFn: () => {
       const body = { ...form, address: form.address || null, description: form.description || null };
-      return editing ? apiFetch(`/api/warehouses/${editing.id}`, { method: "PUT", body: JSON.stringify(body) }) : apiFetch("/api/warehouses", { method: "POST", body: JSON.stringify(body) });
+      return editing ? apiFetch(`/api/warehouses/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) }) : apiFetch("/api/warehouses", { method: "POST", body: JSON.stringify(body) });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["warehouses"] }); setDialogOpen(false); toast({ title: editing ? "Gudang diperbarui" : "Gudang ditambahkan" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -53,19 +53,19 @@ export default function GudangPage() {
           <TableHeader><TableRow><TableHead>Kode</TableHead><TableHead>Nama Gudang</TableHead><TableHead>Alamat</TableHead><TableHead>Deskripsi</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? Array(3).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><Warehouse className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada gudang</p></TableCell></TableRow> :
-             data.map(w => (
-              <TableRow key={w.id}>
-                <TableCell><span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{w.code}</span></TableCell>
-                <TableCell className="font-medium">{w.name}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{w.address ?? "-"}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{w.description ?? "-"}</TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(w)}><Pencil className="w-4 h-4" /></Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(w.id)}><Trash2 className="w-4 h-4" /></Button>
-                </div></TableCell>
-              </TableRow>
-            ))}
+              !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><Warehouse className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada gudang</p></TableCell></TableRow> :
+                data.map(w => (
+                  <TableRow key={w.id}>
+                    <TableCell><span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{w.code}</span></TableCell>
+                    <TableCell className="font-medium">{w.name}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{w.address ?? "-"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{w.description ?? "-"}</TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(w)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(w.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div></TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
       </CardContent></Card>

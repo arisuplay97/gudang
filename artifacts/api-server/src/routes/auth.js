@@ -26,18 +26,25 @@ router.post("/auth/login", async (req, res) => {
     req.session.userRole = user.role;
     req.session.username = user.username;
     req.session.branchId = user.branchId;
-    res.json({
-        user: {
-            id: user.id,
-            username: user.username,
-            fullName: user.fullName,
-            email: user.email,
-            role: user.role,
-            branchId: user.branchId,
-            isActive: user.isActive,
-            createdAt: user.createdAt.toISOString(),
-        },
-        message: "Login berhasil",
+    req.session.save((err) => {
+        if (err) {
+            console.error("Session save error:", err);
+            res.status(500).json({ error: "Gagal menyimpan sesi" });
+            return;
+        }
+        res.json({
+            user: {
+                id: user.id,
+                username: user.username,
+                fullName: user.fullName,
+                email: user.email,
+                role: user.role,
+                branchId: user.branchId,
+                isActive: user.isActive,
+                createdAt: user.createdAt.toISOString(),
+            },
+            message: "Login berhasil",
+        });
     });
 });
 router.post("/auth/logout", (req, res) => {

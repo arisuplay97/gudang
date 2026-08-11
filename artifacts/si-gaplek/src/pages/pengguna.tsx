@@ -39,7 +39,7 @@ export default function PenggunaPage() {
     mutationFn: () => {
       const body = { ...form, email: form.email || null, password: form.password || undefined };
       return editing
-        ? apiFetch(`/api/users/${editing.id}`, { method: "PUT", body: JSON.stringify(body) })
+        ? apiFetch(`/api/users/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) })
         : apiFetch("/api/users", { method: "POST", body: JSON.stringify(body) });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); setDialogOpen(false); toast({ title: editing ? "Pengguna diperbarui" : "Pengguna ditambahkan" }); },
@@ -69,21 +69,21 @@ export default function PenggunaPage() {
           <TableHeader><TableRow><TableHead>Username</TableHead><TableHead>Nama Lengkap</TableHead><TableHead>Email</TableHead><TableHead>Peran</TableHead><TableHead>Status</TableHead><TableHead>Dibuat</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !data?.length ? <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><Users className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada pengguna</p></TableCell></TableRow> :
-             data.map(u => (
-              <TableRow key={u.id}>
-                <TableCell className="font-mono font-medium">{u.username}</TableCell>
-                <TableCell>{u.fullName}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{u.email ?? "-"}</TableCell>
-                <TableCell><Badge variant={roleBadgeVariant(u.role)}>{roleLabel(u.role)}</Badge></TableCell>
-                <TableCell><Badge variant={u.isActive ? "default" : "secondary"}>{u.isActive ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                <TableCell className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(u)}><Pencil className="w-4 h-4" /></Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(u.id)}><Trash2 className="w-4 h-4" /></Button>
-                </div></TableCell>
-              </TableRow>
-            ))}
+              !data?.length ? <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><Users className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada pengguna</p></TableCell></TableRow> :
+                data.map(u => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-mono font-medium">{u.username}</TableCell>
+                    <TableCell>{u.fullName}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{u.email ?? "-"}</TableCell>
+                    <TableCell><Badge variant={roleBadgeVariant(u.role)}>{roleLabel(u.role)}</Badge></TableCell>
+                    <TableCell><Badge variant={u.isActive ? "default" : "secondary"}>{u.isActive ? "Aktif" : "Nonaktif"}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(u)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(u.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div></TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
       </CardContent></Card>

@@ -26,7 +26,7 @@ export default function DepartemenPage() {
   const save = useMutation({
     mutationFn: () => {
       const body = { ...form, description: form.description || null };
-      return editing ? apiFetch(`/api/departments/${editing.id}`, { method: "PUT", body: JSON.stringify(body) }) : apiFetch("/api/departments", { method: "POST", body: JSON.stringify(body) });
+      return editing ? apiFetch(`/api/departments/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) }) : apiFetch("/api/departments", { method: "POST", body: JSON.stringify(body) });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["departments"] }); setDialogOpen(false); toast({ title: editing ? "Departemen diperbarui" : "Departemen ditambahkan" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -52,18 +52,18 @@ export default function DepartemenPage() {
           <TableHeader><TableRow><TableHead>Kode</TableHead><TableHead>Nama Departemen</TableHead><TableHead>Deskripsi</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !data?.length ? <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground"><Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada departemen</p></TableCell></TableRow> :
-             data.map(d => (
-              <TableRow key={d.id}>
-                <TableCell><span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{d.code}</span></TableCell>
-                <TableCell className="font-medium">{d.name}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{d.description ?? "-"}</TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(d)}><Pencil className="w-4 h-4" /></Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(d.id)}><Trash2 className="w-4 h-4" /></Button>
-                </div></TableCell>
-              </TableRow>
-            ))}
+              !data?.length ? <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground"><Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada departemen</p></TableCell></TableRow> :
+                data.map(d => (
+                  <TableRow key={d.id}>
+                    <TableCell><span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{d.code}</span></TableCell>
+                    <TableCell className="font-medium">{d.name}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{d.description ?? "-"}</TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(d)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(d.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div></TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
       </CardContent></Card>

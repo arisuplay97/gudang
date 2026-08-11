@@ -72,10 +72,18 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["ADMIN", "GUDANG"],
     children: [
       { label: "Master Barang", href: "/master/barang", icon: Package, roles: ["ADMIN", "GUDANG"] },
+      { label: "Kategori", href: "/master/kategori", icon: Tags, roles: ["ADMIN", "GUDANG"] },
+      { label: "Satuan", href: "/master/satuan", icon: Ruler, roles: ["ADMIN", "GUDANG"] },
+      { label: "Supplier", href: "/master/supplier", icon: Truck, roles: ["ADMIN", "GUDANG"] },
+      { label: "Departemen", href: "/master/departemen", icon: Building2, roles: ["ADMIN", "GUDANG"] },
+      { label: "Lokasi & Rak", href: "/master/lokasi", icon: MapPin, roles: ["ADMIN", "GUDANG"] },
       { label: "Cabang & Gudang", href: "/master/gudang", icon: Warehouse, roles: ["ADMIN"] },
       { label: "Barang Masuk", href: "/transaksi/masuk", icon: PackagePlus, roles: ["ADMIN", "GUDANG"] },
       { label: "Distribusi (Keluar)", href: "/transaksi/keluar", icon: PackageMinus, roles: ["ADMIN", "GUDANG"] },
-      { label: "Laporan Stok", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Stok Opname", href: "/transaksi/opname", icon: ClipboardList, roles: ["ADMIN", "GUDANG"] },
+      { label: "Retur Barang", href: "/transaksi/retur", icon: RotateCcw, roles: ["ADMIN", "GUDANG"] },
+      { label: "Mutasi Stok", href: "/transaksi/mutasi", icon: ArrowLeftRight, roles: ["ADMIN", "GUDANG"] },
+      { label: "Penyesuaian", href: "/transaksi/penyesuaian", icon: Settings, roles: ["ADMIN", "GUDANG"] },
     ],
   },
   {
@@ -96,6 +104,17 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Dashboard Audit", href: "/spi/dashboard", icon: BarChart3, roles: ["ADMIN", "SPI"] },
       { label: "Verifikasi Pemasangan", href: "/spi/verifikasi", icon: ScrollText, roles: ["ADMIN", "SPI"] },
       { label: "Peta Material (GIS)", href: "/spi/gis", icon: MapPin, roles: ["ADMIN", "SPI"] },
+    ],
+  },
+  {
+    label: "Laporan",
+    icon: FileSpreadsheet,
+    roles: ["ADMIN", "GUDANG", "SPI"],
+    children: [
+      { label: "Laporan Stok", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Laporan Transaksi", href: "/laporan/transaksi", icon: FileSpreadsheet, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Nilai Inventaris", href: "/laporan/nilai", icon: ScrollText, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Audit Log", href: "/laporan/log", icon: ClipboardList, roles: ["ADMIN", "SPI"] },
     ],
   },
   {

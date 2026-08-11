@@ -29,7 +29,7 @@ export default function LokasiPage() {
   const save = useMutation({
     mutationFn: () => {
       const body = { name: form.name, code: form.code, warehouseId: parseInt(form.warehouseId), description: form.description || null };
-      return editing ? apiFetch(`/api/locations/${editing.id}`, { method: "PUT", body: JSON.stringify(body) }) : apiFetch("/api/locations", { method: "POST", body: JSON.stringify(body) });
+      return editing ? apiFetch(`/api/locations/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) }) : apiFetch("/api/locations", { method: "POST", body: JSON.stringify(body) });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["locations"] }); setDialogOpen(false); toast({ title: editing ? "Lokasi diperbarui" : "Lokasi ditambahkan" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -55,19 +55,19 @@ export default function LokasiPage() {
           <TableHeader><TableRow><TableHead>Kode</TableHead><TableHead>Nama Lokasi</TableHead><TableHead>Gudang</TableHead><TableHead>Deskripsi</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? Array(3).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada lokasi</p></TableCell></TableRow> :
-             data.map(l => (
-              <TableRow key={l.id}>
-                <TableCell><span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{l.code}</span></TableCell>
-                <TableCell className="font-medium">{l.name}</TableCell>
-                <TableCell>{l.warehouseName ?? "-"}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{l.description ?? "-"}</TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(l)}><Pencil className="w-4 h-4" /></Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(l.id)}><Trash2 className="w-4 h-4" /></Button>
-                </div></TableCell>
-              </TableRow>
-            ))}
+              !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada lokasi</p></TableCell></TableRow> :
+                data.map(l => (
+                  <TableRow key={l.id}>
+                    <TableCell><span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{l.code}</span></TableCell>
+                    <TableCell className="font-medium">{l.name}</TableCell>
+                    <TableCell>{l.warehouseName ?? "-"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{l.description ?? "-"}</TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(l)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(l.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div></TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
       </CardContent></Card>

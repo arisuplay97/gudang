@@ -27,7 +27,7 @@ export default function SupplierPage() {
   const save = useMutation({
     mutationFn: () => {
       const body = { ...form, contact: form.contact || null, phone: form.phone || null, email: form.email || null, address: form.address || null };
-      return editing ? apiFetch(`/api/suppliers/${editing.id}`, { method: "PUT", body: JSON.stringify(body) }) : apiFetch("/api/suppliers", { method: "POST", body: JSON.stringify(body) });
+      return editing ? apiFetch(`/api/suppliers/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) }) : apiFetch("/api/suppliers", { method: "POST", body: JSON.stringify(body) });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["suppliers"] }); setDialogOpen(false); toast({ title: editing ? "Supplier diperbarui" : "Supplier ditambahkan" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -53,19 +53,19 @@ export default function SupplierPage() {
           <TableHeader><TableRow><TableHead>Nama Supplier</TableHead><TableHead>Kontak</TableHead><TableHead>No. Telepon</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? Array(3).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><Truck className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada supplier</p></TableCell></TableRow> :
-             data.map(s => (
-              <TableRow key={s.id}>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>{s.contact ?? "-"}</TableCell>
-                <TableCell>{s.phone ?? "-"}</TableCell>
-                <TableCell>{s.email ?? "-"}</TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(s)}><Pencil className="w-4 h-4" /></Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(s.id)}><Trash2 className="w-4 h-4" /></Button>
-                </div></TableCell>
-              </TableRow>
-            ))}
+              !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><Truck className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada supplier</p></TableCell></TableRow> :
+                data.map(s => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell>{s.contact ?? "-"}</TableCell>
+                    <TableCell>{s.phone ?? "-"}</TableCell>
+                    <TableCell>{s.email ?? "-"}</TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(s)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(s.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div></TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
       </CardContent></Card>

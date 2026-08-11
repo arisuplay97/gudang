@@ -8,9 +8,21 @@ import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
 import BarangPage from "@/pages/master/barang";
 import GudangPage from "@/pages/master/gudang";
+import KategoriPage from "@/pages/master/kategori";
+import SatuanPage from "@/pages/master/satuan";
+import SupplierPage from "@/pages/master/supplier";
+import DepartemenPage from "@/pages/master/departemen";
+import LokasiPage from "@/pages/master/lokasi";
 import BarangMasukPage from "@/pages/transaksi/masuk";
 import BarangKeluarPage from "@/pages/transaksi/keluar";
+import OpnamePage from "@/pages/transaksi/opname";
+import ReturPage from "@/pages/transaksi/retur";
+import MutasiPage from "@/pages/transaksi/mutasi";
+import PenyesuaianPage from "@/pages/transaksi/penyesuaian";
 import LaporanStokPage from "@/pages/laporan/stok";
+import LaporanTransaksiPage from "@/pages/laporan/transaksi";
+import LaporanNilaiPage from "@/pages/laporan/nilai";
+import AuditLogPage from "@/pages/laporan/log";
 import PenggunaPage from "@/pages/pengguna";
 import NotFound from "@/pages/not-found";
 import CabangReceivePage from "@/pages/cabang/receive";
@@ -54,12 +66,26 @@ function AppRouter() {
     <Layout>
       <Switch>
         <Route path="/" component={DashboardPage} />
-        {/* Gudang Routes */}
+        {/* Gudang Routes - Master */}
         <Route path="/master/barang" component={BarangPage} />
         <Route path="/master/gudang" component={GudangPage} />
+        <Route path="/master/kategori" component={KategoriPage} />
+        <Route path="/master/satuan" component={SatuanPage} />
+        <Route path="/master/supplier" component={SupplierPage} />
+        <Route path="/master/departemen" component={DepartemenPage} />
+        <Route path="/master/lokasi" component={LokasiPage} />
+        {/* Gudang Routes - Transaksi */}
         <Route path="/transaksi/masuk" component={BarangMasukPage} />
         <Route path="/transaksi/keluar" component={BarangKeluarPage} />
+        <Route path="/transaksi/opname" component={OpnamePage} />
+        <Route path="/transaksi/retur" component={ReturPage} />
+        <Route path="/transaksi/mutasi" component={MutasiPage} />
+        <Route path="/transaksi/penyesuaian" component={PenyesuaianPage} />
+        {/* Laporan */}
         <Route path="/laporan/stok" component={LaporanStokPage} />
+        <Route path="/laporan/transaksi" component={LaporanTransaksiPage} />
+        <Route path="/laporan/nilai" component={LaporanNilaiPage} />
+        <Route path="/laporan/log" component={AuditLogPage} />
 
         {/* Cabang Routes */}
         <Route path="/cabang/receive" component={CabangReceivePage} />

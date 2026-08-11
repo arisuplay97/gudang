@@ -25,7 +25,7 @@ export default function KategoriPage() {
 
   const save = useMutation({
     mutationFn: () => editing
-      ? apiFetch(`/api/categories/${editing.id}`, { method: "PUT", body: JSON.stringify(form) })
+      ? apiFetch(`/api/categories/${editing.id}`, { method: "PATCH", body: JSON.stringify(form) })
       : apiFetch("/api/categories", { method: "POST", body: JSON.stringify(form) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["categories"] }); setDialogOpen(false); toast({ title: editing ? "Kategori diperbarui" : "Kategori ditambahkan" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -51,17 +51,17 @@ export default function KategoriPage() {
           <TableHeader><TableRow><TableHead>Nama Kategori</TableHead><TableHead>Deskripsi</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
           <TableBody>
             {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={3}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !data?.length ? <TableRow><TableCell colSpan={3} className="text-center py-12 text-muted-foreground"><Tags className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada kategori</p></TableCell></TableRow> :
-             data.map(c => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.name}</TableCell>
-                <TableCell className="text-muted-foreground">{c.description ?? "-"}</TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(c)}><Pencil className="w-4 h-4" /></Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(c.id)}><Trash2 className="w-4 h-4" /></Button>
-                </div></TableCell>
-              </TableRow>
-            ))}
+              !data?.length ? <TableRow><TableCell colSpan={3} className="text-center py-12 text-muted-foreground"><Tags className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada kategori</p></TableCell></TableRow> :
+                data.map(c => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.description ?? "-"}</TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(c)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(c.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div></TableCell>
+                  </TableRow>
+                ))}
           </TableBody>
         </Table>
       </CardContent></Card>
