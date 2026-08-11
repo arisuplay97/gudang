@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MapPin, Camera, AlertCircle, CheckCircle2, RotateCcw } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
+
 
 export default function CabangPemasanganPage() {
     const { toast } = useToast();
@@ -108,7 +108,7 @@ export default function CabangPemasanganPage() {
             longitude,
             gpsAccuracy,
             clientCaptureTime: new Date().toISOString(),
-            idempotencyKey: uuidv4(),
+            idempotencyKey: crypto.randomUUID(),
         });
     };
 
@@ -149,8 +149,8 @@ export default function CabangPemasanganPage() {
                                             </div>
                                             <div className="text-right">
                                                 <span className={`text-xs font-semibold px-2 py-1 rounded-md ${alloc.status === "VERIFIED" ? "bg-green-100 text-green-800" :
-                                                        alloc.status === "REJECTED" ? "bg-red-100 text-red-800" :
-                                                            "bg-blue-100 text-blue-800"
+                                                    alloc.status === "REJECTED" ? "bg-red-100 text-red-800" :
+                                                        "bg-blue-100 text-blue-800"
                                                     }`}>
                                                     {alloc.status}
                                                 </span>

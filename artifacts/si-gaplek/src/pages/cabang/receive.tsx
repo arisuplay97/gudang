@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { ScanLine, CheckCircle2, ArrowRight, PackageOpen } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
+
 
 export default function CabangReceivePage() {
     const [qrToken, setQrToken] = useState("");
@@ -18,7 +18,7 @@ export default function CabangReceivePage() {
                 method: "POST",
                 body: JSON.stringify({
                     qrToken: token,
-                    idempotencyKey: uuidv4(),
+                    idempotencyKey: crypto.randomUUID(),
                 }),
             });
         },
