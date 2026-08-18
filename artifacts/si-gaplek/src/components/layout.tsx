@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { roleLabel } from "@/lib/utils";
@@ -47,6 +47,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/auth-context";
@@ -257,6 +259,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return document.documentElement.classList.contains("dark") ||
+        localStorage.getItem("theme") === "dark";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDark]);
+
   if (!user) return null;
 
   const initials = user.fullName
@@ -405,7 +425,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto relative">
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className="fixed top-5 right-5 z-50 flex items-center justify-center w-10 h-10 rounded-full shadow-lg transition-transform hover:scale-110 active:scale-95"
+            style={{ backgroundColor: "#121212", color: "white" }}
+            title="Toggle Dark Mode"
+          >
+            {isDark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5" />}
+          </button>
+
           {children}
         </main>
       </div>
