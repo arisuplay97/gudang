@@ -15,26 +15,36 @@ router.get("/dashboard/summary", requireAuth, async (_req, res): Promise<void> =
   const stockInAll = await db.select().from(stockInTable);
   const stockOutAll = await db.select().from(stockOutTable);
 
+  // Support both legacy "finalized" and blueprint "DIKIRIM" statuses
+  const isFinalized = (status: string) => status === "finalized" || status === "DIKIRIM";
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const todayStockIn = stockInAll.filter(r => r.transactionDate >= today && r.status === "finalized").length;
-  const todayStockOut = stockOutAll.filter(r => r.transactionDate >= today && r.status === "finalized").length;
+  const todayStockOut = stockOutAll.filter(r => r.transactionDate >= today && isFinalized(r.status)).length;
 
-  const pendingIn = stockInAll.filter(r => r.status === "draft").length;
-  const pendingOut = stockOutAll.filter(r => r.status === "draft").length;
+  const pendingIn = stockInAll.filter(r => r.status === "draft" || r.status === "DRAFT").length;
+  const pendingOut = stockOutAll.filter(r => r.status === "draft" || r.status === "DRAFT").length;
+
+  // Blueprint Section 5: tracked vs non-tracked counts
+  const trackedItems = allItems.filter(i => (i as any).trackingType === "TRACKED").length;
+  const nonTrackedItems = totalItems - trackedItems;
 
   res.json({
     totalItems,
     totalStockIn: stockInAll.filter(r => r.status === "finalized").length,
-    totalStockOut: stockOutAll.filter(r => r.status === "finalized").length,
+    totalStockOut: stockOutAll.filter(r => isFinalized(r.status)).length,
     lowStockCount,
     pendingTransactions: pendingIn + pendingOut,
     inventoryValue,
     todayStockIn,
     todayStockOut,
+    trackedItems,
+    nonTrackedItems,
   });
 });
+
 
 router.get("/dashboard/recent-transactions", requireAuth, async (_req, res): Promise<void> => {
   const stockIn = await db

@@ -24,19 +24,19 @@ export default function SpiVerifikasiPage() {
     const pendingList = pendingData?.data || [];
 
     const verifyMutation = useMutation({
-        mutationFn: async ({ id, status, notes }: { id: number, status: string, notes: string }) => {
-            return apiFetch("/api/spi/verify", {
+        mutationFn: async ({ evidenceUuid, status, notes }: { evidenceUuid: string, status: string, notes: string }) => {
+            return apiFetch(`/api/spi/verify/${evidenceUuid}`, {
                 method: "POST",
-                body: JSON.stringify({ trackingId: id, status, notes }),
+                body: JSON.stringify({ status, notes }),
             });
         },
         onSuccess: (res, vars) => {
             toast({
-                title: vars.status === "VERIFIED" ? "Verifikasi Disetujui" : "Verifikasi Ditolak",
+                title: vars.status === "TERVERIFIKASI" ? "Verifikasi Disetujui" : "Verifikasi Ditolak",
                 description: "Status material telah diupdate.",
             });
             queryClient.invalidateQueries({ queryKey: ["spi-pending"] });
-            queryClient.invalidateQueries({ queryKey: ["spi-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["spi-dashboard"] });
             setSelectedPending(null);
             setNotes("");
         },
@@ -155,7 +155,7 @@ export default function SpiVerifikasiPage() {
                                     />
                                     <div className="flex gap-3">
                                         <Button
-                                            onClick={() => verifyMutation.mutate({ id: selectedPending.trackingId, status: "REJECTED", notes })}
+                                            onClick={() => verifyMutation.mutate({ evidenceUuid: selectedPending.evidenceUuid, status: "DITOLAK", notes })}
                                             variant="destructive"
                                             className="flex-1"
                                             disabled={verifyMutation.isPending}
@@ -163,7 +163,7 @@ export default function SpiVerifikasiPage() {
                                             <XCircle className="w-4 h-4 mr-2" /> Tolak & Ulangi
                                         </Button>
                                         <Button
-                                            onClick={() => verifyMutation.mutate({ id: selectedPending.trackingId, status: "VERIFIED", notes })}
+                                            onClick={() => verifyMutation.mutate({ evidenceUuid: selectedPending.evidenceUuid, status: "TERVERIFIKASI", notes })}
                                             className="flex-1 bg-green-600 hover:bg-green-700"
                                             disabled={verifyMutation.isPending}
                                         >

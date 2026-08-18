@@ -84,6 +84,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Retur Barang", href: "/transaksi/retur", icon: RotateCcw, roles: ["ADMIN", "GUDANG"] },
       { label: "Mutasi Stok", href: "/transaksi/mutasi", icon: ArrowLeftRight, roles: ["ADMIN", "GUDANG"] },
       { label: "Penyesuaian", href: "/transaksi/penyesuaian", icon: Settings, roles: ["ADMIN", "GUDANG"] },
+      { label: "Tracking Material", href: "/cabang/tracking", icon: MapPin, roles: ["ADMIN", "GUDANG"] },
     ],
   },
   {
