@@ -314,7 +314,7 @@ export default function BarangPage() {
                               className="inline-block cursor-pointer"
                               onClick={() => setDetailItem(item)}
                             >
-                              <BarcodeDisplay value={item.barcode} width={0.8} height={20} />
+                              <BarcodeDisplay value={item.barcode} size={36} />
                             </motion.div>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
@@ -445,7 +445,7 @@ export default function BarangPage() {
                       transition={{ delay: 0.15, type: "spring", damping: 18, stiffness: 200 }}
                     >
                       <div id="barcode-detail-svg">
-                        <BarcodeDisplay value={detailItem.barcode} width={2} height={60} showValue />
+                        <BarcodeDisplay value={detailItem.barcode} size={160} showValue />
                       </div>
                     </motion.div>
                   )}

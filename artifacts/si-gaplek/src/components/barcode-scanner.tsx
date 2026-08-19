@@ -113,10 +113,10 @@ export function BarcodeScanner({
             // Small delay so the DOM element is rendered
             const t = setTimeout(() => startScanner(), 200);
             return () => clearTimeout(t);
-        } else {
-            stopScanner();
-            setState("init");
         }
+        stopScanner();
+        setState("init");
+        return undefined;
     }, [open, startScanner, stopScanner]);
 
     // Cleanup on unmount
