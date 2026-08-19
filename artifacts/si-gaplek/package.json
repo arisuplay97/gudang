@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "html5-qrcode": "^2.3.8",
+    "jsbarcode": "^3.11.6",
     "qrcode.react": "^4.2.0"
   }
 }

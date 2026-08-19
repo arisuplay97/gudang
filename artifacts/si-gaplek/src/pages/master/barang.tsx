@@ -2,8 +2,9 @@ import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { BarcodeDisplay, BarcodePrintLabel } from "@/components/barcode-display";
+import { BarcodeScanner } from "@/components/barcode-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Plus, Search, Pencil, Trash2, Package, AlertTriangle, ScanBarcode,
+  Plus, Search, Pencil, Trash2, Package, AlertTriangle, Camera,
   Eye, Printer, Download, Tag, X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -36,17 +37,12 @@ interface Item {
   unitName?: string;
   supplierName?: string;
   status?: string;
+  trackingType?: string;
 }
 
 interface Category { id: number; name: string; }
 interface Unit { id: number; name: string; }
 interface Supplier { id: number; name: string; }
-
-/* ── Animation Variants ─────────────────────────────────────── */
-const fadeIn = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 } };
-const scaleIn = { initial: { opacity: 0, scale: 0.92 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.92 } };
-const slideUp = { initial: { opacity: 0, y: 40 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: 40 } };
-const stagger = { animate: { transition: { staggerChildren: 0.04 } } };
 
 export default function BarangPage() {
   const [search, setSearch] = useState("");
@@ -54,12 +50,14 @@ export default function BarangPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [detailItem, setDetailItem] = useState<Item | null>(null);
-  const [scanOpen, setScanOpen] = useState(false);
-  const [scanInput, setScanInput] = useState("");
+  /* Camera scanner states */
+  const [cameraScanOpen, setCameraScanOpen] = useState(false);
   const [scanResult, setScanResult] = useState<Item | null>(null);
-  const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState("");
-  const scanRef = useRef<HTMLInputElement>(null);
+  /* Manual scan input */
+  const [manualScanOpen, setManualScanOpen] = useState(false);
+  const [manualInput, setManualInput] = useState("");
+  const [manualLoading, setManualLoading] = useState(false);
 
   const [form, setForm] = useState({
     code: "", name: "", barcode: "", categoryId: "", unitId: "", supplierId: "",
@@ -127,29 +125,46 @@ export default function BarangPage() {
     setDialogOpen(true);
   };
 
-  const handleScan = useCallback(async () => {
-    const q = scanInput.trim();
+  /* Camera scan detected → backend lookup */
+  const handleCameraDetected = useCallback(async (barcode: string) => {
+    setScanError("");
+    try {
+      const result = await apiFetch<Item>(`/api/items/barcode/${encodeURIComponent(barcode)}`);
+      if ((result.status ?? "active") !== "active") {
+        setScanError("Barang tidak aktif. Material tidak dapat digunakan untuk transaksi.");
+        setScanResult(null);
+      } else {
+        setScanResult(result);
+        setCameraScanOpen(false);
+        setDetailItem(result);
+      }
+    } catch {
+      setScanError("Barcode tidak ditemukan. Barang belum terdaftar di Master Material.");
+    }
+  }, []);
+
+  /* Manual scan */
+  const handleManualScan = useCallback(async () => {
+    const q = manualInput.trim();
     if (!q) return;
-    setScanLoading(true);
+    setManualLoading(true);
     setScanError("");
     setScanResult(null);
     try {
       const result = await apiFetch<Item>(`/api/items/barcode/${encodeURIComponent(q)}`);
       setScanResult(result);
+      setManualScanOpen(false);
+      setDetailItem(result);
     } catch {
-      setScanError("Barang dengan barcode tersebut tidak ditemukan.");
+      setScanError("Barcode tidak ditemukan.");
     } finally {
-      setScanLoading(false);
+      setManualLoading(false);
     }
-  }, [scanInput]);
-
-  const handleScanKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleScan();
-  };
+  }, [manualInput]);
 
   /* ── Print / Download ──────────────────────────────────────── */
   const handlePrint = (item: Item) => {
-    const printWindow = window.open("", "_blank", "width=400,height=500");
+    const printWindow = window.open("", "_blank", "width=500,height=400");
     if (!printWindow) return;
     const svg = document.getElementById("barcode-detail-svg");
     const svgHtml = svg?.outerHTML ?? "";
@@ -157,8 +172,8 @@ export default function BarangPage() {
       <html><head><title>Barcode - ${item.name}</title>
       <style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;margin:0;}
       h3{margin:0 0 4px;}p{margin:0;color:#666;font-family:monospace;}</style></head>
-      <body><h3>${item.name}</h3><p>${item.code}</p><div style="margin:12px 0">${svgHtml}</div><p>${item.barcode ?? ""}</p>
-      <script>setTimeout(()=>window.print(),300);</script></body></html>
+      <body><h3>${item.name}</h3><p>${item.code}</p><div style="margin:12px 0">${svgHtml}</div>
+      <script>setTimeout(()=>window.print(),300);<\/script></body></html>
     `);
     printWindow.document.close();
   };
@@ -175,7 +190,7 @@ export default function BarangPage() {
       canvas.height = img.height;
       ctx?.drawImage(img, 0, 0);
       const link = document.createElement("a");
-      link.download = `qr-${item.code}.png`;
+      link.download = `barcode-${item.code}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     };
@@ -191,10 +206,16 @@ export default function BarangPage() {
       <html><head><title>Label - ${item.name}</title>
       <style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;margin:0;padding:24px;}
       .label{border:2px dashed #ccc;border-radius:12px;padding:24px;text-align:center;min-width:240px;}
-      h2{margin:0 0 4px;font-size:16px;}p{margin:2px 0;color:#333;font-size:13px;font-family:monospace;}</style></head>
-      <body><div class="label"><h2>${item.name}</h2><p>Kode: ${item.code}</p><div style="margin:16px 0">${svgHtml}</div>
-      <p>${item.barcode ?? ""}</p></div>
-      <script>setTimeout(()=>window.print(),300);</script></body></html>
+      .company{font-size:11px;font-weight:bold;letter-spacing:1px;margin:0;}
+      h2{margin:8px 0 4px;font-size:16px;}p{margin:2px 0;color:#333;font-size:13px;font-family:monospace;}</style></head>
+      <body><div class="label">
+        <p class="company">PERUMDAM TIRTA ARDHIA</p>
+        <p class="company" style="margin-bottom:8px">RINJANI</p>
+        <h2>${item.name}</h2><p>Kode: ${item.code}</p>
+        <div style="margin:16px 0">${svgHtml}</div>
+        <p>${item.barcode ?? ""}</p>
+      </div>
+      <script>setTimeout(()=>window.print(),300);<\/script></body></html>
     `);
     printWindow.document.close();
   };
@@ -214,8 +235,8 @@ export default function BarangPage() {
           <p className="text-muted-foreground text-sm">Kelola data barang inventaris</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setScanOpen(true); setScanInput(""); setScanResult(null); setScanError(""); }}>
-            <ScanBarcode className="w-4 h-4 mr-2" /> Scan Barcode
+          <Button variant="outline" onClick={() => setCameraScanOpen(true)}>
+            <Camera className="w-4 h-4 mr-2" /> Scan Barcode
           </Button>
           <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Tambah Barang</Button>
         </div>
@@ -238,6 +259,7 @@ export default function BarangPage() {
                   <TableHead>Nama Barang</TableHead>
                   <TableHead>Kategori</TableHead>
                   <TableHead>Satuan</TableHead>
+                  <TableHead>Tracking</TableHead>
                   <TableHead className="text-right">Stok</TableHead>
                   <TableHead className="text-center">Barcode</TableHead>
                   <TableHead>Status</TableHead>
@@ -247,11 +269,11 @@ export default function BarangPage() {
               <TableBody>
                 {isLoading ? (
                   Array(5).fill(0).map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                    <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
                   ))
                 ) : !items?.length ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                       <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
                       <p>Belum ada data barang</p>
                     </TableCell>
@@ -265,8 +287,7 @@ export default function BarangPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -12 }}
                         transition={{ duration: 0.3, delay: idx * 0.03 }}
-                        className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                        layout
+                        className="border-b transition-colors hover:bg-muted/50"
                       >
                         <TableCell className="font-mono text-sm">{item.code}</TableCell>
                         <TableCell>
@@ -274,6 +295,11 @@ export default function BarangPage() {
                         </TableCell>
                         <TableCell>{item.categoryName ?? "-"}</TableCell>
                         <TableCell>{item.unitName ?? "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant={(item.trackingType ?? "NON_TRACKED") === "TRACKED" ? "default" : "outline"} className="text-[10px]">
+                            {(item.trackingType ?? "NON_TRACKED") === "TRACKED" ? "Tracked" : "Non-Tracked"}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right">
                           <Badge variant={item.currentStock <= item.minimumStock ? "destructive" : "secondary"}>
                             {item.currentStock <= item.minimumStock && <AlertTriangle className="w-3 h-3 mr-1" />}
@@ -283,12 +309,12 @@ export default function BarangPage() {
                         <TableCell className="text-center">
                           {item.barcode ? (
                             <motion.div
-                              whileHover={{ scale: 1.15 }}
+                              whileHover={{ scale: 1.1 }}
                               transition={{ type: "spring", stiffness: 400, damping: 15 }}
                               className="inline-block cursor-pointer"
                               onClick={() => setDetailItem(item)}
                             >
-                              <BarcodeDisplay value={item.barcode} size={36} />
+                              <BarcodeDisplay value={item.barcode} width={0.8} height={20} />
                             </motion.div>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
@@ -301,20 +327,14 @@ export default function BarangPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDetailItem(item)}>
-                                <Eye className="w-4 h-4" />
-                              </Button>
+                            <motion.div whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 400, damping: 15 }}>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDetailItem(item)}><Eye className="w-4 h-4" /></Button>
                             </motion.div>
-                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(item)}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
+                            <motion.div whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 400, damping: 15 }}>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(item)}><Pencil className="w-4 h-4" /></Button>
                             </motion.div>
-                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                              <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteId(item.id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                            <motion.div whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 400, damping: 15 }}>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => setDeleteId(item.id)}><Trash2 className="w-4 h-4" /></Button>
                             </motion.div>
                           </div>
                         </TableCell>
@@ -328,90 +348,63 @@ export default function BarangPage() {
         </Card>
       </motion.div>
 
-      {/* ── Dialog: Add/Edit Barang ────────────────────────────── */}
+      {/* ── Camera Scanner ──────────────────────────────────────── */}
+      <BarcodeScanner
+        open={cameraScanOpen}
+        onClose={() => { setCameraScanOpen(false); setScanError(""); }}
+        onDetected={handleCameraDetected}
+      />
+
+      {/* ── Add / Edit Dialog ───────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit Barang" : "Tambah Barang"}</DialogTitle>
-          </DialogHeader>
-          <motion.div className="grid grid-cols-2 gap-4 py-2" {...scaleIn} transition={{ duration: 0.3 }}>
-            <div className="space-y-1.5">
-              <Label>Kode Barang *</Label>
-              <Input value={form.code} onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))} placeholder="ATK-001" />
+          <DialogHeader><DialogTitle>{editing ? "Edit Barang" : "Tambah Barang"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Kode *</Label><Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="MAT-PIPA-001" /></div>
+              <div className="space-y-1.5"><Label>Nama *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Barcode</Label>
-              <Input
-                value={editing?.barcode ?? "AUTO GENERATED"}
-                readOnly
-                disabled
-                className="bg-muted font-mono text-xs cursor-not-allowed"
-              />
+            <div className="space-y-1.5"><Label>Barcode</Label><Input value="[AUTO GENERATED]" readOnly className="bg-muted text-muted-foreground" /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5"><Label>Kategori</Label>
+                <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Pilih" /></SelectTrigger>
+                  <SelectContent>{categories?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Satuan</Label>
+                <Select value={form.unitId} onValueChange={v => setForm(f => ({ ...f, unitId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Pilih" /></SelectTrigger>
+                  <SelectContent>{units?.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Supplier</Label>
+                <Select value={form.supplierId} onValueChange={v => setForm(f => ({ ...f, supplierId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Pilih" /></SelectTrigger>
+                  <SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-1.5 col-span-2">
-              <Label>Nama Barang *</Label>
-              <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama lengkap barang" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Stok Minimum</Label><Input type="number" min="0" value={form.minimumStock} onChange={e => setForm(f => ({ ...f, minimumStock: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Harga Satuan</Label><Input type="number" min="0" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Kategori</Label>
-              <Select value={form.categoryId} onValueChange={(v) => setForm(f => ({ ...f, categoryId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
-                <SelectContent className="z-[100]">
-                  {categories && categories.length > 0
-                    ? categories.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)
-                    : <SelectItem disabled value="empty">Belum ada kategori</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Satuan</Label>
-              <Select value={form.unitId} onValueChange={(v) => setForm(f => ({ ...f, unitId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Pilih satuan" /></SelectTrigger>
-                <SelectContent className="z-[100]">
-                  {units && units.length > 0
-                    ? units.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>)
-                    : <SelectItem disabled value="empty">Belum ada satuan</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Supplier</Label>
-              <Select value={form.supplierId} onValueChange={(v) => setForm(f => ({ ...f, supplierId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Pilih supplier" /></SelectTrigger>
-                <SelectContent className="z-[100]">
-                  {suppliers && suppliers.length > 0
-                    ? suppliers.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)
-                    : <SelectItem disabled value="empty">Belum ada supplier</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Stok Minimum</Label>
-              <Input type="number" min="0" value={form.minimumStock} onChange={(e) => setForm(f => ({ ...f, minimumStock: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5 col-span-2">
-              <Label>Harga Satuan (Rp)</Label>
-              <Input type="number" min="0" value={form.unitPrice} onChange={(e) => setForm(f => ({ ...f, unitPrice: e.target.value }))} placeholder="0" />
-            </div>
-            <div className="space-y-1.5 col-span-2">
-              <Label>Deskripsi</Label>
-              <Textarea value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Keterangan tambahan..." />
-            </div>
-          </motion.div>
+            <div className="space-y-1.5"><Label>Deskripsi</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
             <Button onClick={() => saveMutation.mutate()} disabled={!form.code || !form.name || saveMutation.isPending}>
-              {saveMutation.isPending ? "Menyimpan..." : "Simpan"}
+              {saveMutation.isPending ? "Menyimpan..." : editing ? "Perbarui" : "Simpan"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog: Delete Barang ─────────────────────────────── */}
+      {/* ── Delete Confirmation ─────────────────────────────────── */}
       <Dialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Hapus Barang</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Apakah Anda yakin ingin menghapus barang ini? Tindakan ini tidak dapat dibatalkan.</p>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Hapus Barang?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">Tindakan ini tidak dapat dibatalkan.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>Batal</Button>
             <Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>
@@ -421,162 +414,68 @@ export default function BarangPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog: Detail Barang ─────────────────────────────── */}
-      <Dialog open={detailItem !== null} onOpenChange={(o) => !o && setDetailItem(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Detail Barang</DialogTitle></DialogHeader>
-          {detailItem && (
-            <motion.div className="space-y-4" {...scaleIn} transition={{ duration: 0.35, type: "spring", stiffness: 300 }}>
-              <div className="text-center space-y-1">
-                <h3 className="font-semibold text-lg">{detailItem.name}</h3>
-                <p className="text-sm text-muted-foreground font-mono">{detailItem.code}</p>
-              </div>
-
-              {/* QR Code Display */}
-              {detailItem.barcode && (
-                <motion.div
-                  className="flex flex-col items-center gap-2 py-4 border rounded-xl bg-muted/30"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.15, type: "spring", stiffness: 300, damping: 20 }}
-                >
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">QR Code Barang</p>
-                  <div id="barcode-detail-svg">
-                    <BarcodeDisplay value={detailItem.barcode} size={160} showValue />
-                  </div>
-                  <p className="font-mono text-sm">{detailItem.barcode}</p>
-                </motion.div>
-              )}
-
-              {/* Info Grid */}
-              <motion.div
-                className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.25 }}
-              >
-                <div><span className="text-muted-foreground">Kategori</span><p className="font-medium">{detailItem.categoryName ?? "-"}</p></div>
-                <div><span className="text-muted-foreground">Satuan</span><p className="font-medium">{detailItem.unitName ?? "-"}</p></div>
-                <div><span className="text-muted-foreground">Stok Saat Ini</span><p className="font-medium">{formatNumber(detailItem.currentStock)}</p></div>
-                <div><span className="text-muted-foreground">Stok Minimum</span><p className="font-medium">{formatNumber(detailItem.minimumStock)}</p></div>
-                <div><span className="text-muted-foreground">Harga Satuan</span><p className="font-medium">{formatCurrency(detailItem.unitPrice)}</p></div>
-                <div><span className="text-muted-foreground">Supplier</span><p className="font-medium">{detailItem.supplierName ?? "-"}</p></div>
-                <div><span className="text-muted-foreground">Status</span>
-                  <Badge variant={(detailItem.status ?? "active") === "active" ? "default" : "secondary"}>
-                    {(detailItem.status ?? "active") === "active" ? "Aktif" : "Nonaktif"}
-                  </Badge>
-                </div>
-                {detailItem.description && (
-                  <div className="col-span-2"><span className="text-muted-foreground">Deskripsi</span><p>{detailItem.description}</p></div>
-                )}
-              </motion.div>
-
-              {/* Action Buttons */}
-              {detailItem.barcode && (
-                <motion.div
-                  className="flex flex-wrap gap-2 pt-2"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 }}
-                >
-                  <Button size="sm" variant="outline" onClick={() => handlePrint(detailItem)}>
-                    <Printer className="w-3.5 h-3.5 mr-1.5" /> Print QR
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleDownload(detailItem)}>
-                    <Download className="w-3.5 h-3.5 mr-1.5" /> Download QR
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handlePrintLabel(detailItem)}>
-                    <Tag className="w-3.5 h-3.5 mr-1.5" /> Print Label
-                  </Button>
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => setDetailItem(null)}>Tutup</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Dialog: Scan Barcode ──────────────────────────────── */}
-      <Dialog open={scanOpen} onOpenChange={(o) => { if (!o) { setScanOpen(false); setScanResult(null); setScanError(""); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><ScanBarcode className="w-5 h-5" /> Scan Barcode</DialogTitle></DialogHeader>
-          <motion.div className="space-y-4" {...fadeIn} transition={{ duration: 0.3 }}>
-            <div className="space-y-1.5">
-              <Label>Masukkan / Scan Barcode</Label>
-              <div className="flex gap-2">
-                <Input
-                  ref={scanRef}
-                  value={scanInput}
-                  onChange={(e) => setScanInput(e.target.value)}
-                  onKeyDown={handleScanKey}
-                  placeholder="Scan barcode atau ketik kode..."
-                  className="font-mono"
-                  autoFocus
-                />
-                <Button onClick={handleScan} disabled={!scanInput.trim() || scanLoading}>
-                  {scanLoading ? "Mencari..." : "Cari"}
-                </Button>
-              </div>
-            </div>
-
-            <AnimatePresence mode="wait">
-              {scanError && (
-                <motion.div
-                  key="error"
-                  {...slideUp}
-                  transition={{ duration: 0.3 }}
-                  className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2"
-                >
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  {scanError}
-                </motion.div>
-              )}
-              {scanResult && (
-                <motion.div
-                  key="result"
-                  {...slideUp}
-                  transition={{ duration: 0.4, type: "spring", stiffness: 300, damping: 25 }}
-                  className="border rounded-xl p-4 space-y-3 bg-muted/30"
-                >
-                  <div className="flex items-start gap-3">
-                    {scanResult.barcode && (
-                      <motion.div
-                        initial={{ opacity: 0, rotate: -10 }}
-                        animate={{ opacity: 1, rotate: 0 }}
-                        transition={{ delay: 0.2, type: "spring" }}
-                      >
-                        <BarcodeDisplay value={scanResult.barcode} size={64} />
-                      </motion.div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold">{scanResult.name}</h4>
-                      <p className="font-mono text-sm text-muted-foreground">{scanResult.code}</p>
-                    </div>
-                  </div>
+      {/* ── Detail / Barcode Dialog ─────────────────────────────── */}
+      <AnimatePresence>
+        {detailItem && (
+          <Dialog open={!!detailItem} onOpenChange={(o) => !o && setDetailItem(null)}>
+            <DialogContent className="max-w-md">
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", damping: 20, stiffness: 250 }}>
+                <DialogHeader><DialogTitle>Detail Barang</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-3">
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-muted-foreground">Kategori:</span> <span className="font-medium">{scanResult.categoryName ?? "-"}</span></div>
-                    <div><span className="text-muted-foreground">Satuan:</span> <span className="font-medium">{scanResult.unitName ?? "-"}</span></div>
-                    <div><span className="text-muted-foreground">Stok:</span> <span className="font-medium">{formatNumber(scanResult.currentStock)}</span></div>
-                    <div><span className="text-muted-foreground">Status:</span>{" "}
-                      <Badge variant={(scanResult.status ?? "active") === "active" ? "default" : "secondary"} className="text-xs">
-                        {(scanResult.status ?? "active") === "active" ? "Aktif" : "Nonaktif"}
+                    <div><span className="text-muted-foreground">Kode</span><p className="font-mono font-medium">{detailItem.code}</p></div>
+                    <div><span className="text-muted-foreground">Nama</span><p className="font-medium">{detailItem.name}</p></div>
+                    <div><span className="text-muted-foreground">Kategori</span><p>{detailItem.categoryName ?? "-"}</p></div>
+                    <div><span className="text-muted-foreground">Satuan</span><p>{detailItem.unitName ?? "-"}</p></div>
+                    <div><span className="text-muted-foreground">Tracking</span><p>{(detailItem.trackingType ?? "NON_TRACKED") === "TRACKED" ? "Tracked" : "Non-Tracked"}</p></div>
+                    <div><span className="text-muted-foreground">Stok</span><p>{formatNumber(detailItem.currentStock)} / min {formatNumber(detailItem.minimumStock)}</p></div>
+                    <div><span className="text-muted-foreground">Status</span>
+                      <Badge variant={(detailItem.status ?? "active") === "active" ? "default" : "secondary"}>
+                        {(detailItem.status ?? "active") === "active" ? "Aktif" : "Nonaktif"}
                       </Badge>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" className="w-full" onClick={() => { setDetailItem(scanResult); setScanOpen(false); }}>
-                    <Eye className="w-3.5 h-3.5 mr-1.5" /> Lihat Detail Lengkap
-                  </Button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setScanOpen(false); setScanResult(null); setScanError(""); }}>Tutup</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+                  {/* Barcode */}
+                  {detailItem.barcode && (
+                    <motion.div
+                      className="flex flex-col items-center py-4 px-6 bg-muted/30 rounded-xl"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15, type: "spring", damping: 18, stiffness: 200 }}
+                    >
+                      <div id="barcode-detail-svg">
+                        <BarcodeDisplay value={detailItem.barcode} width={2} height={60} showValue />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Actions */}
+                  {detailItem.barcode && (
+                    <div className="flex gap-2">
+                      <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Button variant="outline" className="w-full" onClick={() => handlePrint(detailItem)}>
+                          <Printer className="w-4 h-4 mr-2" /> Print
+                        </Button>
+                      </motion.div>
+                      <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Button variant="outline" className="w-full" onClick={() => handleDownload(detailItem)}>
+                          <Download className="w-4 h-4 mr-2" /> Download
+                        </Button>
+                      </motion.div>
+                      <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Button variant="outline" className="w-full" onClick={() => handlePrintLabel(detailItem)}>
+                          <Tag className="w-4 h-4 mr-2" /> Label
+                        </Button>
+                      </motion.div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

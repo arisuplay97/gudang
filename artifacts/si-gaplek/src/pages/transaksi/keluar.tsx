@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { BarcodeScanner } from "@/components/barcode-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,11 +14,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, Trash2, PackageMinus, ScanBarcode } from "lucide-react";
+import { Plus, Eye, Trash2, PackageMinus, Camera, Search, ScanBarcode } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface StockOut { id: number; referenceNumber: string; departmentId: number | null; notes: string | null; status: string; createdAt: string; departmentName?: string; itemCount?: number; }
-interface Item { id: number; code: string; name: string; currentStock: number; unitName?: string; barcode?: string | null; }
+interface Item { id: number; code: string; name: string; currentStock: number; unitName?: string; barcode?: string | null; status?: string; }
 interface Department { id: number; name: string; code: string; }
 interface DetailEntry { itemId: number; quantity: number; notes: string | null; _item?: Item; }
 
@@ -25,6 +27,7 @@ export default function BarangKeluarPage() {
   const [viewId, setViewId] = useState<number | null>(null);
   const [details, setDetails] = useState<DetailEntry[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [cameraScanOpen, setCameraScanOpen] = useState(false);
   const [form, setForm] = useState({ referenceNumber: "", departmentId: "", notes: "", date: new Date().toISOString().split("T")[0] });
   const [detailForm, setDetailForm] = useState({ itemId: "", quantity: "1" });
   const { toast } = useToast();
@@ -56,63 +59,91 @@ export default function BarangKeluarPage() {
     setDialogOpen(true);
   };
 
+  /* Add material to draft list by item object */
+  const addItemToDraft = useCallback((item: Item, qty: number = 1) => {
+    if ((item.status ?? "active") !== "active") {
+      toast({ title: "Barang tidak aktif", description: "Material tidak dapat digunakan untuk transaksi.", variant: "destructive" });
+      return;
+    }
+    setDetails(ds => {
+      const existing = ds.find(d => d.itemId === item.id);
+      if (existing) {
+        return ds.map(d => d.itemId === item.id ? { ...d, quantity: d.quantity + qty } : d);
+      }
+      return [...ds, { itemId: item.id, quantity: qty, notes: null, _item: item }];
+    });
+    toast({ title: `${item.name} ditambahkan` });
+  }, [toast]);
+
+  /* Keyboard barcode scan handler (USB/Bluetooth scanner) */
   const handleBarcodeKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && barcodeInput.trim()) {
-      const item = items?.find(i => (i as any).barcode === barcodeInput.trim() || i.code === barcodeInput.trim());
+      const item = items?.find(i => i.barcode === barcodeInput.trim() || i.code === barcodeInput.trim());
       if (item) {
-        const existing = details.find(d => d.itemId === item.id);
-        if (existing) {
-          setDetails(ds => ds.map(d => d.itemId === item.id ? { ...d, quantity: d.quantity + 1 } : d));
-        } else {
-          setDetails(ds => [...ds, { itemId: item.id, quantity: 1, notes: null, _item: item }]);
-        }
-        toast({ title: `${item.name} ditambahkan` });
+        addItemToDraft(item);
       } else {
-        toast({ title: "Barang tidak ditemukan", variant: "destructive" });
+        toast({ title: "Barcode tidak ditemukan", description: "Barang belum terdaftar di Master Material.", variant: "destructive" });
       }
       setBarcodeInput("");
     }
   };
 
+  /* Camera scan detected → backend lookup → add to draft */
+  const handleCameraDetected = useCallback(async (barcode: string) => {
+    try {
+      const result = await apiFetch<Item>(`/api/items/barcode/${encodeURIComponent(barcode)}`);
+      addItemToDraft(result);
+    } catch {
+      toast({ title: "Barcode tidak ditemukan", description: "Barang belum terdaftar di Master Material.", variant: "destructive" });
+    }
+  }, [addItemToDraft, toast]);
+
+  /* Manual dropdown add */
   const addDetail = () => {
     if (!detailForm.itemId) return;
     const item = items?.find(i => i.id === parseInt(detailForm.itemId));
     if (!item) return;
     const qty = parseInt(detailForm.quantity);
     if (item.currentStock < qty) { toast({ title: "Stok tidak cukup", description: `Stok tersedia: ${item.currentStock}`, variant: "destructive" }); return; }
-    const existing = details.find(d => d.itemId === item.id);
-    if (existing) setDetails(ds => ds.map(d => d.itemId === item.id ? { ...d, quantity: d.quantity + qty } : d));
-    else setDetails(ds => [...ds, { itemId: item.id, quantity: qty, notes: null, _item: item }]);
+    addItemToDraft(item, qty);
     setDetailForm({ itemId: "", quantity: "1" });
   };
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <motion.div
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <div><h1 className="text-2xl font-bold">Barang Keluar</h1><p className="text-muted-foreground text-sm">Transaksi pengeluaran barang dari gudang</p></div>
         <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Transaksi Baru</Button>
-      </div>
+      </motion.div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Departemen</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !stockOuts?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><PackageMinus className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada transaksi keluar</p></TableCell></TableRow> :
-             stockOuts.map(s => (
-              <TableRow key={s.id}>
-                <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
-                <TableCell>{formatDate(s.createdAt)}</TableCell>
-                <TableCell>{s.departmentName ?? "-"}</TableCell>
-                <TableCell className="text-right">{s.itemCount ?? 0} item</TableCell>
-                <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
-                <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent></Card>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+        <Card><CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Departemen</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+                !stockOuts?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><PackageMinus className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada transaksi keluar</p></TableCell></TableRow> :
+                  stockOuts.map(s => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
+                      <TableCell>{formatDate(s.createdAt)}</TableCell>
+                      <TableCell>{s.departmentName ?? "-"}</TableCell>
+                      <TableCell className="text-right">{s.itemCount ?? 0} item</TableCell>
+                      <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
+                      <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button></TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </CardContent></Card>
+      </motion.div>
 
+      {/* ── Create Transaction Dialog ───────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Transaksi Barang Keluar</DialogTitle></DialogHeader>
@@ -129,9 +160,35 @@ export default function BarangKeluarPage() {
             </div>
             <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
 
-            <div className="border rounded-lg p-3 space-y-3">
-              <p className="font-medium text-sm flex items-center gap-2"><ScanBarcode className="w-4 h-4" /> Scan Barcode / Tambah Barang</p>
-              <Input value={barcodeInput} onChange={e => setBarcodeInput(e.target.value)} onKeyDown={handleBarcodeKey} placeholder="Scan barcode atau kode barang, tekan Enter..." className="font-mono" />
+            {/* Material selection section */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <p className="font-medium text-sm">+ Tambah Material</p>
+
+              {/* Scan Barcode row */}
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={barcodeInput}
+                    onChange={e => setBarcodeInput(e.target.value)}
+                    onKeyDown={handleBarcodeKey}
+                    placeholder="🔍 Cari berdasarkan nama/kode/barcode, tekan Enter..."
+                    className="font-mono pl-9"
+                  />
+                </div>
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setCameraScanOpen(true)}
+                    className="gap-2"
+                  >
+                    <Camera className="w-4 h-4" /> 📷 Scan Barcode
+                  </Button>
+                </motion.div>
+              </div>
+
+              {/* Manual dropdown add */}
               <div className="flex gap-2">
                 <Select value={detailForm.itemId} onValueChange={v => setDetailForm(f => ({ ...f, itemId: v }))}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Atau pilih barang" /></SelectTrigger>
@@ -142,22 +199,51 @@ export default function BarangKeluarPage() {
               </div>
             </div>
 
-            {details.length > 0 && (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Barang</TableHead><TableHead className="text-right">Qty</TableHead><TableHead className="text-right">Hapus</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {details.map((d, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{d._item?.name ?? d.itemId}</TableCell>
-                        <TableCell className="text-right">{d.quantity}</TableCell>
-                        <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDetails(ds => ds.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></Button></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+            {/* Draft items list */}
+            <AnimatePresence>
+              {details.length > 0 && (
+                <motion.div
+                  className="border rounded-lg overflow-hidden"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Barang</TableHead><TableHead className="text-right">Qty</TableHead><TableHead className="text-right">Hapus</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {details.map((d, i) => (
+                        <motion.tr
+                          key={d.itemId}
+                          initial={{ opacity: 0, x: -12 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 12 }}
+                          transition={{ duration: 0.2 }}
+                          className="border-b"
+                        >
+                          <TableCell>
+                            <span className="font-medium">{d._item?.name ?? d.itemId}</span>
+                            {d._item?.code && <span className="text-xs text-muted-foreground ml-2 font-mono">{d._item.code}</span>}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={d.quantity}
+                              onChange={(e) => {
+                                const newQty = parseInt(e.target.value) || 1;
+                                setDetails(ds => ds.map((dd, j) => j === i ? { ...dd, quantity: newQty } : dd));
+                              }}
+                              className="w-20 text-right inline-block"
+                            />
+                          </TableCell>
+                          <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDetails(ds => ds.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></Button></TableCell>
+                        </motion.tr>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
@@ -166,6 +252,15 @@ export default function BarangKeluarPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Camera Scanner (continuous mode) ────────────────────── */}
+      <BarcodeScanner
+        open={cameraScanOpen}
+        onClose={() => setCameraScanOpen(false)}
+        onDetected={handleCameraDetected}
+        continuous
+      />
+
+      {/* ── View Detail Dialog ──────────────────────────────────── */}
       <Dialog open={viewId !== null} onOpenChange={o => !o && setViewId(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Detail Transaksi Keluar</DialogTitle></DialogHeader>
