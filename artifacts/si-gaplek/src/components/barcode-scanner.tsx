@@ -7,7 +7,7 @@ import { X, Camera, CameraOff, CheckCircle2, Search } from "lucide-react";
 interface BarcodeScannerProps {
     open: boolean;
     onClose: () => void;
-    onDetected: (barcode: string) => void;
+    onDetected: (barcode: string) => void | Promise<void>;
     /** If true, scanner stays open after detection for continuous scanning */
     continuous?: boolean;
 }
@@ -43,24 +43,30 @@ export function BarcodeScanner({
                 { facingMode: "environment" },
                 {
                     fps: 10,
-                    qrbox: { width: 280, height: 120 },
-                    aspectRatio: 1.5,
+                    qrbox: 250,
+                    aspectRatio: 1.0,
                 },
-                (decodedText) => {
+                async (decodedText) => {
                     if (cooldownRef.current) return;
                     cooldownRef.current = true;
 
                     setLastBarcode(decodedText);
-                    setState("success");
-                    onDetected(decodedText);
 
-                    // Cooldown: 800ms before next scan
-                    setTimeout(() => {
+                    try {
+                        await onDetected(decodedText);
+                        setState("success");
+                        // Cooldown: 800ms before next scan
+                        setTimeout(() => {
+                            cooldownRef.current = false;
+                            if (continuous) {
+                                setState("scanning");
+                            }
+                        }, 800);
+                    } catch (err: any) {
+                        setErrorMsg(err.message || "Barcode tidak cocok atau tidak ditemukan.");
+                        setState("error");
                         cooldownRef.current = false;
-                        if (continuous) {
-                            setState("scanning");
-                        }
-                    }, 800);
+                    }
                 },
                 () => {
                     // ignore scan errors (no barcode in frame)

@@ -125,21 +125,17 @@ export default function BarangPage() {
     setDialogOpen(true);
   };
 
-  /* Camera scan detected → backend lookup */
   const handleCameraDetected = useCallback(async (barcode: string) => {
-    setScanError("");
     try {
       const result = await apiFetch<Item>(`/api/items/barcode/${encodeURIComponent(barcode)}`);
       if ((result.status ?? "active") !== "active") {
-        setScanError("Barang tidak aktif. Material tidak dapat digunakan untuk transaksi.");
-        setScanResult(null);
-      } else {
-        setScanResult(result);
-        setCameraScanOpen(false);
-        setDetailItem(result);
+        throw new Error("Barang tidak aktif. Material tidak dapat digunakan untuk transaksi.");
       }
-    } catch {
-      setScanError("Barcode tidak ditemukan. Barang belum terdaftar di Master Material.");
+      setScanResult(result);
+      setCameraScanOpen(false);
+      setDetailItem(result);
+    } catch (err: any) {
+      throw new Error(err.message || "Barcode tidak ditemukan. Barang belum terdaftar di Master Material.");
     }
   }, []);
 

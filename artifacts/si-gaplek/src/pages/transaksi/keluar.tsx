@@ -92,11 +92,14 @@ export default function BarangKeluarPage() {
   const handleCameraDetected = useCallback(async (barcode: string) => {
     try {
       const result = await apiFetch<Item>(`/api/items/barcode/${encodeURIComponent(barcode)}`);
+      if ((result.status ?? "active") !== "active") {
+        throw new Error("Barang tidak aktif.");
+      }
       addItemToDraft(result);
     } catch {
-      toast({ title: "Barcode tidak ditemukan", description: "Barang belum terdaftar di Master Material.", variant: "destructive" });
+      throw new Error("Barcode tidak ditemukan (Barang belum terdaftar).");
     }
-  }, [addItemToDraft, toast]);
+  }, [addItemToDraft]);
 
   /* Manual dropdown add */
   const addDetail = () => {
