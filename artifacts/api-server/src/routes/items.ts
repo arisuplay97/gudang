@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, isNull } from "drizzle-orm";
 import {
   db, itemsTable, categoriesTable, unitsTable, suppliersTable, auditLogsTable,
   stockInTable, stockInItemsTable, stockOutTable, stockOutItemsTable,
@@ -147,12 +147,15 @@ router.post("/items", requireAuth, async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const insertData = { ...parsed.data, unitPrice: String(parsed.data.unitPrice) };
-  if (insertData.barcode === "") insertData.barcode = null;
+  // Auto-generate barcode from code if not provided
+  if (!insertData.barcode || insertData.barcode === "") {
+    insertData.barcode = insertData.code;
+  }
 
   const [row] = await db.insert(itemsTable).values(insertData).returning();
   const [full] = await joinedItems().where(eq(itemsTable.id, row.id));
 
-  await db.insert(auditLogsTable).values({ entityType: "item", entityId: row.id, action: "create", description: `Barang ${row.name} ditambahkan`, userId: req.session.userId, username: req.session.username });
+  await db.insert(auditLogsTable).values({ entityType: "item", entityId: row.id, action: "create", description: `Barang ${row.name} ditambahkan (barcode: ${row.barcode})`, userId: req.session.userId, username: req.session.username });
 
   res.status(201).json(fmtItem(full));
 });
@@ -207,6 +210,17 @@ router.post("/import/items", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json({ success, failed: errors.length, errors });
+});
+
+// POST /items/backfill-barcodes — generate barcode for existing items without one
+router.post("/items/backfill-barcodes", requireAuth, async (req, res): Promise<void> => {
+  const rows = await db.select({ id: itemsTable.id, code: itemsTable.code }).from(itemsTable).where(isNull(itemsTable.barcode));
+  let updated = 0;
+  for (const row of rows) {
+    await db.update(itemsTable).set({ barcode: row.code }).where(eq(itemsTable.id, row.id));
+    updated++;
+  }
+  res.json({ updated });
 });
 
 export default router;
