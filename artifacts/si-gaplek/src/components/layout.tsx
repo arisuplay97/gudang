@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { roleLabel } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -139,7 +139,7 @@ function NavLink({
   collapsed?: boolean;
   onNavigate?: () => void;
 }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
 
@@ -180,15 +180,17 @@ function NavLink({
               const childActive = child.href && location.startsWith(child.href);
               return (
                 <DropdownMenuItem key={child.href} asChild>
-                  <Link href={child.href!}>
-                    <button
-                      onClick={onNavigate}
-                      className={cn("w-full flex items-center gap-2 text-sm", childActive && "font-medium text-primary")}
-                    >
-                      <child.icon className="w-4 h-4" />
-                      <span>{child.label}</span>
-                    </button>
-                  </Link>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(child.href!);
+                      onNavigate?.();
+                    }}
+                    className={cn("w-full flex items-center gap-2 text-sm", childActive && "font-medium text-primary")}
+                  >
+                    <child.icon className="w-4 h-4" />
+                    <span>{child.label}</span>
+                  </button>
                 </DropdownMenuItem>
               );
             })}
@@ -225,7 +227,11 @@ function NavLink({
   // Leaf nav item
   const linkContent = (
     <button
-      onClick={onNavigate}
+      onClick={(e) => {
+        e.preventDefault();
+        navigate(item.href!);
+        onNavigate?.();
+      }}
       className={cn(
         "w-full flex items-center gap-3 rounded-lg text-sm transition-colors",
         "hover:bg-accent hover:text-accent-foreground",
@@ -242,7 +248,7 @@ function NavLink({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href={item.href!}>{linkContent}</Link>
+          {linkContent}
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={8}>
           {item.label}
@@ -251,7 +257,7 @@ function NavLink({
     );
   }
 
-  return <Link href={item.href!}>{linkContent}</Link>;
+  return linkContent;
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
