@@ -25,7 +25,7 @@ interface StockReport {
 
 export default function LaporanStokPage() {
   const [search, setSearch] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [categoryId, setCategoryId] = useState<string>("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["reports/stock", search, categoryId],
@@ -61,10 +61,10 @@ export default function LaporanStokPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input placeholder="Cari barang..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <Select value={categoryId} onValueChange={setCategoryId}>
+            <Select value={categoryId || "__all__"} onValueChange={v => setCategoryId(v === "__all__" ? "" : v)}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Semua Kategori" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Semua Kategori</SelectItem>
+                <SelectItem value="__all__">Semua Kategori</SelectItem>
                 {categories?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -75,25 +75,25 @@ export default function LaporanStokPage() {
             <TableHeader><TableRow><TableHead>Kode</TableHead><TableHead>Nama Barang</TableHead><TableHead>Kategori</TableHead><TableHead>Satuan</TableHead><TableHead className="text-right">Stok</TableHead><TableHead className="text-right">Min. Stok</TableHead><TableHead className="text-right">Nilai</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
               {isLoading ? Array(6).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-               !data?.length ? <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground"><BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Tidak ada data stok</p></TableCell></TableRow> :
-               data.map(item => (
-                <TableRow key={item.itemId}>
-                  <TableCell className="font-mono text-sm">{item.itemCode}</TableCell>
-                  <TableCell className="font-medium">{item.itemName}</TableCell>
-                  <TableCell>{item.categoryName ?? "-"}</TableCell>
-                  <TableCell>{item.unitName ?? "-"}</TableCell>
-                  <TableCell className="text-right font-medium">{formatNumber(item.currentStock)}</TableCell>
-                  <TableCell className="text-right text-muted-foreground">{item.minimumStock}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.totalValue)}</TableCell>
-                  <TableCell>
-                    {item.currentStock <= item.minimumStock ? (
-                      <Badge variant="destructive" className="text-xs"><AlertTriangle className="w-3 h-3 mr-1" />Rendah</Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-xs">Normal</Badge>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                !data?.length ? <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground"><BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Tidak ada data stok</p></TableCell></TableRow> :
+                  data.map(item => (
+                    <TableRow key={item.itemId}>
+                      <TableCell className="font-mono text-sm">{item.itemCode}</TableCell>
+                      <TableCell className="font-medium">{item.itemName}</TableCell>
+                      <TableCell>{item.categoryName ?? "-"}</TableCell>
+                      <TableCell>{item.unitName ?? "-"}</TableCell>
+                      <TableCell className="text-right font-medium">{formatNumber(item.currentStock)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{item.minimumStock}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.totalValue)}</TableCell>
+                      <TableCell>
+                        {item.currentStock <= item.minimumStock ? (
+                          <Badge variant="destructive" className="text-xs"><AlertTriangle className="w-3 h-3 mr-1" />Rendah</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">Normal</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
             </TableBody>
           </Table>
         </CardContent>

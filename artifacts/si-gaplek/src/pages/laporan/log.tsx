@@ -41,10 +41,10 @@ export default function LogAktivitasPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <Select value={entity} onValueChange={setEntity}>
+          <Select value={entity || "__all__"} onValueChange={v => setEntity(v === "__all__" ? "" : v)}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Semua Entitas" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Semua Entitas</SelectItem>
+              <SelectItem value="__all__">Semua Entitas</SelectItem>
               <SelectItem value="item">Barang</SelectItem>
               <SelectItem value="stock_in">Barang Masuk</SelectItem>
               <SelectItem value="stock_out">Barang Keluar</SelectItem>

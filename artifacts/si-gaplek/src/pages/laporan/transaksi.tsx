@@ -47,10 +47,10 @@ export default function LaporanTransaksiPage() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-wrap gap-3">
-            <Select value={type} onValueChange={setType}>
+            <Select value={type || "__all__"} onValueChange={v => setType(v === "__all__" ? "" : v)}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Semua Tipe" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Semua Tipe</SelectItem>
+                <SelectItem value="__all__">Semua Tipe</SelectItem>
                 <SelectItem value="stock_in">Barang Masuk</SelectItem>
                 <SelectItem value="stock_out">Barang Keluar</SelectItem>
                 <SelectItem value="mutation">Mutasi</SelectItem>
