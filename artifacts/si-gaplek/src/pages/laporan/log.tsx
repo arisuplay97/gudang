@@ -13,7 +13,7 @@ interface AuditLog {
   id: number;
   userId: number | null;
   action: string;
-  entity: string;
+  entityType: string;
   entityId: number | null;
   description: string | null;
   createdAt: string;
@@ -25,7 +25,7 @@ export default function LogAktivitasPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["audit-logs", entity],
-    queryFn: () => apiFetch<AuditLog[]>(`/api/reports/audit-logs${entity ? `?entity=${entity}` : ""}`),
+    queryFn: () => apiFetch<AuditLog[]>(`/api/audit-logs${entity ? `?entityType=${entity}` : ""}`),
   });
 
   const actionColor = (action: string) => {
@@ -57,16 +57,16 @@ export default function LogAktivitasPage() {
             <TableHeader><TableRow><TableHead>Waktu</TableHead><TableHead>Pengguna</TableHead><TableHead>Aksi</TableHead><TableHead>Entitas</TableHead><TableHead>Deskripsi</TableHead></TableRow></TableHeader>
             <TableBody>
               {isLoading ? Array(8).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-               !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><ScrollText className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada log aktivitas</p></TableCell></TableRow> :
-               data.map(log => (
-                <TableRow key={log.id}>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
-                  <TableCell className="font-medium text-sm">{log.userName ?? `User #${log.userId}`}</TableCell>
-                  <TableCell><Badge variant={actionColor(log.action)} className="text-xs">{log.action}</Badge></TableCell>
-                  <TableCell className="text-sm">{log.entity}{log.entityId ? ` #${log.entityId}` : ""}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{log.description ?? "-"}</TableCell>
-                </TableRow>
-              ))}
+                !data?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><ScrollText className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada log aktivitas</p></TableCell></TableRow> :
+                  data.map(log => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
+                      <TableCell className="font-medium text-sm">{log.userName ?? `User #${log.userId}`}</TableCell>
+                      <TableCell><Badge variant={actionColor(log.action) as any} className="text-xs">{log.action}</Badge></TableCell>
+                      <TableCell className="text-sm">{log.entityType}{log.entityId ? ` #${log.entityId}` : ""}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{log.description ?? "-"}</TableCell>
+                    </TableRow>
+                  ))}
             </TableBody>
           </Table>
         </CardContent>

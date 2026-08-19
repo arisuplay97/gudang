@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -13,16 +13,12 @@ import { ScrollText } from "lucide-react";
 
 interface TransactionReport {
   id: number;
+  referenceNo: string;
   type: string;
-  referenceNumber: string;
-  itemName: string;
-  itemCode: string;
-  quantity: number;
-  unitName: string | null;
-  partyName: string | null;
-  notes: string | null;
-  createdAt: string;
-  userName: string | null;
+  status: string;
+  totalItems: number;
+  transactionDate: string;
+  createdByName: string | null;
 }
 
 export default function LaporanTransaksiPage() {
@@ -35,8 +31,8 @@ export default function LaporanTransaksiPage() {
     queryFn: () => {
       const params = new URLSearchParams();
       if (type) params.set("type", type);
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
+      if (from) params.set("startDate", from);
+      if (to) params.set("endDate", to);
       return apiFetch<TransactionReport[]>(`/api/reports/transactions?${params.toString()}`);
     },
   });
@@ -71,24 +67,20 @@ export default function LaporanTransaksiPage() {
         </CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Tipe</TableHead><TableHead>No. Referensi</TableHead><TableHead>Barang</TableHead><TableHead className="text-right">Qty</TableHead><TableHead>Satuan</TableHead><TableHead>Pihak</TableHead><TableHead>Operator</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Tipe</TableHead><TableHead>No. Referensi</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Operator</TableHead></TableRow></TableHeader>
             <TableBody>
-              {isLoading ? Array(6).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-               !data?.length ? <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground"><ScrollText className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Tidak ada data transaksi</p></TableCell></TableRow> :
-               data.map((t, i) => (
-                <TableRow key={`${t.type}-${t.id}-${i}`}>
-                  <TableCell className="text-sm">{formatDate(t.createdAt)}</TableCell>
-                  <TableCell><Badge variant={typeBadge(t.type)} className="text-xs">{typeLabel(t.type)}</Badge></TableCell>
-                  <TableCell className="font-mono text-sm">{t.referenceNumber}</TableCell>
-                  <TableCell>
-                    <div><p className="font-medium text-sm">{t.itemName}</p><p className="text-xs text-muted-foreground">{t.itemCode}</p></div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">{t.quantity}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{t.unitName ?? "-"}</TableCell>
-                  <TableCell className="text-sm">{t.partyName ?? "-"}</TableCell>
-                  <TableCell className="text-sm">{t.userName ?? "-"}</TableCell>
-                </TableRow>
-              ))}
+              {isLoading ? Array(6).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+                !data?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><ScrollText className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Tidak ada data transaksi</p></TableCell></TableRow> :
+                  data.map((t, i) => (
+                    <TableRow key={`${t.type}-${t.id}-${i}`}>
+                      <TableCell className="text-sm">{formatDate(t.transactionDate)}</TableCell>
+                      <TableCell><Badge variant={typeBadge(t.type)} className="text-xs">{typeLabel(t.type)}</Badge></TableCell>
+                      <TableCell className="font-mono text-sm">{t.referenceNo}</TableCell>
+                      <TableCell><Badge variant="secondary" className="text-xs">{t.status}</Badge></TableCell>
+                      <TableCell className="text-right font-medium">{t.totalItems}</TableCell>
+                      <TableCell className="text-sm">{t.createdByName ?? "-"}</TableCell>
+                    </TableRow>
+                  ))}
             </TableBody>
           </Table>
         </CardContent>

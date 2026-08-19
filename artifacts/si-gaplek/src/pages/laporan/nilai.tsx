@@ -6,22 +6,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileSpreadsheet, DollarSign } from "lucide-react";
 
-interface InventoryValue {
-  categoryName: string;
+interface InventoryValueResponse {
   totalItems: number;
-  totalStock: number;
   totalValue: number;
-  items: Array<{ id: number; code: string; name: string; stock: number; unitPrice: number; value: number; unit: string }>;
+  byCategory: Array<{
+    categoryName: string;
+    itemCount: number;
+    totalValue: number;
+  }>;
 }
 
 export default function LaporanNilaiPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["reports/inventory-value"],
-    queryFn: () => apiFetch<InventoryValue[]>("/api/reports/inventory-value"),
+    queryFn: () => apiFetch<InventoryValueResponse>("/api/reports/inventory-value"),
   });
-
-  const grandTotal = data?.reduce((sum, c) => sum + c.totalValue, 0) ?? 0;
-  const grandItems = data?.reduce((sum, c) => sum + c.totalItems, 0) ?? 0;
 
   return (
     <div className="p-6 space-y-4">
@@ -29,48 +28,39 @@ export default function LaporanNilaiPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card><CardContent className="p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center"><DollarSign className="w-6 h-6 text-green-600" /></div>
-          <div><p className="text-sm text-muted-foreground">Total Nilai Inventaris</p><p className="text-2xl font-bold text-green-600">{formatCurrency(grandTotal)}</p></div>
+          <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center"><DollarSign className="w-6 h-6 text-green-600" /></div>
+          <div><p className="text-sm text-muted-foreground">Total Nilai Inventaris</p><p className="text-2xl font-bold text-green-600">{formatCurrency(data?.totalValue ?? 0)}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-blue-600" /></div>
-          <div><p className="text-sm text-muted-foreground">Total Jenis Barang</p><p className="text-2xl font-bold">{grandItems}</p></div>
+          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-blue-600" /></div>
+          <div><p className="text-sm text-muted-foreground">Total Jenis Barang</p><p className="text-2xl font-bold">{data?.totalItems ?? 0}</p></div>
         </CardContent></Card>
       </div>
 
       {isLoading ? (
         <div className="space-y-3">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
-      ) : !data?.length ? (
+      ) : !data?.byCategory?.length ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground"><FileSpreadsheet className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Tidak ada data inventaris</p></CardContent></Card>
       ) : (
-        data.map(cat => (
-          <Card key={cat.categoryName}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center justify-between">
-                <span>{cat.categoryName}</span>
-                <span className="text-green-600 font-bold">{formatCurrency(cat.totalValue)}</span>
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">{cat.totalItems} jenis barang • Total stok: {formatNumber(cat.totalStock)}</p>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader><TableRow><TableHead>Kode</TableHead><TableHead>Nama</TableHead><TableHead className="text-right">Stok</TableHead><TableHead>Satuan</TableHead><TableHead className="text-right">Harga Satuan</TableHead><TableHead className="text-right">Total Nilai</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {cat.items?.map(item => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-mono text-sm">{item.code}</TableCell>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell className="text-right">{formatNumber(item.stock)}</TableCell>
-                      <TableCell>{item.unit}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(item.value)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        ))
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Nilai per Kategori</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader><TableRow><TableHead>Kategori</TableHead><TableHead className="text-right">Jumlah Barang</TableHead><TableHead className="text-right">Total Nilai</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {data.byCategory.map(cat => (
+                  <TableRow key={cat.categoryName}>
+                    <TableCell className="font-medium">{cat.categoryName}</TableCell>
+                    <TableCell className="text-right">{formatNumber(cat.itemCount)}</TableCell>
+                    <TableCell className="text-right font-medium text-green-600">{formatCurrency(cat.totalValue)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
