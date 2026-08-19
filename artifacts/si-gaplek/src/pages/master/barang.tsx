@@ -257,69 +257,69 @@ export default function BarangPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  <AnimatePresence>
-                    <motion.tbody variants={stagger} initial="initial" animate="animate">
-                      {items.map((item, idx) => (
-                        <motion.tr
-                          key={item.id}
-                          variants={fadeIn}
-                          transition={{ duration: 0.3, delay: idx * 0.03 }}
-                          className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                          layout
-                        >
-                          <TableCell className="font-mono text-sm">{item.code}</TableCell>
-                          <TableCell>
-                            <p className="font-medium">{item.name}</p>
-                          </TableCell>
-                          <TableCell>{item.categoryName ?? "-"}</TableCell>
-                          <TableCell>{item.unitName ?? "-"}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant={item.currentStock <= item.minimumStock ? "destructive" : "secondary"}>
-                              {item.currentStock <= item.minimumStock && <AlertTriangle className="w-3 h-3 mr-1" />}
-                              {formatNumber(item.currentStock)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.barcode ? (
-                              <motion.div
-                                whileHover={{ scale: 1.15 }}
-                                transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                                className="inline-block cursor-pointer"
-                                onClick={() => setDetailItem(item)}
-                              >
-                                <BarcodeDisplay value={item.barcode} size={36} />
-                              </motion.div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={(item.status ?? "active") === "active" ? "default" : "secondary"}>
-                              {(item.status ?? "active") === "active" ? "Aktif" : "Nonaktif"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDetailItem(item)}>
-                                  <Eye className="w-4 h-4" />
-                                </Button>
-                              </motion.div>
-                              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(item)}>
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                              </motion.div>
-                              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteId(item.id)}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </motion.div>
-                            </div>
-                          </TableCell>
-                        </motion.tr>
-                      ))}
-                    </motion.tbody>
+                  <AnimatePresence mode="popLayout">
+                    {items.map((item, idx) => (
+                      <motion.tr
+                        key={item.id}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -12 }}
+                        transition={{ duration: 0.3, delay: idx * 0.03 }}
+                        className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+                        layout
+                      >
+                        <TableCell className="font-mono text-sm">{item.code}</TableCell>
+                        <TableCell>
+                          <p className="font-medium">{item.name}</p>
+                        </TableCell>
+                        <TableCell>{item.categoryName ?? "-"}</TableCell>
+                        <TableCell>{item.unitName ?? "-"}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant={item.currentStock <= item.minimumStock ? "destructive" : "secondary"}>
+                            {item.currentStock <= item.minimumStock && <AlertTriangle className="w-3 h-3 mr-1" />}
+                            {formatNumber(item.currentStock)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.barcode ? (
+                            <motion.div
+                              whileHover={{ scale: 1.15 }}
+                              transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                              className="inline-block cursor-pointer"
+                              onClick={() => setDetailItem(item)}
+                            >
+                              <BarcodeDisplay value={item.barcode} size={36} />
+                            </motion.div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={(item.status ?? "active") === "active" ? "default" : "secondary"}>
+                            {(item.status ?? "active") === "active" ? "Aktif" : "Nonaktif"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDetailItem(item)}>
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </motion.div>
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(item)}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                            </motion.div>
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteId(item.id)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </motion.div>
+                          </div>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
                   </AnimatePresence>
                 )}
               </TableBody>
