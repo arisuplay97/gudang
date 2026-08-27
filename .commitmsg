@@ -1,1 +1,1 @@
-fix: replace GIS mock canvas with real Leaflet interactive map
+chore: add seed data, fix Windows dev setup, add Vite API proxy
