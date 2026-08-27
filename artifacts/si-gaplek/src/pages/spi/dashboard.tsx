@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
     ShieldCheck, Clock, AlertTriangle, CheckCircle, BarChart3, Activity,
-    Package, Truck, MapPin, Timer, Loader2
+    Package, Truck, MapPin, Timer, Eye, XCircle,
 } from "lucide-react";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    PieChart, Pie, Cell, Legend,
+    PieChart, Pie, Cell,
 } from "recharts";
+import { useLocation } from "wouter";
 
 interface SpiDashboardData {
     cards: {
@@ -26,37 +28,35 @@ interface SpiDashboardData {
     branchPerformance: Array<{
         branchName: string;
         total: number;
+        verified?: number;
+        overdue?: number;
     }>;
 }
 
-const STATUS_COLORS = [
-    "#f97316", "#3b82f6", "#8b5cf6", "#10b981", "#06b6d4",
-    "#eab308", "#ef4444", "#6366f1",
-];
+const PIE_COLORS = ["#e8c468", "#5b7553", "#8b6b4a", "#a3b899", "#c27c5a", "#6b9080"];
+
+function DashCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+    return (
+        <div className={`rounded-2xl p-5 bg-white dark:bg-card border border-[#eae8e0] dark:border-border transition-colors duration-200 ${className}`}>
+            {children}
+        </div>
+    );
+}
 
 export default function SpiDashboardPage() {
     const { data, isLoading } = useQuery({
         queryKey: ["spi-dashboard"],
         queryFn: () => apiFetch<SpiDashboardData>("/api/spi/dashboard"),
     });
-
-    if (isLoading) {
-        return (
-            <div className="p-8 flex justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            </div>
-        );
-    }
+    const [, navigate] = useLocation();
 
     const cards = data?.cards || {
         totalTracked: 0, menungguDiterima: 0, diterimaCabang: 0,
         menungguPemasangan: 0, terpasang: 0, menungguVerifikasi: 0,
         terverifikasi: 0, overdue: 0, locationMismatch: 0, terpasangSebagian: 0,
     };
-
     const branchPerformance = data?.branchPerformance || [];
 
-    // Status distribution chart data
     const statusChartData = [
         { name: "Menunggu Diterima", value: cards.menungguDiterima },
         { name: "Diterima Cabang", value: cards.diterimaCabang },
@@ -66,187 +66,314 @@ export default function SpiDashboardPage() {
         { name: "Terverifikasi", value: cards.terverifikasi },
     ].filter(d => d.value > 0);
 
+    // SLA compliance calculation
+    const total = cards.totalTracked || 1;
+    const onTimeCount = cards.terverifikasi + cards.terpasang + cards.menungguVerifikasi;
+    const compliance = Math.round((onTimeCount / total) * 100);
+
+    // SLA Overview breakdown
+    const slaItems = [
+        { label: "Normal", count: cards.diterimaCabang + cards.menungguPemasangan, color: "bg-[#5b7553]", textColor: "text-[#5b7553] dark:text-green-400" },
+        { label: "Warning", count: cards.terpasangSebagian ?? 0, color: "bg-[#e8c468]", textColor: "text-[#d4a55a] dark:text-yellow-400" },
+        { label: "Kritis", count: cards.menungguVerifikasi, color: "bg-[#c27c5a]", textColor: "text-[#c27c5a] dark:text-orange-400" },
+        { label: "Overdue", count: cards.overdue, color: "bg-red-600", textColor: "text-red-600 dark:text-red-400" },
+    ];
+
     return (
-        <div className="p-6 md:p-8 space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Dashboard SPI</h1>
-                <p className="text-muted-foreground">
-                    Satuan Pengawasan Intern — Ringkasan Audit dan Verifikasi Pemasangan.
-                </p>
-            </div>
+        <div className="min-h-screen bg-[#f7f6f3] dark:bg-background transition-colors duration-200">
+            <div className="p-5 md:p-8 max-w-[1600px] mx-auto space-y-5">
+                {/* Header */}
+                <div>
+                    <h1 className="text-2xl font-semibold text-[#2d2d2a] dark:text-foreground">Dashboard SPI</h1>
+                    <p className="text-sm text-[#8a8a7a] dark:text-muted-foreground">
+                        Satuan Pengawasan Intern — Audit dan Verifikasi
+                    </p>
+                </div>
 
-            {/* Row 1: Overview cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                <Card className="bg-slate-50/50 border-slate-200">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-slate-900">Total Tracked</CardTitle>
-                        <Package className="w-4 h-4 text-slate-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-slate-700">{cards.totalTracked}</div>
-                        <p className="text-xs text-slate-600/80 mt-1">Material dalam pelacakan</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-yellow-50/50 border-yellow-200">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-yellow-900">Menunggu Diterima</CardTitle>
-                        <Truck className="w-4 h-4 text-yellow-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-yellow-700">{cards.menungguDiterima}</div>
-                        <p className="text-xs text-yellow-600/80 mt-1">Belum di-scan cabang</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-orange-50/50 border-orange-200">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-orange-900">Menunggu Verifikasi</CardTitle>
-                        <Clock className="w-4 h-4 text-orange-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-orange-700">{cards.menungguVerifikasi}</div>
-                        <p className="text-xs text-orange-600/80 mt-1">Bukti fisik, butuh review</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-green-50/50 border-green-200">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-green-900">Terverifikasi</CardTitle>
-                        <ShieldCheck className="w-4 h-4 text-green-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-green-700">{cards.terverifikasi}</div>
-                        <p className="text-xs text-green-600/80 mt-1">Sesuai standard</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-red-50/50 border-red-200">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-red-900">Overdue</CardTitle>
-                        <AlertTriangle className="w-4 h-4 text-red-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-red-700">{cards.overdue}</div>
-                        <p className="text-xs text-red-600/80 mt-1">Melewati SLA 7 hari</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Row 2: Secondary cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Diterima Cabang</CardTitle>
-                        <CheckCircle className="w-4 h-4 text-blue-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{cards.diterimaCabang}</div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Belum Terpasang</CardTitle>
-                        <Timer className="w-4 h-4 text-amber-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{cards.menungguPemasangan}</div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Terpasang Sebagian</CardTitle>
-                        <Activity className="w-4 h-4 text-purple-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{cards.terpasangSebagian ?? 0}</div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Terpasang</CardTitle>
-                        <CheckCircle className="w-4 h-4 text-teal-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{cards.terpasang}</div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Location Mismatch</CardTitle>
-                        <MapPin className="w-4 h-4 text-rose-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{cards.locationMismatch}</div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Row 3: Charts */}
-            <div className="grid gap-4 md:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <BarChart3 className="w-5 h-5" /> Distribusi Status Material
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-64">
-                        {statusChartData.length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-                                Belum ada data tracking material.
-                            </div>
-                        ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={statusChartData}
-                                        dataKey="value"
-                                        nameKey="name"
-                                        cx="50%"
-                                        cy="50%"
-                                        outerRadius={80}
-                                        label={({ name, value }) => `${name}: ${value}`}
-                                    >
-                                        {statusChartData.map((_, i) => (
-                                            <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend />
-                                </PieChart>
-                            </ResponsiveContainer>
+                {/* Row 1: KPI Cards */}
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                    {/* Total Tracked */}
+                    <div className="rounded-2xl p-5 bg-[#5b7553] text-white">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-medium opacity-80">Total Tracked</p>
+                            <Package className="w-4 h-4 opacity-60" />
+                        </div>
+                        {isLoading ? <Skeleton className="h-8 w-16 bg-white/20" /> : (
+                            <>
+                                <p className="text-3xl font-bold">{cards.totalTracked}</p>
+                                <p className="text-xs opacity-60 mt-1">Material dalam pelacakan</p>
+                            </>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <BarChart3 className="w-5 h-5" /> Performa Cabang (Jumlah Tracking)
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-64">
-                        {branchPerformance.length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-                                Belum ada data performa cabang.
-                            </div>
-                        ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={branchPerformance}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="branchName" tick={{ fontSize: 12 }} />
-                                    <YAxis allowDecimals={false} />
-                                    <Tooltip />
-                                    <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Total Tracking" />
-                                </BarChart>
-                            </ResponsiveContainer>
+                    {/* Diterima */}
+                    <DashCard>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Diterima</p>
+                            <CheckCircle className="w-4 h-4 text-blue-500" />
+                        </div>
+                        {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                            <p className="text-2xl font-bold text-[#2d2d2a] dark:text-foreground">{cards.diterimaCabang}</p>
                         )}
-                    </CardContent>
-                </Card>
+                    </DashCard>
+
+                    {/* Terpasang */}
+                    <DashCard>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Terpasang</p>
+                            <Activity className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
+                        </div>
+                        {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                            <p className="text-2xl font-bold text-[#2d2d2a] dark:text-foreground">{cards.terpasang}</p>
+                        )}
+                    </DashCard>
+
+                    {/* Terverifikasi */}
+                    <DashCard>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Terverifikasi</p>
+                            <ShieldCheck className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
+                        </div>
+                        {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                            <p className="text-2xl font-bold text-[#5b7553] dark:text-green-500">{cards.terverifikasi}</p>
+                        )}
+                    </DashCard>
+
+                    {/* Overdue */}
+                    <DashCard>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Overdue</p>
+                            <AlertTriangle className="w-4 h-4 text-red-500" />
+                        </div>
+                        {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                            <p className={`text-2xl font-bold ${cards.overdue > 0 ? "text-red-600 dark:text-red-500" : "text-[#2d2d2a] dark:text-foreground"}`}>
+                                {cards.overdue}
+                            </p>
+                        )}
+                    </DashCard>
+                </div>
+
+                {/* Row 2: SLA Overview + SLA Compliance + Detail cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {/* SLA Overview */}
+                    <DashCard>
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground">SLA Overview</p>
+                                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Status SLA 7 hari</p>
+                            </div>
+                            <Timer className="w-4 h-4 text-[#d4a55a] dark:text-yellow-500" />
+                        </div>
+                        <div className="space-y-2.5">
+                            {slaItems.map(item => (
+                                <div key={item.label} className="flex items-center justify-between hover:bg-muted/50 rounded-lg px-2 py-1.5 transition-colors">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className={`w-2 h-2 rounded-full ${item.color}`} />
+                                        <span className="text-sm text-[#6b6b5e] dark:text-muted-foreground">{item.label}</span>
+                                    </div>
+                                    <span className={`text-sm font-bold ${item.textColor}`}>{item.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Compliance bar */}
+                        <div className="mt-4 pt-3 border-t border-[#eae8e0] dark:border-border">
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Compliance</p>
+                                <p className={`text-sm font-bold ${compliance >= 80 ? "text-[#5b7553]" : compliance >= 60 ? "text-[#d4a55a]" : "text-[#c27c5a]"}`}>
+                                    {compliance}%
+                                </p>
+                            </div>
+                            <div className="w-full h-2 rounded-full bg-[#f0efe9] dark:bg-muted overflow-hidden">
+                                <div
+                                    className="h-full rounded-full transition-all duration-700"
+                                    style={{
+                                        width: `${compliance}%`,
+                                        background: compliance >= 80 ? "#5b7553" : compliance >= 60 ? "#e8c468" : "#c27c5a",
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </DashCard>
+
+                    {/* Detail secondary cards */}
+                    <DashCard>
+                        <p className="text-sm font-semibold mb-4 text-[#2d2d2a] dark:text-foreground">Status Detail</p>
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-3 py-1.5">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#fff0e6] dark:bg-orange-950/50">
+                                    <Truck className="w-4 h-4 text-[#c27c5a] dark:text-orange-500" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Menunggu Diterima</p>
+                                    <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Belum di-scan cabang</p>
+                                </div>
+                                <Badge variant={cards.menungguDiterima > 0 ? "destructive" : "secondary"}>{cards.menungguDiterima}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3 py-1.5">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#f5f0e0] dark:bg-yellow-950/50">
+                                    <Timer className="w-4 h-4 text-[#8b6b4a] dark:text-yellow-500" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Menunggu Pemasangan</p>
+                                    <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Sudah diterima, belum dipasang</p>
+                                </div>
+                                <Badge variant="secondary">{cards.menungguPemasangan}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3 py-1.5">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-50 dark:bg-purple-950/50">
+                                    <Activity className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Sebagian Terpasang</p>
+                                    <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Partial installation</p>
+                                </div>
+                                <Badge variant="secondary">{cards.terpasangSebagian ?? 0}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3 py-1.5">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#fff0e6] dark:bg-rose-950/50">
+                                    <MapPin className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Location Mismatch</p>
+                                    <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Lokasi tidak sesuai</p>
+                                </div>
+                                <Badge variant={cards.locationMismatch > 0 ? "destructive" : "secondary"}>{cards.locationMismatch}</Badge>
+                            </div>
+                        </div>
+                    </DashCard>
+
+                    {/* Quick actions */}
+                    <DashCard className="bg-[#fffdf5] dark:bg-card">
+                        <p className="text-sm font-semibold mb-4 text-[#2d2d2a] dark:text-foreground">Aksi Cepat SPI</p>
+                        <div className="space-y-2">
+                            <button
+                                onClick={() => navigate("/spi/verifikasi")}
+                                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#f0efe9] dark:hover:bg-muted transition-colors text-left"
+                            >
+                                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#e8f5e3] dark:bg-green-950/50">
+                                    <Eye className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Verifikasi Pending</p>
+                                    <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">{cards.menungguVerifikasi} menunggu review</p>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => navigate("/cabang/tracking")}
+                                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#f0efe9] dark:hover:bg-muted transition-colors text-left"
+                            >
+                                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#fff0e6] dark:bg-red-950/50">
+                                    <AlertTriangle className="w-4 h-4 text-[#c27c5a] dark:text-red-500" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Material Overdue</p>
+                                    <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">{cards.overdue} melewati SLA</p>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => navigate("/spi/gis")}
+                                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#f0efe9] dark:hover:bg-muted transition-colors text-left"
+                            >
+                                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 dark:bg-blue-950/50">
+                                    <MapPin className="w-4 h-4 text-blue-600 dark:text-blue-500" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Peta Material (GIS)</p>
+                                    <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Lokasi pemasangan terverifikasi</p>
+                                </div>
+                            </button>
+                        </div>
+                    </DashCard>
+                </div>
+
+                {/* Row 3: Charts */}
+                <div className="grid gap-5 md:grid-cols-2">
+                    {/* Status Distribution Pie */}
+                    <DashCard className="p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <BarChart3 className="w-4 h-4 text-[#8a8a7a] dark:text-muted-foreground" />
+                            <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground">Distribusi Status Material</p>
+                        </div>
+                        <div className="h-56">
+                            {isLoading ? (
+                                <Skeleton className="h-full w-full rounded-xl" />
+                            ) : statusChartData.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-sm text-[#8a8a7a] dark:text-muted-foreground">
+                                    Belum ada data tracking.
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={statusChartData}
+                                            dataKey="value"
+                                            nameKey="name"
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={50}
+                                            outerRadius={80}
+                                            strokeWidth={3}
+                                            stroke="var(--color-card, #fff)"
+                                        >
+                                            {statusChartData.map((_, i) => (
+                                                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #eae8e0", fontSize: 12 }} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                            {statusChartData.map((d, i) => (
+                                <span key={d.name} className="flex items-center gap-1.5 text-xs text-[#6b6b5e] dark:text-muted-foreground">
+                                    <span className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                                    {d.name}: <b>{d.value}</b>
+                                </span>
+                            ))}
+                        </div>
+                    </DashCard>
+
+                    {/* Branch Performance Bar */}
+                    <DashCard className="p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <BarChart3 className="w-4 h-4 text-[#8a8a7a] dark:text-muted-foreground" />
+                            <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground">Performa Cabang</p>
+                        </div>
+                        <div className="h-56">
+                            {isLoading ? (
+                                <Skeleton className="h-full w-full rounded-xl" />
+                            ) : branchPerformance.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-sm text-[#8a8a7a] dark:text-muted-foreground">
+                                    Belum ada data performa cabang.
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={branchPerformance}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#eae8e0" strokeOpacity={0.5} />
+                                        <XAxis dataKey="branchName" tick={{ fontSize: 11, fill: "#8a8a7a" }} axisLine={false} tickLine={false} />
+                                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#8a8a7a" }} axisLine={false} tickLine={false} />
+                                        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #eae8e0", fontSize: 12 }} />
+                                        <Bar dataKey="total" fill="#5b7553" radius={[6, 6, 0, 0]} name="Total" />
+                                        <Bar dataKey="verified" fill="#a3b899" radius={[6, 6, 0, 0]} name="Terverifikasi" />
+                                        <Bar dataKey="overdue" fill="#c27c5a" radius={[6, 6, 0, 0]} name="Overdue" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
+                        <div className="flex gap-4 mt-2">
+                            <span className="flex items-center gap-1.5 text-xs text-[#6b6b5e] dark:text-muted-foreground">
+                                <span className="w-2 h-2 rounded-full bg-[#5b7553]" /> Total
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-[#6b6b5e] dark:text-muted-foreground">
+                                <span className="w-2 h-2 rounded-full bg-[#a3b899]" /> Terverifikasi
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-[#6b6b5e] dark:text-muted-foreground">
+                                <span className="w-2 h-2 rounded-full bg-[#c27c5a]" /> Overdue
+                            </span>
+                        </div>
+                    </DashCard>
+                </div>
             </div>
         </div>
     );

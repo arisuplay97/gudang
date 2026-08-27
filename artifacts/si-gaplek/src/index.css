@@ -68,14 +68,16 @@
 
 /* LIGHT MODE - SI GAPLEK Professional Government Theme */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
+  --button-outline: rgba(0, 0, 0, .10);
+  --badge-outline: rgba(0, 0, 0, .05);
   --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
+  --elevate-1: rgba(0, 0, 0, .03);
+  --elevate-2: rgba(0, 0, 0, .08);
 
-  --background: 210 40% 98%; /* Light gray-blue background */
-  --foreground: 222 47% 11%; /* Deep Navy Text */
+  --background: 210 40% 98%;
+  /* Light gray-blue background */
+  --foreground: 222 47% 11%;
+  /* Deep Navy Text */
 
   --border: 214 32% 91%;
   --input: 214 32% 91%;
@@ -89,10 +91,12 @@
   --popover-foreground: 222 47% 11%;
   --popover-border: 214 32% 91%;
 
-  --primary: 222 47% 11%; /* Authoritative Navy Blue */
+  --primary: 222 47% 11%;
+  /* Authoritative Navy Blue */
   --primary-foreground: 210 40% 98%;
 
-  --secondary: 214 32% 91%; /* Light Gray-Blue */
+  --secondary: 214 32% 91%;
+  /* Light Gray-Blue */
   --secondary-foreground: 222 47% 11%;
 
   --muted: 210 40% 96%;
@@ -104,16 +108,25 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
 
+  --success: 142 71% 28%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 0%;
+
   --chart-1: 222 47% 11%;
-  --chart-2: 142 71% 28%; /* Forest Green */
-  --chart-3: 38 92% 50%; /* Alert Orange */
+  --chart-2: 142 71% 28%;
+  /* Forest Green */
+  --chart-3: 38 92% 50%;
+  /* Alert Orange */
   --chart-4: 214 32% 91%;
   --chart-5: 215 16% 47%;
 
-  --sidebar: 222 47% 11%; /* Dark Navy Sidebar */
+  --sidebar: 222 47% 11%;
+  /* Dark Navy Sidebar */
   --sidebar-foreground: 210 40% 98%;
   --sidebar-border: 222 47% 15%;
-  --sidebar-primary: 142 71% 28%; /* Forest Green accents in sidebar */
+  --sidebar-primary: 142 71% 28%;
+  /* Forest Green accents in sidebar */
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 222 47% 15%;
   --sidebar-accent-foreground: 210 40% 98%;
@@ -122,9 +135,10 @@
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
-  
-  --radius: 0.375rem; /* Slightly sharper corners for institutional feel */
-  
+
+  --radius: 0.375rem;
+  /* Slightly sharper corners for institutional feel */
+
   --shadow-2xs: 0px 2px 0px 0px hsl(222 47% 11% / 0.05);
   --shadow-xs: 0px 2px 0px 0px hsl(222 47% 11% / 0.05);
   --shadow-sm: 0px 2px 0px 0px hsl(222 47% 11% / 0.05), 0px 1px 2px -1px hsl(222 47% 11% / 0.05);
@@ -133,7 +147,7 @@
   --shadow-lg: 0px 2px 0px 0px hsl(222 47% 11% / 0.05), 0px 4px 6px -1px hsl(222 47% 11% / 0.05);
   --shadow-xl: 0px 2px 0px 0px hsl(222 47% 11% / 0.05), 0px 8px 10px -1px hsl(222 47% 11% / 0.05);
   --shadow-2xl: 0px 2px 0px 0px hsl(222 47% 11% / 0.05);
-  
+
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-accent-border: hsl(var(--sidebar-accent));
   --primary-border: hsl(var(--primary));
@@ -144,11 +158,11 @@
 }
 
 .dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255, 255, 255, .10);
+  --badge-outline: rgba(255, 255, 255, .05);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255, 255, 255, .04);
+  --elevate-2: rgba(255, 255, 255, .09);
 
   --background: 222 47% 11%;
   --foreground: 210 40% 98%;
@@ -180,6 +194,11 @@
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 210 40% 98%;
 
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 0%;
+
   --chart-1: 210 40% 98%;
   --chart-2: 142 71% 45%;
   --chart-3: 38 92% 50%;
@@ -191,7 +210,145 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  /* Focus-visible accessibility ring */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+/* ─── Micro-animations ─────────────────────────────────── */
+
+/* Page enter animation */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: page-enter 0.35s ease-out both;
+}
+
+/* Card hover lift effect — opt-in via class */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.12);
+}
+
+/* Fade-in-up for staggered lists */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted) / 0.5) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Pulse dot (notification / live indicator) */
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: scale(1.3);
+  }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ─── Touch targets (mobile ≥44px) ────────────────────── */
+@media (pointer: coarse) {
+
+  button,
+  [role="button"],
+  a,
+  [role="tab"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ─── Reduced motion ──────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Scrollbar styling ───────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.35);
 }

@@ -43,8 +43,14 @@ export function formatNumber(value: number | null | undefined): string {
 
 export function roleLabel(role: string): string {
   const map: Record<string, string> = {
+    ADMIN: "Administrator",
     admin: "Administrator",
+    GUDANG: "Staff Gudang",
     gudang: "Staff Gudang",
+    CABANG: "Operator Cabang",
+    cabang: "Operator Cabang",
+    SPI: "Auditor SPI",
+    spi: "Auditor SPI",
     keuangan: "Staff Keuangan",
     pimpinan: "Pimpinan",
   };

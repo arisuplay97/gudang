@@ -1,10 +1,15 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
-import { eq, sql, gte, and, lt } from "drizzle-orm";
-import { db, itemsTable, stockInTable, stockOutTable, auditLogsTable, usersTable } from "@workspace/db";
+import { eq, sql, gte, and, lt, desc } from "drizzle-orm";
+import {
+  db, itemsTable, stockInTable, stockOutTable, auditLogsTable, usersTable,
+  materialTrackingTable, stockOutItemsTable, installationEvidenceTable, branchesTable,
+} from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
+
+const SLA_DAYS = 7;
 
 router.get("/dashboard/summary", requireAuth, async (_req, res): Promise<void> => {
   const allItems = await db.select().from(itemsTable);
@@ -15,7 +20,6 @@ router.get("/dashboard/summary", requireAuth, async (_req, res): Promise<void> =
   const stockInAll = await db.select().from(stockInTable);
   const stockOutAll = await db.select().from(stockOutTable);
 
-  // Support both legacy "finalized" and blueprint "DIKIRIM" statuses
   const isFinalized = (status: string) => status === "finalized" || status === "DIKIRIM";
 
   const today = new Date();
@@ -27,7 +31,6 @@ router.get("/dashboard/summary", requireAuth, async (_req, res): Promise<void> =
   const pendingIn = stockInAll.filter(r => r.status === "draft" || r.status === "DRAFT").length;
   const pendingOut = stockOutAll.filter(r => r.status === "draft" || r.status === "DRAFT").length;
 
-  // Blueprint Section 5: tracked vs non-tracked counts
   const trackedItems = allItems.filter(i => (i as any).trackingType === "TRACKED").length;
   const nonTrackedItems = totalItems - trackedItems;
 
@@ -107,4 +110,150 @@ router.get("/dashboard/stock-movement", requireAuth, async (_req, res): Promise<
   res.json(result);
 });
 
+/* ── NEW: Stock Health (Section 15) ── */
+router.get("/dashboard/stock-health", requireAuth, async (_req, res): Promise<void> => {
+  try {
+    const allItems = await db.select({
+      currentStock: itemsTable.currentStock,
+      minimumStock: itemsTable.minimumStock,
+      maximumStock: itemsTable.maximumStock,
+    }).from(itemsTable);
+
+    let aman = 0, menipis = 0, kritis = 0, habis = 0, overstock = 0;
+    for (const item of allItems) {
+      const cur = item.currentStock;
+      const min = item.minimumStock;
+      const max = (item as any).maximumStock ?? 999999;
+      if (cur === 0) habis++;
+      else if (cur <= min * 0.5) kritis++;
+      else if (cur <= min) menipis++;
+      else if (cur > max && max > 0) overstock++;
+      else aman++;
+    }
+    res.json({ aman, menipis, kritis, habis, overstock });
+  } catch (err) {
+    res.json({ aman: 0, menipis: 0, kritis: 0, habis: 0, overstock: 0 });
+  }
+});
+
+/* ── NEW: Aging Material (Section 16) ── */
+router.get("/dashboard/aging", requireAuth, async (_req, res): Promise<void> => {
+  try {
+    const now = new Date();
+    const allItems = await db.select({
+      id: itemsTable.id,
+      currentStock: itemsTable.currentStock,
+      createdAt: itemsTable.createdAt,
+    }).from(itemsTable).where(sql`${itemsTable.currentStock} > 0`);
+
+    const buckets = { "0-30": 0, "31-90": 0, "91-180": 0, "181-365": 0, ">365": 0 };
+    for (const item of allItems) {
+      const days = Math.floor((now.getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+      if (days <= 30) buckets["0-30"]++;
+      else if (days <= 90) buckets["31-90"]++;
+      else if (days <= 180) buckets["91-180"]++;
+      else if (days <= 365) buckets["181-365"]++;
+      else buckets[">365"]++;
+    }
+    res.json(buckets);
+  } catch (err) {
+    res.json({ "0-30": 0, "31-90": 0, "91-180": 0, "181-365": 0, ">365": 0 });
+  }
+});
+
+/* ── NEW: Exception Center (Section 18) ── */
+router.get("/dashboard/exceptions", requireAuth, async (_req, res): Promise<void> => {
+  try {
+    const slaDeadline = new Date();
+    slaDeadline.setDate(slaDeadline.getDate() - SLA_DAYS);
+
+    const [overdueResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(materialTrackingTable)
+      .where(and(
+        lt(materialTrackingTable.createdAt, slaDeadline),
+        sql`${materialTrackingTable.status} NOT IN ('TERVERIFIKASI', 'SELESAI')`
+      ));
+
+    const [mismatchResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(installationEvidenceTable)
+      .where(eq(installationEvidenceTable.locationMismatch, true));
+
+    const [rejectedResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(installationEvidenceTable)
+      .where(eq(installationEvidenceTable.status, "DITOLAK"));
+
+    const [pendingVerif] = await db.select({ count: sql<number>`count(*)` })
+      .from(installationEvidenceTable)
+      .where(eq(installationEvidenceTable.status, "PENDING"));
+
+    const lowStockCount = await db.select({ count: sql<number>`count(*)` })
+      .from(itemsTable)
+      .where(sql`${itemsTable.currentStock} <= ${itemsTable.minimumStock} AND ${itemsTable.currentStock} > 0`);
+
+    const zeroStockCount = await db.select({ count: sql<number>`count(*)` })
+      .from(itemsTable)
+      .where(sql`${itemsTable.currentStock} = 0 AND ${itemsTable.minimumStock} > 0`);
+
+    res.json({
+      overdue: Number(overdueResult?.count ?? 0),
+      locationMismatch: Number(mismatchResult?.count ?? 0),
+      evidenceRejected: Number(rejectedResult?.count ?? 0),
+      waitingVerification: Number(pendingVerif?.count ?? 0),
+      stockCritical: Number(lowStockCount[0]?.count ?? 0),
+      stockEmpty: Number(zeroStockCount[0]?.count ?? 0),
+    });
+  } catch (err) {
+    res.json({ overdue: 0, locationMismatch: 0, evidenceRejected: 0, waitingVerification: 0, stockCritical: 0, stockEmpty: 0 });
+  }
+});
+
+/* ── NEW: Top Material Keluar (Section 20) ── */
+router.get("/dashboard/top-outgoing", requireAuth, async (_req, res): Promise<void> => {
+  try {
+    const rows = await db
+      .select({
+        itemId: stockOutItemsTable.itemId,
+        itemName: itemsTable.name,
+        totalQty: sql<number>`CAST(SUM(${stockOutItemsTable.quantity}) AS INTEGER)`,
+      })
+      .from(stockOutItemsTable)
+      .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+      .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+      .where(sql`${stockOutTable.status} IN ('finalized', 'DIKIRIM')`)
+      .groupBy(stockOutItemsTable.itemId, itemsTable.name)
+      .orderBy(sql`SUM(${stockOutItemsTable.quantity}) DESC`)
+      .limit(5);
+
+    res.json(rows);
+  } catch (err) {
+    res.json([]);
+  }
+});
+
+/* ── NEW: Activity Feed (Section 19) ── */
+router.get("/dashboard/activity", requireAuth, async (_req, res): Promise<void> => {
+  try {
+    const logs = await db
+      .select({
+        id: auditLogsTable.id,
+        action: auditLogsTable.action,
+        entity: auditLogsTable.entity,
+        createdAt: auditLogsTable.createdAt,
+      })
+      .from(auditLogsTable)
+      .orderBy(desc(auditLogsTable.createdAt))
+      .limit(10);
+
+    res.json(logs.map(l => ({
+      id: l.id,
+      action: l.action,
+      entity: l.entity,
+      createdAt: l.createdAt.toISOString(),
+    })));
+  } catch (err) {
+    res.json([]);
+  }
+});
+
 export default router;
+

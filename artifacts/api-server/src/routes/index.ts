@@ -18,6 +18,8 @@ import branchesRouter from "./branches";
 import trackingRouter from "./tracking";
 import branchOpsRouter from "./branch-ops";
 import spiRouter from "./spi";
+import searchRouter from "./search";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -39,6 +41,8 @@ router.use(branchesRouter);
 router.use(trackingRouter);
 router.use(branchOpsRouter);
 router.use(spiRouter);
+router.use(searchRouter);
+router.use(notificationsRouter);
 
 export default router;
 

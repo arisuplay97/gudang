@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { roleLabel } from "@/lib/utils";
@@ -20,6 +20,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import {
   LayoutDashboard,
   Package,
   PackagePlus,
@@ -31,7 +39,6 @@ import {
   Settings,
   ChevronDown,
   Menu,
-  X,
   LogOut,
   Warehouse,
   Tags,
@@ -43,22 +50,34 @@ import {
   FileSpreadsheet,
   ScrollText,
   ChevronRight,
-  ChevronLeft,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
   Sun,
   Moon,
+  Search,
+  Bell,
+  User,
+  Keyboard,
+  ShieldCheck,
+  AlertTriangle,
+  Timer,
+  Layers,
+  Activity,
+  Archive,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/auth-context";
 
+/* ── Navigation Types & Config ── */
 interface NavItem {
   label: string;
   href?: string;
   icon: React.ElementType;
   roles: Role[];
   children?: NavItem[];
+  group?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -69,53 +88,72 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
   },
   {
-    label: "Admin Gudang",
-    icon: Settings,
+    label: "MASTER",
+    icon: Package,
     roles: ["ADMIN", "GUDANG"],
+    group: "MASTER",
     children: [
-      { label: "Master Barang", href: "/master/barang", icon: Package, roles: ["ADMIN", "GUDANG"] },
+      { label: "Material", href: "/master/barang", icon: Package, roles: ["ADMIN", "GUDANG"] },
       { label: "Kategori", href: "/master/kategori", icon: Tags, roles: ["ADMIN", "GUDANG"] },
       { label: "Satuan", href: "/master/satuan", icon: Ruler, roles: ["ADMIN", "GUDANG"] },
       { label: "Supplier", href: "/master/supplier", icon: Truck, roles: ["ADMIN", "GUDANG"] },
-      { label: "Departemen", href: "/master/departemen", icon: Building2, roles: ["ADMIN", "GUDANG"] },
-      { label: "Lokasi & Rak", href: "/master/lokasi", icon: MapPin, roles: ["ADMIN", "GUDANG"] },
       { label: "Cabang & Gudang", href: "/master/gudang", icon: Warehouse, roles: ["ADMIN"] },
-      { label: "Barang Masuk", href: "/transaksi/masuk", icon: PackagePlus, roles: ["ADMIN", "GUDANG"] },
-      { label: "Distribusi (Keluar)", href: "/transaksi/keluar", icon: PackageMinus, roles: ["ADMIN", "GUDANG"] },
-      { label: "Stok Opname", href: "/transaksi/opname", icon: ClipboardList, roles: ["ADMIN", "GUDANG"] },
-      { label: "Retur Barang", href: "/transaksi/retur", icon: RotateCcw, roles: ["ADMIN", "GUDANG"] },
-      { label: "Mutasi Stok", href: "/transaksi/mutasi", icon: ArrowLeftRight, roles: ["ADMIN", "GUDANG"] },
-      { label: "Penyesuaian", href: "/transaksi/penyesuaian", icon: Settings, roles: ["ADMIN", "GUDANG"] },
-      { label: "Tracking Material", href: "/cabang/tracking", icon: MapPin, roles: ["ADMIN", "GUDANG"] },
+      { label: "Lokasi Gudang", href: "/master/lokasi", icon: MapPin, roles: ["ADMIN", "GUDANG"] },
+      { label: "Departemen", href: "/master/departemen", icon: Building2, roles: ["ADMIN", "GUDANG"] },
     ],
   },
   {
-    label: "Operasional Cabang",
-    icon: ArrowLeftRight,
-    roles: ["ADMIN", "CABANG"],
+    label: "PERSEDIAAN",
+    icon: Archive,
+    roles: ["ADMIN", "GUDANG"],
+    group: "PERSEDIAAN",
     children: [
+      { label: "Stock Opname", href: "/transaksi/opname", icon: ClipboardList, roles: ["ADMIN", "GUDANG"] },
+      { label: "Penyesuaian", href: "/transaksi/penyesuaian", icon: Settings, roles: ["ADMIN", "GUDANG"] },
+      { label: "Retur", href: "/transaksi/retur", icon: RotateCcw, roles: ["ADMIN", "GUDANG"] },
+      { label: "Mutasi Stok", href: "/transaksi/mutasi", icon: ArrowLeftRight, roles: ["ADMIN", "GUDANG"] },
+    ],
+  },
+  {
+    label: "TRANSAKSI",
+    icon: ArrowLeftRight,
+    roles: ["ADMIN", "GUDANG", "CABANG"],
+    group: "TRANSAKSI",
+    children: [
+      { label: "Material Masuk", href: "/transaksi/masuk", icon: PackagePlus, roles: ["ADMIN", "GUDANG"] },
+      { label: "Distribusi (Keluar)", href: "/transaksi/keluar", icon: PackageMinus, roles: ["ADMIN", "GUDANG"] },
       { label: "Penerimaan (Scan QR)", href: "/cabang/receive", icon: ScanBarcode, roles: ["ADMIN", "CABANG"] },
       { label: "Pemasangan Material", href: "/cabang/pemasangan", icon: Ruler, roles: ["ADMIN", "CABANG"] },
-      { label: "Tracking Status", href: "/cabang/tracking", icon: MapPin, roles: ["ADMIN", "CABANG"] },
     ],
   },
   {
-    label: "Audit SPI",
-    icon: ClipboardList,
+    label: "TRACKING",
+    icon: Activity,
+    roles: ["ADMIN", "GUDANG", "CABANG"],
+    group: "TRACKING",
+    children: [
+      { label: "Material Tracking", href: "/cabang/tracking", icon: MapPin, roles: ["ADMIN", "GUDANG", "CABANG"] },
+    ],
+  },
+  {
+    label: "AUDIT / SPI",
+    icon: ShieldCheck,
     roles: ["ADMIN", "SPI"],
+    group: "AUDIT",
     children: [
       { label: "Dashboard Audit", href: "/spi/dashboard", icon: BarChart3, roles: ["ADMIN", "SPI"] },
-      { label: "Verifikasi Pemasangan", href: "/spi/verifikasi", icon: ScrollText, roles: ["ADMIN", "SPI"] },
-      { label: "Peta Material (GIS)", href: "/spi/gis", icon: MapPin, roles: ["ADMIN", "SPI"] },
+      { label: "Verifikasi", href: "/spi/verifikasi", icon: ScrollText, roles: ["ADMIN", "SPI"] },
+      { label: "Peta Material", href: "/spi/gis", icon: MapPin, roles: ["ADMIN", "SPI"] },
     ],
   },
   {
-    label: "Laporan",
+    label: "LAPORAN",
     icon: FileSpreadsheet,
     roles: ["ADMIN", "GUDANG", "SPI"],
+    group: "LAPORAN",
     children: [
-      { label: "Laporan Stok", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
-      { label: "Laporan Transaksi", href: "/laporan/transaksi", icon: FileSpreadsheet, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Stok", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Transaksi", href: "/laporan/transaksi", icon: FileSpreadsheet, roles: ["ADMIN", "GUDANG", "SPI"] },
       { label: "Nilai Inventaris", href: "/laporan/nilai", icon: ScrollText, roles: ["ADMIN", "GUDANG", "SPI"] },
       { label: "Audit Log", href: "/laporan/log", icon: ClipboardList, roles: ["ADMIN", "SPI"] },
     ],
@@ -128,6 +166,44 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+/* ── Breadcrumb Route Map ── */
+const ROUTE_LABELS: Record<string, string> = {
+  "/": "Dashboard",
+  "/master/barang": "Material",
+  "/master/kategori": "Kategori",
+  "/master/satuan": "Satuan",
+  "/master/supplier": "Supplier",
+  "/master/gudang": "Cabang & Gudang",
+  "/master/departemen": "Departemen",
+  "/master/lokasi": "Lokasi Gudang",
+  "/transaksi/masuk": "Material Masuk",
+  "/transaksi/keluar": "Distribusi",
+  "/transaksi/opname": "Stock Opname",
+  "/transaksi/retur": "Retur",
+  "/transaksi/mutasi": "Mutasi Stok",
+  "/transaksi/penyesuaian": "Penyesuaian",
+  "/cabang/receive": "Penerimaan",
+  "/cabang/pemasangan": "Pemasangan",
+  "/cabang/tracking": "Material Tracking",
+  "/spi/dashboard": "Dashboard Audit",
+  "/spi/verifikasi": "Verifikasi",
+  "/spi/gis": "Peta Material",
+  "/laporan/stok": "Laporan Stok",
+  "/laporan/transaksi": "Laporan Transaksi",
+  "/laporan/nilai": "Nilai Inventaris",
+  "/laporan/log": "Audit Log",
+  "/pengguna": "Pengguna",
+};
+
+const ROUTE_GROUPS: Record<string, string> = {
+  "/master": "Master",
+  "/transaksi": "Transaksi",
+  "/cabang": "Operasional",
+  "/spi": "Audit SPI",
+  "/laporan": "Laporan",
+};
+
+/* ── NavLink Component ── */
 function NavLink({
   item,
   depth = 0,
@@ -143,15 +219,21 @@ function NavLink({
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
 
+  // Auto-expand if child is active
+  useEffect(() => {
+    if (item.children?.some((c) => c.href && (c.href === "/" ? location === "/" : location.startsWith(c.href)))) {
+      setOpen(true);
+    }
+  }, [location, item.children]);
+
   if (!user || !item.roles.includes(user.role)) return null;
 
   const isActive = item.href
     ? item.href === "/" ? location === "/" : location.startsWith(item.href)
-    : item.children?.some((c) => c.href && location.startsWith(c.href));
+    : item.children?.some((c) => c.href && (c.href === "/" ? location === "/" : location.startsWith(c.href)));
 
   if (item.children) {
     if (collapsed && depth === 0) {
-      // When collapsed, show a dropdown menu for group items
       return (
         <DropdownMenu>
           <Tooltip>
@@ -177,7 +259,7 @@ function NavLink({
             <DropdownMenuSeparator />
             {item.children.map((child) => {
               if (!user || !child.roles.includes(user.role)) return null;
-              const childActive = child.href && location.startsWith(child.href);
+              const childActive = child.href && (child.href === "/" ? location === "/" : location.startsWith(child.href));
               return (
                 <DropdownMenuItem key={child.href} asChild>
                   <button
@@ -201,6 +283,12 @@ function NavLink({
 
     return (
       <div>
+        {/* Group label for top-level groups */}
+        {depth === 0 && item.group && !collapsed && (
+          <p className="text-[10px] font-semibold tracking-wider text-muted-foreground/60 uppercase px-3 pt-4 pb-1">
+            {item.group}
+          </p>
+        )}
         <button
           onClick={() => setOpen(!open)}
           className={cn(
@@ -211,15 +299,20 @@ function NavLink({
         >
           <item.icon className="w-4 h-4 shrink-0" />
           <span className="flex-1 text-left">{item.label}</span>
-          <ChevronRight className={cn("w-4 h-4 transition-transform", open && "rotate-90")} />
+          <ChevronRight className={cn("w-4 h-4 transition-transform duration-200", open && "rotate-90")} />
         </button>
-        {open && (
+        <div
+          className={cn(
+            "overflow-hidden transition-all duration-200",
+            open ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+          )}
+        >
           <div className="ml-4 mt-1 space-y-0.5">
             {item.children.map((child) => (
               <NavLink key={child.href} item={child} depth={depth + 1} collapsed={collapsed} onNavigate={onNavigate} />
             ))}
           </div>
-        )}
+        </div>
       </div>
     );
   }
@@ -260,8 +353,10 @@ function NavLink({
   return linkContent;
 }
 
+/* ── Main Layout ── */
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -292,6 +387,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     .join("")
     .toUpperCase();
 
+  /* ── Breadcrumb computation ── */
+  const breadcrumbItems = useMemo(() => {
+    if (location === "/") return [{ label: "Dashboard", href: "/" }];
+    const parts = location.split("/").filter(Boolean);
+    const items: { label: string; href: string }[] = [];
+
+    // Find group
+    const firstSegment = `/${parts[0]}`;
+    if (ROUTE_GROUPS[firstSegment]) {
+      items.push({ label: ROUTE_GROUPS[firstSegment], href: firstSegment });
+    }
+
+    // Full path label
+    const fullLabel = ROUTE_LABELS[location];
+    if (fullLabel) {
+      items.push({ label: fullLabel, href: location });
+    }
+
+    return items;
+  }, [location]);
+
+  /* ── Sidebar content ── */
   const SidebarContent = ({ isCollapsed }: { isCollapsed: boolean }) => (
     <div className="flex flex-col h-full">
       <div className={cn("border-b", isCollapsed ? "p-3" : "p-4")}>
@@ -321,7 +438,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <nav className={cn("flex-1 overflow-y-auto space-y-1", isCollapsed ? "p-2" : "p-3")}>
+      <nav className={cn("flex-1 overflow-y-auto space-y-0.5", isCollapsed ? "p-2" : "p-3")}>
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.label}
@@ -331,68 +448,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           />
         ))}
       </nav>
-
-      <div className={cn("border-t", isCollapsed ? "p-2" : "p-3")}>
-
-        {/* User profile */}
-        {isCollapsed ? (
-          <DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="w-full">
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback className="text-xs bg-primary text-primary-foreground">{initials}</AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {user.fullName}
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent side="right" align="end" className="w-52">
-              <DropdownMenuLabel>
-                <p className="font-medium">{user.fullName}</p>
-                <p className="text-xs text-muted-foreground font-normal">@{user.username}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
-                <LogOut className="w-4 h-4 mr-2" />
-                Keluar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-3">
-                <Avatar className="w-8 h-8 shrink-0">
-                  <AvatarFallback className="text-xs bg-primary text-primary-foreground">{initials}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-medium truncate">{user.fullName}</p>
-                  <Badge variant="secondary" className="text-xs h-4 px-1.5 mt-0.5">
-                    {roleLabel(user.role)}
-                  </Badge>
-                </div>
-                <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>
-                <p className="font-medium">{user.fullName}</p>
-                <p className="text-xs text-muted-foreground font-normal">@{user.username}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
-                <LogOut className="w-4 h-4 mr-2" />
-                Keluar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
     </div>
   );
 
@@ -420,27 +475,152 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile header */}
-        <header className="lg:hidden flex items-center gap-3 p-4 border-b bg-background">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+        {/* ── TOPBAR ── */}
+        <header className="flex items-center gap-3 h-14 px-4 border-b bg-background/95 backdrop-blur-sm z-30 shrink-0">
+          {/* Left: sidebar toggle + breadcrumb */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden shrink-0"
+            onClick={() => setSidebarOpen(true)}
+          >
             <Menu className="w-5 h-5" />
           </Button>
-          <div className="flex items-center gap-2">
+
+          <Breadcrumb className="hidden sm:flex">
+            <BreadcrumbList>
+              {breadcrumbItems.map((item, i) => (
+                <BreadcrumbItem key={item.href}>
+                  {i > 0 && <BreadcrumbSeparator />}
+                  {i === breadcrumbItems.length - 1 ? (
+                    <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink
+                      className="cursor-pointer text-muted-foreground hover:text-foreground"
+                      onClick={() => navigate(item.href)}
+                    >
+                      {item.label}
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              ))}
+            </BreadcrumbList>
+          </Breadcrumb>
+
+          {/* Mobile: show page title */}
+          <div className="flex sm:hidden items-center gap-2">
             <Package className="w-5 h-5 text-primary" />
-            <span className="font-bold text-sm">SI GAPLEK</span>
+            <span className="font-bold text-sm">
+              {ROUTE_LABELS[location] || "SI GAPLEK"}
+            </span>
           </div>
+
+          <div className="flex-1" />
+
+          {/* Center-Right: Global Search trigger */}
+          <button
+            id="global-search-trigger"
+            onClick={() => {
+              // Dispatch event for GlobalSearch component to handle
+              window.dispatchEvent(new CustomEvent("open-command-palette"));
+            }}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-muted/40 hover:bg-muted text-sm text-muted-foreground transition-colors max-w-[260px] w-full"
+          >
+            <Search className="w-4 h-4 shrink-0" />
+            <span className="flex-1 text-left truncate">Cari material, transaksi...</span>
+            <kbd className="hidden lg:inline-flex items-center gap-0.5 text-[10px] font-medium bg-background border rounded px-1.5 py-0.5">
+              <span className="text-xs">⌘</span>K
+            </kbd>
+          </button>
+
+          {/* Search icon for mobile */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden shrink-0"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+          >
+            <Search className="w-5 h-5" />
+          </Button>
+
+          {/* Notification bell */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative shrink-0"
+                id="notification-trigger"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-notifications"))}
+              >
+                <Bell className="w-5 h-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Notifikasi</TooltipContent>
+          </Tooltip>
+
+          {/* Dark mode toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0"
+                onClick={() => setIsDark(!isDark)}
+                aria-label="Toggle dark mode"
+              >
+                {isDark ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{isDark ? "Mode Terang" : "Mode Gelap"}</TooltipContent>
+          </Tooltip>
+
+          {/* User avatar / menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="gap-2 px-2 h-9 shrink-0">
+                <Avatar className="w-7 h-7">
+                  <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="hidden lg:block text-sm font-medium max-w-[120px] truncate">
+                  {user.fullName}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hidden lg:block" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <p className="font-medium">{user.fullName}</p>
+                <p className="text-xs text-muted-foreground font-normal">@{user.username}</p>
+                <Badge variant="secondary" className="text-xs h-4 px-1.5 mt-1">
+                  {roleLabel(user.role)}
+                </Badge>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="cursor-pointer">
+                <User className="w-4 h-4 mr-2" />
+                Profil
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer">
+                <Settings className="w-4 h-4 mr-2" />
+                Pengaturan
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer">
+                <Keyboard className="w-4 h-4 mr-2" />
+                Keyboard Shortcuts
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
+                <LogOut className="w-4 h-4 mr-2" />
+                Keluar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
         <main className="flex-1 overflow-y-auto relative">
-          <button
-            onClick={() => setIsDark(!isDark)}
-            className="fixed top-5 right-5 z-50 flex items-center justify-center w-10 h-10 rounded-full shadow-lg transition-transform hover:scale-110 active:scale-95"
-            style={{ backgroundColor: "#121212", color: "white" }}
-            title="Toggle Dark Mode"
-          >
-            {isDark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5" />}
-          </button>
-
           {children}
         </main>
       </div>

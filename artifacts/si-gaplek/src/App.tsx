@@ -31,6 +31,9 @@ import CabangTrackingPage from "@/pages/cabang/tracking";
 import SpiDashboardPage from "@/pages/spi/dashboard";
 import SpiVerifikasiPage from "@/pages/spi/verifikasi";
 import SpiGisPage from "@/pages/spi/gis";
+import GlobalSearch from "@/components/global-search";
+import NotificationCenter from "@/components/notification-center";
+import ErrorBoundary from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -64,6 +67,7 @@ function AppRouter() {
 
   return (
     <Layout>
+      <GlobalSearch />
       <Switch>
         <Route path="/" component={DashboardPage} />
         {/* Gudang Routes - Master */}
@@ -107,16 +111,18 @@ function AppRouter() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppRouter />
-          </WouterRouter>
-          <Toaster />
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AuthProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AppRouter />
+            </WouterRouter>
+            <Toaster />
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
