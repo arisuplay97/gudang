@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
-import { eq, desc, isNull } from "drizzle-orm";
+import { eq, desc, asc, isNull, and, or, ilike, sql } from "drizzle-orm";
 import {
   db, itemsTable, categoriesTable, unitsTable, suppliersTable, auditLogsTable,
   stockInTable, stockInItemsTable, stockOutTable, stockOutItemsTable,
@@ -26,16 +26,20 @@ function fmtItem(row: any) {
     unitAbbreviation: row.unitAbbreviation,
     description: row.description,
     minimumStock: row.minimumStock,
+    maximumStock: row.maximumStock ?? 0,
     currentStock: row.currentStock,
     unitPrice: parseFloat(row.unitPrice),
     supplierId: row.supplierId,
     supplierName: row.supplierName,
     rackId: row.rackId ?? null,
+    trackingType: row.trackingType ?? "NON_TRACKED",
     trackSerialNumber: row.trackSerialNumber ?? false,
     secondaryUnitId: row.secondaryUnitId ?? null,
     conversionFactor: row.conversionFactor ? parseFloat(row.conversionFactor) : 1,
+    status: row.status ?? "active",
     isLowStock: row.currentStock <= row.minimumStock,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
   };
 }
 
@@ -51,15 +55,19 @@ const itemSelect = {
   unitAbbreviation: unitsTable.abbreviation,
   description: itemsTable.description,
   minimumStock: itemsTable.minimumStock,
+  maximumStock: itemsTable.maximumStock,
   currentStock: itemsTable.currentStock,
   unitPrice: itemsTable.unitPrice,
   supplierId: itemsTable.supplierId,
   supplierName: suppliersTable.name,
   rackId: itemsTable.rackId,
+  trackingType: itemsTable.trackingType,
   trackSerialNumber: itemsTable.trackSerialNumber,
   secondaryUnitId: itemsTable.secondaryUnitId,
   conversionFactor: itemsTable.conversionFactor,
+  status: itemsTable.status,
   createdAt: itemsTable.createdAt,
+  updatedAt: itemsTable.updatedAt,
 };
 
 const joinedItems = () => db
@@ -69,21 +77,92 @@ const joinedItems = () => db
   .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id))
   .leftJoin(suppliersTable, eq(itemsTable.supplierId, suppliersTable.id));
 
-// GET /items — list semua barang
-router.get("/items", requireAuth, async (req, res): Promise<void> => {
-  const qp = ListItemsQueryParams.safeParse(req.query);
-  let rows = await joinedItems().orderBy(itemsTable.name);
+// GET /items/summary — KPI counts for dashboard cards
+router.get("/items/summary", requireAuth, async (_req, res): Promise<void> => {
+  const [result] = await db.select({
+    total: sql<number>`count(*)::int`,
+    stokAman: sql<number>`count(*) filter (where ${itemsTable.currentStock} > ${itemsTable.minimumStock} and ${itemsTable.status} = 'active')::int`,
+    stokMenipis: sql<number>`count(*) filter (where ${itemsTable.currentStock} > 0 and ${itemsTable.currentStock} <= ${itemsTable.minimumStock} and ${itemsTable.status} = 'active')::int`,
+    stokHabis: sql<number>`count(*) filter (where ${itemsTable.currentStock} <= 0 and ${itemsTable.status} = 'active')::int`,
+    tracked: sql<number>`count(*) filter (where ${itemsTable.trackingType} = 'TRACKED')::int`,
+    nonTracked: sql<number>`count(*) filter (where ${itemsTable.trackingType} = 'NON_TRACKED' or ${itemsTable.trackingType} is null)::int`,
+    inactive: sql<number>`count(*) filter (where ${itemsTable.status} = 'inactive')::int`,
+  }).from(itemsTable);
+  res.json(result);
+});
 
-  if (qp.success) {
-    if (qp.data.categoryId) rows = rows.filter(r => r.categoryId === qp.data.categoryId);
-    if (qp.data.search) {
-      const s = qp.data.search.toLowerCase();
-      rows = rows.filter(r => r.name.toLowerCase().includes(s) || r.code.toLowerCase().includes(s) || (r.barcode && r.barcode.toLowerCase().includes(s)));
-    }
-    if (qp.data.lowStock === true) rows = rows.filter(r => r.currentStock <= r.minimumStock);
+// GET /items — list with server-side pagination, sorting, filtering
+router.get("/items", requireAuth, async (req, res): Promise<void> => {
+  const { search, categoryId, lowStock, trackingType, status, page: pageStr, limit: limitStr, sortBy, sortOrder } = req.query as Record<string, string | undefined>;
+
+  const page = Math.max(1, parseInt(pageStr ?? "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(limitStr ?? "25") || 25));
+  const offset = (page - 1) * limit;
+
+  // Build WHERE conditions
+  const conditions: any[] = [];
+  if (search) {
+    const s = `%${search}%`;
+    conditions.push(or(ilike(itemsTable.name, s), ilike(itemsTable.code, s), ilike(itemsTable.barcode, s)));
+  }
+  if (categoryId) {
+    const cid = parseInt(categoryId);
+    if (!isNaN(cid)) conditions.push(eq(itemsTable.categoryId, cid));
+  }
+  if (trackingType === "TRACKED" || trackingType === "NON_TRACKED") {
+    conditions.push(eq(itemsTable.trackingType, trackingType));
+  }
+  if (status === "active" || status === "inactive") {
+    conditions.push(eq(itemsTable.status, status));
+  }
+  if (status === "AMAN") {
+    conditions.push(sql`${itemsTable.currentStock} > ${itemsTable.minimumStock}`);
+    conditions.push(eq(itemsTable.status, "active"));
+  }
+  if (status === "MENIPIS") {
+    conditions.push(sql`${itemsTable.currentStock} > 0 AND ${itemsTable.currentStock} <= ${itemsTable.minimumStock}`);
+    conditions.push(eq(itemsTable.status, "active"));
+  }
+  if (status === "HABIS") {
+    conditions.push(sql`${itemsTable.currentStock} <= 0`);
+    conditions.push(eq(itemsTable.status, "active"));
+  }
+  if (lowStock === "true") {
+    conditions.push(sql`${itemsTable.currentStock} <= ${itemsTable.minimumStock}`);
   }
 
-  res.json(rows.map(fmtItem));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Determine sort column
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "code": return itemsTable.code;
+      case "stock": return itemsTable.currentStock;
+      case "createdAt": return itemsTable.createdAt;
+      case "updatedAt": return itemsTable.updatedAt;
+      case "name":
+      default: return itemsTable.name;
+    }
+  })();
+  const orderFn = sortOrder === "desc" ? desc : asc;
+
+  // Count total matching rows
+  let countQuery = db.select({ count: sql<number>`count(*)::int` }).from(itemsTable);
+  if (whereClause) countQuery = countQuery.where(whereClause) as any;
+  const [{ count: total }] = await countQuery;
+
+  // Fetch paginated data
+  let dataQuery = joinedItems();
+  if (whereClause) dataQuery = dataQuery.where(whereClause) as any;
+  const rows = await (dataQuery as any).orderBy(orderFn(sortCol)).limit(limit).offset(offset);
+
+  res.json({
+    data: rows.map(fmtItem),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  });
 });
 
 // GET /items/low-stock — barang stok menipis
