@@ -283,12 +283,7 @@ function NavLink({
 
     return (
       <div>
-        {/* Group label for top-level groups */}
-        {depth === 0 && item.group && !collapsed && (
-          <p className="text-[10px] font-semibold tracking-wider text-muted-foreground/60 uppercase px-3 pt-4 pb-1">
-            {item.group}
-          </p>
-        )}
+
         <button
           onClick={() => setOpen(!open)}
           className={cn(
