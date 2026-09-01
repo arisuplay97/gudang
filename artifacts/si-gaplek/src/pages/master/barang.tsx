@@ -107,9 +107,9 @@ function useCountUp(target: number, duration = 600) {
 }
 
 /* ── KPI Card Component ──────────────────────────────────────── */
-function KpiCard({ label, value, icon: Icon, color, borderColor, delay = 0, onClick }: {
+function KpiCard({ label, value, icon: Icon, color, delay = 0, onClick }: {
   label: string; value: number; icon: React.ElementType;
-  color: string; borderColor: string; delay?: number; onClick?: () => void;
+  color: string; delay?: number; onClick?: () => void;
 }) {
   const animatedValue = useCountUp(value);
   return (
@@ -120,8 +120,7 @@ function KpiCard({ label, value, icon: Icon, color, borderColor, delay = 0, onCl
     >
       <Card
         className={cn(
-          "border-l-4 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
-          borderColor
+          "cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
         )}
         onClick={onClick}
       >
@@ -350,27 +349,27 @@ export default function BarangPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard
           label="Total Barang" value={summary?.total ?? 0}
-          icon={Package} color="bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400" borderColor="border-l-blue-500"
+          icon={Package} color="bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400"
           delay={0}
         />
         <KpiCard
           label="Stok Aman" value={summary?.stokAman ?? 0}
-          icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400" borderColor="border-l-emerald-500"
+          icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
           delay={0.05} onClick={() => { setFilterStatus("AMAN"); setFilterCategory(""); setFilterTracking(""); }}
         />
         <KpiCard
           label="Stok Menipis" value={summary?.stokMenipis ?? 0}
-          icon={AlertTriangle} color="bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400" borderColor="border-l-amber-500"
+          icon={AlertTriangle} color="bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400"
           delay={0.1} onClick={() => { setFilterStatus("MENIPIS"); setFilterCategory(""); setFilterTracking(""); }}
         />
         <KpiCard
           label="Stok Habis" value={summary?.stokHabis ?? 0}
-          icon={XCircle} color="bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400" borderColor="border-l-red-500"
+          icon={XCircle} color="bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
           delay={0.15} onClick={() => { setFilterStatus("HABIS"); setFilterCategory(""); setFilterTracking(""); }}
         />
         <KpiCard
           label="Tracked" value={summary?.tracked ?? 0}
-          icon={Radio} color="bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-400" borderColor="border-l-violet-500"
+          icon={Radio} color="bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-400"
           delay={0.2} onClick={() => { setFilterTracking("TRACKED"); setFilterCategory(""); setFilterStatus(""); }}
         />
       </div>
