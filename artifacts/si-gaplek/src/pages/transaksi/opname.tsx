@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, ScanBarcode, Trash2 } from "lucide-react";
+import { Plus, Eye, ScanBarcode, Trash2, FolderOpen, ClipboardCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Opname { id: number; referenceNumber: string; warehouseId: number; status: string; createdAt: string; warehouseName?: string; }
@@ -77,30 +79,45 @@ export default function OpnamePage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Stock Opname</h1><p className="text-muted-foreground text-sm">Pencocokan stok fisik dengan data sistem</p></div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Buat Opname</Button>
-      </div>
+    <div className="p-4 md:p-6 space-y-4">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Stock Opname</h1>
+          <p className="text-muted-foreground text-sm">Pencocokan stok fisik dengan data sistem.</p>
+        </div>
+        <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-2" /> Buat Opname</Button>
+      </motion.div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Gudang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? Array(3).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !opnames?.length ? <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><ScanBarcode className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada stock opname</p></TableCell></TableRow> :
-             opnames.map(o => (
-              <TableRow key={o.id}>
-                <TableCell className="font-mono font-medium">{o.referenceNumber}</TableCell>
-                <TableCell>{formatDate(o.createdAt)}</TableCell>
-                <TableCell>{o.warehouseName ?? "-"}</TableCell>
-                <TableCell><Badge variant={o.status === "completed" ? "default" : o.status === "in_progress" ? "secondary" : "outline"}>{o.status === "completed" ? "Selesai" : o.status === "in_progress" ? "Proses" : o.status}</Badge></TableCell>
-                <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(o.id)}><Eye className="w-4 h-4" /></Button></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent></Card>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+          <ClipboardCheck className="w-3.5 h-3.5 mr-1.5" />{opnames?.length ?? 0} Opname
+        </Badge>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Card><CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Gudang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? Array(3).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+                !opnames?.length ? <TableRow><TableCell colSpan={5} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada stock opname</p></TableCell></TableRow> :
+                  opnames.map(o => (
+                    <TableRow key={o.id} className="group">
+                      <TableCell className="font-mono font-medium">{o.referenceNumber}</TableCell>
+                      <TableCell className="text-sm">{formatDate(o.createdAt)}</TableCell>
+                      <TableCell className="text-sm">{o.warehouseName ?? "—"}</TableCell>
+                      <TableCell><Badge variant={o.status === "completed" ? "default" : o.status === "in_progress" ? "secondary" : "outline"}>{o.status === "completed" ? "Selesai" : o.status === "in_progress" ? "Proses" : o.status}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        <Tooltip><TooltipTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setViewId(o.id)}><Eye className="w-4 h-4" /></Button>
+                        </TooltipTrigger><TooltipContent>Lihat Detail</TooltipContent></Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </CardContent></Card>
+      </motion.div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Stock Opname</DialogTitle></DialogHeader>

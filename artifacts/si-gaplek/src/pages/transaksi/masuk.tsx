@@ -1,18 +1,20 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Eye, ScanBarcode, Trash2, PackagePlus } from "lucide-react";
+import { Plus, Pencil, Eye, ScanBarcode, Trash2, PackagePlus, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface StockIn {
@@ -55,7 +57,7 @@ export default function BarangMasukPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: stockIns, isLoading } = useQuery({ queryKey: ["stock-in"], queryFn: () => apiFetch<StockIn[]>("/api/stock-in") });
+  const { data: stockIns, isLoading } = useQuery({ queryKey: ["stock-in"], queryFn: () => apiFetch<StockIn[]>("/api/stock-in"), refetchInterval: 15_000 });
   const { data: items } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[]>("/api/items") });
   const { data: suppliers } = useQuery({ queryKey: ["suppliers"], queryFn: () => apiFetch<Supplier[]>("/api/suppliers") });
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => apiFetch<Warehouse[]>("/api/warehouses") });
@@ -131,33 +133,46 @@ export default function BarangMasukPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Barang Masuk</h1><p className="text-muted-foreground text-sm">Transaksi penerimaan barang ke gudang</p></div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Transaksi Baru</Button>
-      </div>
+    <div className="p-4 md:p-6 space-y-4">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Barang Masuk</h1>
+          <p className="text-muted-foreground text-sm">Transaksi penerimaan barang ke gudang.</p>
+        </div>
+        <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-2" /> Transaksi Baru</Button>
+      </motion.div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Supplier</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !stockIns?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><PackagePlus className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada transaksi masuk</p></TableCell></TableRow> :
-             stockIns.map(s => (
-              <TableRow key={s.id}>
-                <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
-                <TableCell>{formatDate(s.createdAt)}</TableCell>
-                <TableCell>{s.supplierName ?? "-"}</TableCell>
-                <TableCell className="text-right">{s.itemCount ?? 0} item</TableCell>
-                <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
-                <TableCell className="text-right">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent></Card>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+          <PackagePlus className="w-3.5 h-3.5 mr-1.5" />{stockIns?.length ?? 0} Transaksi
+        </Badge>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Card><CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Supplier</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+                !stockIns?.length ? <TableRow><TableCell colSpan={6} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada transaksi masuk</p><p className="text-xs mt-1">Klik Transaksi Baru untuk memulai</p></TableCell></TableRow> :
+                  stockIns.map(s => (
+                    <TableRow key={s.id} className="group">
+                      <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
+                      <TableCell className="text-sm">{formatDate(s.createdAt)}</TableCell>
+                      <TableCell className="text-sm">{s.supplierName ?? "—"}</TableCell>
+                      <TableCell className="text-right font-medium">{s.itemCount ?? 0} item</TableCell>
+                      <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        <Tooltip><TooltipTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button>
+                        </TooltipTrigger><TooltipContent>Lihat Detail</TooltipContent></Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </CardContent></Card>
+      </motion.div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

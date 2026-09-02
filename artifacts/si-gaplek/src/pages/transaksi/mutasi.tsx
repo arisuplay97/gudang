@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, ArrowLeftRight } from "lucide-react";
+import { Plus, Eye, ArrowLeftRight, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Mutation { id: number; referenceNumber: string; fromWarehouseId: number; toWarehouseId: number; status: string; createdAt: string; fromWarehouseName?: string; toWarehouseName?: string; }
@@ -52,31 +54,46 @@ export default function MutasiPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Mutasi Barang</h1><p className="text-muted-foreground text-sm">Perpindahan barang antar gudang</p></div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Buat Mutasi</Button>
-      </div>
+    <div className="p-4 md:p-6 space-y-4">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Mutasi Barang</h1>
+          <p className="text-muted-foreground text-sm">Perpindahan barang antar gudang.</p>
+        </div>
+        <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-2" /> Buat Mutasi</Button>
+      </motion.div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Dari Gudang</TableHead><TableHead>Ke Gudang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !mutations?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><ArrowLeftRight className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada mutasi barang</p></TableCell></TableRow> :
-             mutations.map(m => (
-              <TableRow key={m.id}>
-                <TableCell className="font-mono font-medium">{m.referenceNumber}</TableCell>
-                <TableCell>{formatDate(m.createdAt)}</TableCell>
-                <TableCell>{m.fromWarehouseName ?? "-"}</TableCell>
-                <TableCell>{m.toWarehouseName ?? "-"}</TableCell>
-                <TableCell><Badge variant={m.status === "completed" ? "default" : "secondary"}>{m.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
-                <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(m.id)}><Eye className="w-4 h-4" /></Button></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent></Card>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+          <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />{mutations?.length ?? 0} Mutasi
+        </Badge>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Card><CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Dari Gudang</TableHead><TableHead>Ke Gudang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+                !mutations?.length ? <TableRow><TableCell colSpan={6} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada mutasi barang</p></TableCell></TableRow> :
+                  mutations.map(m => (
+                    <TableRow key={m.id} className="group">
+                      <TableCell className="font-mono font-medium">{m.referenceNumber}</TableCell>
+                      <TableCell className="text-sm">{formatDate(m.createdAt)}</TableCell>
+                      <TableCell className="text-sm">{m.fromWarehouseName ?? "—"}</TableCell>
+                      <TableCell className="text-sm">{m.toWarehouseName ?? "—"}</TableCell>
+                      <TableCell><Badge variant={m.status === "completed" ? "default" : "secondary"}>{m.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        <Tooltip><TooltipTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setViewId(m.id)}><Eye className="w-4 h-4" /></Button>
+                        </TooltipTrigger><TooltipContent>Lihat Detail</TooltipContent></Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </CardContent></Card>
+      </motion.div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Buat Mutasi Barang</DialogTitle></DialogHeader>

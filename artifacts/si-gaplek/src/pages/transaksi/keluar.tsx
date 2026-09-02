@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, Trash2, PackageMinus, Camera, Search, ScanBarcode } from "lucide-react";
+import { Plus, Eye, Trash2, PackageMinus, Camera, Search, ScanBarcode, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface StockOut { id: number; referenceNumber: string; departmentId: number | null; notes: string | null; status: string; createdAt: string; departmentName?: string; itemCount?: number; }
@@ -113,32 +114,44 @@ export default function BarangKeluarPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       <motion.div
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
       >
-        <div><h1 className="text-2xl font-bold">Barang Keluar</h1><p className="text-muted-foreground text-sm">Transaksi pengeluaran barang dari gudang</p></div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Transaksi Baru</Button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Barang Keluar</h1>
+          <p className="text-muted-foreground text-sm">Transaksi pengeluaran barang dari gudang.</p>
+        </div>
+        <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-2" /> Transaksi Baru</Button>
       </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+          <PackageMinus className="w-3.5 h-3.5 mr-1.5" />{stockOuts?.length ?? 0} Transaksi
+        </Badge>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card><CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Departemen</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Departemen</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
             <TableBody>
               {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-                !stockOuts?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><PackageMinus className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada transaksi keluar</p></TableCell></TableRow> :
+                !stockOuts?.length ? <TableRow><TableCell colSpan={6} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada transaksi keluar</p><p className="text-xs mt-1">Klik Transaksi Baru untuk memulai</p></TableCell></TableRow> :
                   stockOuts.map(s => (
-                    <TableRow key={s.id}>
+                    <TableRow key={s.id} className="group">
                       <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
-                      <TableCell>{formatDate(s.createdAt)}</TableCell>
-                      <TableCell>{s.departmentName ?? "-"}</TableCell>
-                      <TableCell className="text-right">{s.itemCount ?? 0} item</TableCell>
+                      <TableCell className="text-sm">{formatDate(s.createdAt)}</TableCell>
+                      <TableCell className="text-sm">{s.departmentName ?? "—"}</TableCell>
+                      <TableCell className="text-right font-medium">{s.itemCount ?? 0} item</TableCell>
                       <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
-                      <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button></TableCell>
+                      <TableCell className="text-right">
+                        <Tooltip><TooltipTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button>
+                        </TooltipTrigger><TooltipContent>Lihat Detail</TooltipContent></Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
             </TableBody>

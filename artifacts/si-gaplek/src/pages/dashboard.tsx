@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { formatCurrency, formatNumber } from "@/lib/utils";
@@ -137,18 +138,22 @@ export default function DashboardPage() {
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: () => apiFetch<Summary>("/api/dashboard/summary"),
+    refetchInterval: 30_000,
   });
   const { data: recentTx, isLoading: loadingTx } = useQuery({
     queryKey: ["dashboard-recent"],
     queryFn: () => apiFetch<RecentTx[]>("/api/dashboard/recent-transactions"),
+    refetchInterval: 30_000,
   });
   const { data: lowStock, isLoading: loadingLow } = useQuery({
     queryKey: ["dashboard-lowstock"],
     queryFn: () => apiFetch<LowStockItem[]>("/api/dashboard/low-stock"),
+    refetchInterval: 30_000,
   });
   const { data: movement, isLoading: loadingMove } = useQuery({
     queryKey: ["dashboard-movement"],
     queryFn: () => apiFetch<Movement[]>("/api/dashboard/stock-movement"),
+    refetchInterval: 30_000,
   });
   const { data: stockHealth } = useQuery({
     queryKey: ["dashboard-stock-health"],
@@ -214,22 +219,22 @@ export default function DashboardPage() {
       <div className="p-5 md:p-8 max-w-[1600px] mx-auto space-y-5">
 
         {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
           <div>
             <p className="text-sm text-[#8a8a7a] dark:text-muted-foreground">
               Selamat datang kembali,
             </p>
-            <h1 className="text-2xl font-semibold text-[#2d2d2a] dark:text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-[#2d2d2a] dark:text-foreground">
               {user?.fullName ?? "Dashboard"}
             </h1>
           </div>
           <p className="text-xs font-medium px-3 py-1.5 rounded-full bg-[#eae8e0] text-[#6b6b5e] dark:bg-muted dark:text-muted-foreground">
             {new Date().toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
-        </div>
+        </motion.div>
 
         {/* ── Row 1: Hero + Side Stats ── */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-1 xl:grid-cols-12 gap-5">
 
           {/* Hero card — Inventory Value + Area Chart */}
           <DashCard className="xl:col-span-8 p-6">
@@ -360,10 +365,10 @@ export default function DashboardPage() {
               )}
             </DashCard>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Row 2: Stock Health + Aging + Exception Center ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
           {/* Stock Health (Section 15) */}
           <DashCard>
@@ -466,10 +471,10 @@ export default function DashboardPage() {
               </div>
             )}
           </DashCard>
-        </div>
+        </motion.div>
 
         {/* ── Row 3: Capacity + Quick Stats ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Kapasitas Gudang */}
           <DashCard className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -535,10 +540,10 @@ export default function DashboardPage() {
               </div>
             </div>
           </DashCard>
-        </div>
+        </motion.div>
 
         {/* ── Row 4: Donut + Low Stock + Top Material + Activity ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
           {/* Komposisi Material */}
           <DashCard className="lg:col-span-3 p-6">
@@ -695,7 +700,7 @@ export default function DashboardPage() {
               </div>
             )}
           </DashCard>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, ClipboardList } from "lucide-react";
+import { Plus, Eye, ClipboardList, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Adjustment { id: number; referenceNumber: string; itemId: number; adjustmentType: string; quantity: number; reason: string | null; status: string; createdAt: string; itemName?: string; }
@@ -48,31 +49,42 @@ export default function PenyesuaianPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Penyesuaian Stok</h1><p className="text-muted-foreground text-sm">Koreksi/penyesuaian stok barang</p></div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Buat Penyesuaian</Button>
-      </div>
+    <div className="p-4 md:p-6 space-y-4">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Penyesuaian Stok</h1>
+          <p className="text-muted-foreground text-sm">Koreksi dan penyesuaian stok barang.</p>
+        </div>
+        <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-2" /> Buat Penyesuaian</Button>
+      </motion.div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Barang</TableHead><TableHead>Tipe</TableHead><TableHead className="text-right">Jumlah</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-             !adjustments?.length ? <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada penyesuaian stok</p></TableCell></TableRow> :
-             adjustments.map(a => (
-              <TableRow key={a.id}>
-                <TableCell className="font-mono font-medium">{a.referenceNumber}</TableCell>
-                <TableCell>{formatDate(a.createdAt)}</TableCell>
-                <TableCell>{a.itemName ?? `Item #${a.itemId}`}</TableCell>
-                <TableCell><Badge variant={a.adjustmentType === "add" ? "default" : a.adjustmentType === "subtract" ? "destructive" : "secondary"}>{a.adjustmentType === "add" ? "Tambah" : a.adjustmentType === "subtract" ? "Kurang" : "Set"}</Badge></TableCell>
-                <TableCell className="text-right font-medium">{a.adjustmentType === "add" ? "+" : a.adjustmentType === "subtract" ? "-" : ""}{a.quantity}</TableCell>
-                <TableCell><Badge variant="outline">{a.status}</Badge></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent></Card>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+          <ClipboardList className="w-3.5 h-3.5 mr-1.5" />{adjustments?.length ?? 0} Penyesuaian
+        </Badge>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Card><CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Barang</TableHead><TableHead>Tipe</TableHead><TableHead className="text-right">Jumlah</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+                !adjustments?.length ? <TableRow><TableCell colSpan={6} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada penyesuaian stok</p></TableCell></TableRow> :
+                  adjustments.map(a => (
+                    <TableRow key={a.id}>
+                      <TableCell className="font-mono font-medium">{a.referenceNumber}</TableCell>
+                      <TableCell className="text-sm">{formatDate(a.createdAt)}</TableCell>
+                      <TableCell className="text-sm">{a.itemName ?? `Item #${a.itemId}`}</TableCell>
+                      <TableCell><Badge variant={a.adjustmentType === "add" ? "default" : a.adjustmentType === "subtract" ? "destructive" : "secondary"}>{a.adjustmentType === "add" ? "Tambah" : a.adjustmentType === "subtract" ? "Kurang" : "Set"}</Badge></TableCell>
+                      <TableCell className="text-right font-medium">{a.adjustmentType === "add" ? "+" : a.adjustmentType === "subtract" ? "-" : ""}{a.quantity}</TableCell>
+                      <TableCell><Badge variant="outline">{a.status}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </CardContent></Card>
+      </motion.div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md"><DialogHeader><DialogTitle>Penyesuaian Stok</DialogTitle></DialogHeader>

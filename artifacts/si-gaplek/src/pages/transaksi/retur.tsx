@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, Trash2, RotateCcw } from "lucide-react";
+import { Plus, Eye, Trash2, RotateCcw, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Return {
@@ -141,32 +143,39 @@ export default function ReturPage() {
   const conditionLabel = (c: string) => (c === "good" ? "Baik" : "Rusak");
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="p-4 md:p-6 space-y-4">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Retur Barang</h1>
-          <p className="text-muted-foreground text-sm">Pengembalian barang dari lapangan atau ke supplier</p>
+          <h1 className="text-2xl font-bold tracking-tight">Retur Barang</h1>
+          <p className="text-muted-foreground text-sm">Pengembalian barang dari lapangan atau ke supplier.</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} size="sm">
           <Plus className="w-4 h-4 mr-2" /> Buat Retur
         </Button>
-      </div>
+      </motion.div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>No. Referensi</TableHead>
-                <TableHead>Tanggal</TableHead>
-                <TableHead>Tipe</TableHead>
-                <TableHead>Catatan</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading
-                ? Array(4)
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+          <RotateCcw className="w-3.5 h-3.5 mr-1.5" />{returns?.length ?? 0} Retur
+        </Badge>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead>No. Referensi</TableHead>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>Tipe</TableHead>
+                  <TableHead>Catatan</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading
+                  ? Array(4)
                     .fill(0)
                     .map((_, i) => (
                       <TableRow key={i}>
@@ -175,36 +184,39 @@ export default function ReturPage() {
                         </TableCell>
                       </TableRow>
                     ))
-                : !returns?.length
-                ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                      <RotateCcw className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p>Belum ada data retur</p>
-                    </TableCell>
-                  </TableRow>
-                )
-                : returns.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-mono font-medium">{r.referenceNo}</TableCell>
-                    <TableCell>{formatDate(r.transactionDate)}</TableCell>
-                    <TableCell>
-                      <Badge variant={r.type === "from_field" ? "secondary" : "outline"}>
-                        {typeLabel(r.type)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{r.notes ?? "-"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewId(r.id)}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  : !returns?.length
+                    ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
+                          <FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                          <p className="font-medium">Belum ada data retur</p>
+                        </TableCell>
+                      </TableRow>
+                    )
+                    : returns.map((r) => (
+                      <TableRow key={r.id} className="group">
+                        <TableCell className="font-mono font-medium">{r.referenceNo}</TableCell>
+                        <TableCell className="text-sm">{formatDate(r.transactionDate)}</TableCell>
+                        <TableCell>
+                          <Badge variant={r.type === "from_field" ? "secondary" : "outline"}>
+                            {typeLabel(r.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{r.notes ?? "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <Tooltip><TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setViewId(r.id)}>
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger><TooltipContent>Lihat Detail</TooltipContent></Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Dialog Buat Retur */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate, roleLabel } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface User {
@@ -58,35 +60,46 @@ export default function PenggunaPage() {
   const roleBadgeVariant = (role: string) => ({ admin: "destructive" as const, gudang: "default" as const, keuangan: "secondary" as const, pimpinan: "outline" as const }[role] ?? "outline" as const);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Manajemen Pengguna</h1><p className="text-muted-foreground text-sm">Kelola akun pengguna sistem</p></div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Tambah Pengguna</Button>
-      </div>
+    <div className="p-4 md:p-6 space-y-4">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Manajemen Pengguna</h1>
+          <p className="text-muted-foreground text-sm">Kelola akun pengguna sistem.</p>
+        </div>
+        <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-2" /> Tambah Pengguna</Button>
+      </motion.div>
 
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow><TableHead>Username</TableHead><TableHead>Nama Lengkap</TableHead><TableHead>Email</TableHead><TableHead>Peran</TableHead><TableHead>Status</TableHead><TableHead>Dibuat</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
-              !data?.length ? <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><Users className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>Belum ada pengguna</p></TableCell></TableRow> :
-                data.map(u => (
-                  <TableRow key={u.id}>
-                    <TableCell className="font-mono font-medium">{u.username}</TableCell>
-                    <TableCell>{u.fullName}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{u.email ?? "-"}</TableCell>
-                    <TableCell><Badge variant={roleBadgeVariant(u.role)}>{roleLabel(u.role)}</Badge></TableCell>
-                    <TableCell><Badge variant={u.isActive ? "default" : "secondary"}>{u.isActive ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
-                    <TableCell className="text-right"><div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(u)}><Pencil className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setDeleteId(u.id)}><Trash2 className="w-4 h-4" /></Button>
-                    </div></TableCell>
-                  </TableRow>
-                ))}
-          </TableBody>
-        </Table>
-      </CardContent></Card>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+          <Users className="w-3.5 h-3.5 mr-1.5" />{data?.length ?? 0} Pengguna
+        </Badge>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Card><CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead>Username</TableHead><TableHead>Nama Lengkap</TableHead><TableHead>Email</TableHead><TableHead>Peran</TableHead><TableHead>Status</TableHead><TableHead>Dibuat</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
+                !data?.length ? <TableRow><TableCell colSpan={7} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada pengguna</p></TableCell></TableRow> :
+                  data.map(u => (
+                    <TableRow key={u.id} className="group">
+                      <TableCell className="font-mono font-medium">{u.username}</TableCell>
+                      <TableCell className="font-medium">{u.fullName}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{u.email ?? "—"}</TableCell>
+                      <TableCell><Badge variant={roleBadgeVariant(u.role)}>{roleLabel(u.role)}</Badge></TableCell>
+                      <TableCell><Badge variant={u.isActive ? "default" : "secondary"}>{u.isActive ? "Aktif" : "Nonaktif"}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
+                      <TableCell className="text-right"><div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(u)}><Pencil className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>
+                        <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => setDeleteId(u.id)}><Trash2 className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Hapus</TooltipContent></Tooltip>
+                      </div></TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </CardContent></Card>
+      </motion.div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md"><DialogHeader><DialogTitle>{editing ? "Edit Pengguna" : "Tambah Pengguna"}</DialogTitle></DialogHeader>
