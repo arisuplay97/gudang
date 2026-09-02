@@ -20,12 +20,12 @@ router.get("/dashboard/summary", requireAuth, async (_req, res): Promise<void> =
   const stockInAll = await db.select().from(stockInTable);
   const stockOutAll = await db.select().from(stockOutTable);
 
-  const isFinalized = (status: string) => status === "finalized" || status === "DIKIRIM";
+  const isFinalized = (status?: string) => !!status && ["finalized", "completed", "DIKIRIM"].includes(status);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const todayStockIn = stockInAll.filter(r => r.transactionDate >= today && r.status === "finalized").length;
+  const todayStockIn = stockInAll.filter(r => r.transactionDate >= today && isFinalized(r.status)).length;
   const todayStockOut = stockOutAll.filter(r => r.transactionDate >= today && isFinalized(r.status)).length;
 
   const pendingIn = stockInAll.filter(r => r.status === "draft" || r.status === "DRAFT").length;
@@ -36,7 +36,7 @@ router.get("/dashboard/summary", requireAuth, async (_req, res): Promise<void> =
 
   res.json({
     totalItems,
-    totalStockIn: stockInAll.filter(r => r.status === "finalized").length,
+    totalStockIn: stockInAll.filter(r => isFinalized(r.status)).length,
     totalStockOut: stockOutAll.filter(r => isFinalized(r.status)).length,
     lowStockCount,
     pendingTransactions: pendingIn + pendingOut,
@@ -89,6 +89,8 @@ router.get("/dashboard/low-stock", requireAuth, async (_req, res): Promise<void>
 
 router.get("/dashboard/stock-movement", requireAuth, async (_req, res): Promise<void> => {
   const result: { date: string; stockIn: number; stockOut: number }[] = [];
+  const isFinalized = (status?: string) => !!status && ["finalized", "completed", "DIKIRIM"].includes(status);
+
   for (let i = 6; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
@@ -103,8 +105,8 @@ router.get("/dashboard/stock-movement", requireAuth, async (_req, res): Promise<
 
     result.push({
       date: date.toISOString().split("T")[0],
-      stockIn: stockIn.filter(r => r.status === "finalized").length,
-      stockOut: stockOut.filter(r => r.status === "finalized").length,
+      stockIn: stockIn.filter(r => isFinalized(r.status)).length,
+      stockOut: stockOut.filter(r => isFinalized(r.status)).length,
     });
   }
   res.json(result);
