@@ -32,6 +32,7 @@ import CabangTrackingPage from "@/pages/cabang/tracking";
 import SpiDashboardPage from "@/pages/spi/dashboard";
 import SpiVerifikasiPage from "@/pages/spi/verifikasi";
 import SpiGisPage from "@/pages/spi/gis";
+import AiAssistantPage from "@/pages/ai-assistant";
 import GlobalSearch from "@/components/global-search";
 import NotificationCenter from "@/components/notification-center";
 import ErrorBoundary from "@/components/error-boundary";
@@ -102,6 +103,9 @@ function AppRouter() {
         <Route path="/spi/dashboard" component={SpiDashboardPage} />
         <Route path="/spi/verifikasi" component={SpiVerifikasiPage} />
         <Route path="/spi/gis" component={SpiGisPage} />
+
+        {/* AI Assistant */}
+        <Route path="/ai-assistant" component={AiAssistantPage} />
 
         <Route path="/pengguna" component={PenggunaPage} />
         <Route path="/login"><Redirect to="/" /></Route>

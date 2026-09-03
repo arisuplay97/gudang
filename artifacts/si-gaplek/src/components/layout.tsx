@@ -67,6 +67,7 @@ import {
   Archive,
   BookOpen,
   Wrench,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/auth-context";
@@ -79,6 +80,7 @@ interface NavItem {
   roles: Role[];
   children?: NavItem[];
   group?: string;
+  badge?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -161,6 +163,13 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    label: "AI Assistant",
+    href: "/ai-assistant",
+    icon: Sparkles,
+    roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
+    badge: "AI",
+  },
+  {
     label: "Pengguna",
     href: "/pengguna",
     icon: Users,
@@ -195,6 +204,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/laporan/pemasangan-aksesoris": "Laporan Pemasangan Aksesoris",
   "/laporan/nilai": "Nilai Inventaris",
   "/laporan/log": "Audit Log",
+  "/ai-assistant": "AI Assistant Logistik",
   "/pengguna": "Pengguna",
 };
 
@@ -331,7 +341,12 @@ function NavLink({
       )}
     >
       <item.icon className={cn("shrink-0", collapsed && depth === 0 ? "w-5 h-5" : "w-4 h-4")} />
-      {(!collapsed || depth > 0) && <span>{item.label}</span>}
+      {(!collapsed || depth > 0) && <span className="flex-1 text-left">{item.label}</span>}
+      {item.badge && (!collapsed || depth > 0) && (
+        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-2xs leading-none">
+          {item.badge}
+        </span>
+      )}
     </button>
   );
 
