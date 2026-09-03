@@ -111,24 +111,24 @@ const BASEMAP_CONFIGS: Record<
   BasemapType,
   { name: string; url: string; subdomains?: string[] | string; attribution: string; maxZoom: number }
 > = {
-  google_hybrid: {
-    name: "Satelit 2025/2026 (Minim Awan + Jalan)",
-    url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-    subdomains: ["0", "1", "2", "3"],
-    attribution:
-      "&copy; Google Maps Satellite (Citra Terbaru & Bebas Awan)",
-    maxZoom: 21,
-  },
   google_satellite: {
-    name: "Satelit 2025/2026 (Foto Murni)",
+    name: "Foto Murni",
     url: "https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
     subdomains: ["0", "1", "2", "3"],
     attribution:
       "&copy; Google Maps Satellite",
     maxZoom: 21,
   },
+  google_hybrid: {
+    name: "Satelit Hybrid",
+    url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+    subdomains: ["0", "1", "2", "3"],
+    attribution:
+      "&copy; Google Maps Satellite",
+    maxZoom: 21,
+  },
   esri_clarity: {
-    name: "Esri Clarity (Cloud-Free)",
+    name: "Esri Clarity",
     url: "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution:
       "Tiles &copy; Esri Clarity Archive",
@@ -319,7 +319,7 @@ export default function SpiGisPage() {
   const rawFeatures = useMemo(() => gisData?.features || [], [gisData]);
 
   // States
-  const [activeBasemap, setActiveBasemap] = useState<BasemapType>("google_hybrid");
+  const [activeBasemap, setActiveBasemap] = useState<BasemapType>("google_satellite");
   const [selectedBranch, setSelectedBranch] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<
     "ALL" | "VERIFIED" | "MISMATCH"
@@ -938,29 +938,29 @@ FROM pdam_material_gis;`;
         <div className="absolute top-3 right-3 z-[400] flex items-center bg-card/90 dark:bg-card/90 backdrop-blur-md p-1 rounded-xl shadow-md border border-border text-xs gap-1">
           <button
             type="button"
-            onClick={() => setActiveBasemap("google_hybrid")}
-            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-xs font-medium ${
-              activeBasemap === "google_hybrid"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-            title="Satelit Terbaru 2025/2026 Google (Bebas Awan + Label Jalan Lengkap)"
-          >
-            <Satellite className="w-3.5 h-3.5" />
-            <span>Satelit 2025/26 (Minim Awan)</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveBasemap("google_satellite")}
             className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-xs font-medium ${
               activeBasemap === "google_satellite"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
             }`}
-            title="Foto Udara Satelit Murni Tanpa Tulisan"
+            title="Foto Udara Satelit Murni"
           >
+            <Satellite className="w-3.5 h-3.5" />
             <span>Foto Murni</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveBasemap("google_hybrid")}
+            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-xs font-medium ${
+              activeBasemap === "google_hybrid"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            }`}
+            title="Satelit dengan Garis dan Nama Jalan"
+          >
+            <span>Satelit Hybrid</span>
           </button>
 
           <button

@@ -73,10 +73,10 @@ function TrackingMapLeaflet({ gisLocations = [] }: { gisLocations?: any[] }) {
     if (!containerRef.current) return;
     if (!mapInstance.current) {
       const map = L.map(containerRef.current).setView([-8.6705, 116.1155], 11);
-      L.tileLayer("https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+      L.tileLayer("https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
         subdomains: ["0", "1", "2", "3"],
         maxZoom: 20,
-        attribution: '&copy; Google Satellite (2025/2026, Bebas Awan)',
+        attribution: '&copy; Google Satellite',
       }).addTo(map);
       mapInstance.current = map;
     }
