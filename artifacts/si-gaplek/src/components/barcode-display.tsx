@@ -24,9 +24,15 @@ export function BarcodeDisplay({
             <QRCodeSVG
                 value={value}
                 size={size}
-                level="M"
+                level="H"
                 bgColor="transparent"
                 fgColor="currentColor"
+                imageSettings={size >= 48 ? {
+                    src: "/logo-qr-icon.png",
+                    height: Math.round(size * 0.25),
+                    width: Math.round(size * 0.25),
+                    excavate: true,
+                } : undefined}
             />
             {showValue && (
                 <span className="text-[10px] font-mono text-muted-foreground leading-none">
@@ -52,14 +58,12 @@ export function BarcodePrintLabel({
 }) {
     return (
         <div
-            className="flex flex-col items-center gap-1 p-4 bg-white text-black"
+            className="flex flex-col items-center gap-1.5 p-4 bg-white text-black"
             id="barcode-print-label"
         >
+            <img src="/logo-perumdam.png" alt="Logo Perumdam" className="h-10 w-auto object-contain mb-0.5" />
             <p className="text-[10px] font-bold text-center tracking-wider uppercase leading-tight">
-                PERUMDAM TIRTA ARDHIA
-            </p>
-            <p className="text-[10px] font-bold text-center tracking-wider uppercase leading-none mb-1">
-                RINJANI
+                PERUMDAM TIRTA ARDHIA RINJANI
             </p>
             <p className="text-sm font-semibold text-center leading-tight">
                 {itemName}
@@ -71,8 +75,14 @@ export function BarcodePrintLabel({
                 level="H"
                 bgColor="#ffffff"
                 fgColor="#000000"
+                imageSettings={{
+                    src: "/logo-qr-icon.png",
+                    height: 38,
+                    width: 38,
+                    excavate: true,
+                }}
             />
-            <p className="text-xs font-mono">{barcode}</p>
+            <p className="text-xs font-mono font-bold">{barcode}</p>
         </div>
     );
 }

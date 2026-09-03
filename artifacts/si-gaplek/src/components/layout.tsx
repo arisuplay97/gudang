@@ -411,13 +411,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col h-full">
       <div className={cn("border-b", isCollapsed ? "p-3" : "p-4")}>
         <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
-          <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center shrink-0">
-            <Package className="w-5 h-5 text-primary-foreground" />
+          <div className="w-10 h-10 rounded-xl bg-white p-1 border border-border shadow-xs flex items-center justify-center shrink-0">
+            <img
+              src="/logo-perumdam.png"
+              alt="Logo SI GAPLEK"
+              className="w-full h-full object-contain"
+            />
           </div>
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-sm leading-tight">SI GAPLEK</p>
-              <p className="text-xs text-muted-foreground truncate">Logistik Kantor</p>
+              <p className="font-bold text-sm leading-tight text-foreground">SI GAPLEK</p>
+              <p className="text-[11px] text-muted-foreground truncate">Perumdam Tirta Ardhia Rinjani</p>
             </div>
           )}
           <Tooltip>
@@ -507,7 +511,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Mobile: show page title */}
           <div className="flex sm:hidden items-center gap-2">
-            <Package className="w-5 h-5 text-primary" />
+            <img src="/logo-perumdam.png" alt="Logo" className="w-6 h-6 object-contain" />
             <span className="font-bold text-sm">
               {ROUTE_LABELS[location] || "SI GAPLEK"}
             </span>

@@ -95,10 +95,12 @@ export function SuratJalanPrintModal({ open, onClose, data }: SuratJalanPrintPro
           >
             {/* 1. Header / Kop Surat Resmi */}
             <div className="flex items-start justify-between border-b-2 border-zinc-900 pb-4 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-lg bg-sky-800 text-white flex items-center justify-center font-bold text-2xl shadow-xs">
-                  TAR
-                </div>
+              <div className="flex items-center gap-3.5">
+                <img
+                  src="/logo-perumdam.png"
+                  alt="Logo Perumdam"
+                  className="h-16 w-auto object-contain shrink-0"
+                />
                 <div>
                   <h1 className="text-lg sm:text-xl font-black tracking-tight text-zinc-900 uppercase leading-none">
                     PERUMDAM TIRTA ARDHIA RINJANI
@@ -116,10 +118,16 @@ export function SuratJalanPrintModal({ open, onClose, data }: SuratJalanPrintPro
               <div className="flex flex-col items-center justify-center p-2 bg-zinc-50 border border-zinc-200 rounded-md shrink-0">
                 <QRCodeSVG
                   value={qrValue}
-                  size={72}
-                  level="M"
+                  size={78}
+                  level="H"
                   bgColor="#ffffff"
                   fgColor="#000000"
+                  imageSettings={{
+                    src: "/logo-qr-icon.png",
+                    height: 20,
+                    width: 20,
+                    excavate: true,
+                  }}
                 />
                 <span className="text-[8px] font-mono text-zinc-600 mt-1 font-bold">
                   {data.referenceNo}

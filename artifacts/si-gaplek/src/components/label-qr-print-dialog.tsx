@@ -139,10 +139,16 @@ export function LabelQrPrintDialog({ items, open, onClose }: LabelQrPrintDialogP
                       <div className="shrink-0 bg-white p-0.5 border border-zinc-200 rounded">
                         <QRCodeSVG
                           value={item.barcode || item.code}
-                          size={52}
-                          level="M"
+                          size={54}
+                          level="H"
                           bgColor="#ffffff"
                           fgColor="#000000"
+                          imageSettings={{
+                            src: "/logo-qr-icon.png",
+                            height: 14,
+                            width: 14,
+                            excavate: true,
+                          }}
                         />
                       </div>
                     </div>
@@ -159,9 +165,12 @@ export function LabelQrPrintDialog({ items, open, onClose }: LabelQrPrintDialogP
                   className="w-full bg-white text-zinc-900 border-2 border-zinc-800 p-2 rounded flex items-center justify-between gap-2 h-[110px] print:h-[110px] print:break-after-page print:border-0"
                 >
                   <div className="flex-1 min-w-0 space-y-0.5">
-                    <p className="text-[7px] font-black uppercase tracking-wider text-zinc-700 leading-none">
-                      PERUMDAM LOMBOK TENGAH
-                    </p>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <img src="/logo-perumdam.png" alt="Logo" className="h-3.5 w-auto object-contain shrink-0" />
+                      <p className="text-[7px] font-black uppercase tracking-wider text-zinc-700 leading-none">
+                        PERUMDAM LOMBOK TENGAH
+                      </p>
+                    </div>
                     <p className="text-[10px] font-bold text-zinc-900 line-clamp-2 leading-tight">
                       {item.name}
                     </p>
@@ -176,10 +185,16 @@ export function LabelQrPrintDialog({ items, open, onClose }: LabelQrPrintDialogP
                   <div className="shrink-0 bg-white p-1 border border-zinc-300 rounded flex flex-col items-center">
                     <QRCodeSVG
                       value={item.barcode || item.code}
-                      size={64}
-                      level="M"
+                      size={66}
+                      level="H"
                       bgColor="#ffffff"
                       fgColor="#000000"
+                      imageSettings={{
+                        src: "/logo-qr-icon.png",
+                        height: 17,
+                        width: 17,
+                        excavate: true,
+                      }}
                     />
                     <span className="text-[7px] font-mono text-zinc-500 mt-0.5 font-bold">
                       {item.barcode || item.code}

@@ -35,12 +35,12 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-950 to-blue-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur mb-4">
-            <Package className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white p-2.5 shadow-xl mb-4">
+            <img src="/logo-perumdam.png" alt="Logo Perumdam" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-white">SI GAPLEK</h1>
           <p className="text-blue-200 mt-1 text-sm">
-            Sistem Gudang dan Pengelolaan Logistik Kantor
+            Perumdam Tirta Ardhia Rinjani Kabupaten Lombok Tengah
           </p>
         </div>
 

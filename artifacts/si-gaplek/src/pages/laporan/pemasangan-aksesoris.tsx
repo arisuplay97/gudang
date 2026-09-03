@@ -237,14 +237,17 @@ export default function LaporanPemasanganAksesorisPage() {
       {/* ── Table Sheet Preview (Exactly Matching User's Image Format) ── */}
       <Card className="border border-border/80 shadow-sm overflow-hidden bg-card">
         {/* Document Header Title inside the sheet preview */}
-        <div className="p-4 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h2 className="text-xl font-bold italic tracking-wide text-sky-700 dark:text-sky-400 font-serif">
-              LAPORAN PEMASANGAN AKSESORIS
-            </h2>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">
-              Format Standar Perumdam Tirta Ardhia Rinjani Kabupaten Lombok Tengah
-            </p>
+        <div className="p-4 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <img src="/logo-perumdam.png" alt="Logo Perumdam" className="h-12 w-auto object-contain shrink-0" />
+            <div>
+              <h2 className="text-xl font-bold tracking-wide text-zinc-900 dark:text-zinc-100 font-sans uppercase leading-tight">
+                LAPORAN PEMASANGAN AKSESORIS
+              </h2>
+              <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                PERUMDAM TIRTA ARDHIA RINJANI KABUPATEN LOMBOK TENGAH
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
