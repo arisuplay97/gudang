@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { exportToCSV } from "@/lib/export-utils";
@@ -11,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollText, Download, RotateCcw, FolderOpen } from "lucide-react";
+import { ScrollText, Download, RotateCcw, FolderOpen, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface TransactionReport {
@@ -23,6 +24,7 @@ const TYPE_LABELS: Record<string, string> = { stock_in: "Barang Masuk", stock_ou
 const TYPE_BADGE: Record<string, "default" | "destructive" | "secondary"> = { stock_in: "default", stock_out: "destructive" };
 
 export default function LaporanTransaksiPage() {
+  const [, setLocation] = useLocation();
   const [type, setType] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -54,9 +56,19 @@ export default function LaporanTransaksiPage() {
           <h1 className="text-2xl font-bold tracking-tight">Laporan Transaksi</h1>
           <p className="text-muted-foreground text-sm">Riwayat semua transaksi barang masuk, keluar, mutasi.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport} disabled={!data?.length}>
-          <Download className="w-4 h-4 mr-2" /> Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setLocation("/laporan/pemasangan-aksesoris")}
+            className="text-xs gap-1.5"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Format Pemasangan Aksesoris (Excel)
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={!data?.length}>
+            <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+        </div>
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="flex items-center gap-2">

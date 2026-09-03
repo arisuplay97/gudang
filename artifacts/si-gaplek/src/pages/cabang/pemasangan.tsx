@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +27,7 @@ import {
   FolderOpen,
   CameraOff,
   Sparkles,
+  FileSpreadsheet,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -63,6 +65,7 @@ interface AllocationItem {
 export default function CabangPemasanganPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<string>("allocations");
@@ -421,6 +424,15 @@ export default function CabangPemasanganPage() {
             Kelola alokasi titik pemasangan material dan unggah bukti fisik dengan watermark resmi.
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 self-start sm:self-auto text-xs"
+          onClick={() => setLocation("/laporan/pemasangan-aksesoris")}
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+          Format Laporan Pemasangan (Excel)
+        </Button>
       </motion.div>
 
       {/* Tabs */}

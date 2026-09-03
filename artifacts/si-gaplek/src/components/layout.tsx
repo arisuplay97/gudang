@@ -66,6 +66,7 @@ import {
   Activity,
   Archive,
   BookOpen,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/auth-context";
@@ -149,11 +150,12 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: "LAPORAN",
     icon: FileSpreadsheet,
-    roles: ["ADMIN", "GUDANG", "SPI"],
+    roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
     group: "LAPORAN",
     children: [
       { label: "Stok", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
       { label: "Transaksi", href: "/laporan/transaksi", icon: FileSpreadsheet, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Pemasangan Aksesoris", href: "/laporan/pemasangan-aksesoris", icon: Wrench, roles: ["ADMIN", "GUDANG", "CABANG", "SPI"] },
       { label: "Nilai Inventaris", href: "/laporan/nilai", icon: ScrollText, roles: ["ADMIN", "GUDANG", "SPI"] },
       { label: "Audit Log", href: "/laporan/log", icon: ClipboardList, roles: ["ADMIN", "SPI"] },
     ],
@@ -190,6 +192,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/spi/gis": "Peta Material",
   "/laporan/stok": "Laporan Stok",
   "/laporan/transaksi": "Laporan Transaksi",
+  "/laporan/pemasangan-aksesoris": "Laporan Pemasangan Aksesoris",
   "/laporan/nilai": "Nilai Inventaris",
   "/laporan/log": "Audit Log",
   "/pengguna": "Pengguna",
