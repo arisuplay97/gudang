@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
@@ -134,6 +135,7 @@ function DashCard({ children, className = "" }: { children: React.ReactNode; cla
 export default function DashboardPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const [period, setPeriod] = useState<"7" | "30">("7");
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ["dashboard-summary"],
@@ -151,9 +153,10 @@ export default function DashboardPage() {
     refetchInterval: 30_000,
   });
   const { data: movement, isLoading: loadingMove } = useQuery({
-    queryKey: ["dashboard-movement"],
-    queryFn: () => apiFetch<Movement[]>("/api/dashboard/stock-movement"),
+    queryKey: ["dashboard-movement", period],
+    queryFn: () => apiFetch<Movement[]>(`/api/dashboard/stock-movement?days=${period}`),
     refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
   });
   const { data: stockHealth } = useQuery({
     queryKey: ["dashboard-stock-health"],
@@ -176,7 +179,7 @@ export default function DashboardPage() {
     queryFn: () => apiFetch<ActivityItem[]>("/api/dashboard/activity"),
   });
 
-  const isLoading = loadingSummary || loadingTx || loadingLow || loadingMove;
+  const isLoading = loadingSummary || loadingTx || loadingLow;
 
   const totalMovement = (movement ?? []).reduce((s, m) => s + m.stockIn + m.stockOut, 0);
   const inventoryValue = summary?.inventoryValue ?? 0;
@@ -249,9 +252,29 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-              <div className="flex gap-1">
-                <button className="text-xs font-medium px-3 py-1.5 rounded-full bg-[#5b7553] text-white">7h</button>
-                <button className="text-xs font-medium px-3 py-1.5 rounded-full bg-[#f0efe9] text-[#6b6b5e] dark:bg-muted dark:text-muted-foreground">30h</button>
+              <div className="flex gap-1 bg-[#eae8e0] dark:bg-muted p-0.5 rounded-full">
+                <button
+                  type="button"
+                  onClick={() => setPeriod("7")}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full transition-all cursor-pointer ${
+                    period === "7"
+                      ? "bg-[#5b7553] text-white shadow-xs"
+                      : "text-[#6b6b5e] hover:text-[#2d2d2a] dark:text-muted-foreground dark:hover:text-foreground"
+                  }`}
+                >
+                  7h
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriod("30")}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full transition-all cursor-pointer ${
+                    period === "30"
+                      ? "bg-[#5b7553] text-white shadow-xs"
+                      : "text-[#6b6b5e] hover:text-[#2d2d2a] dark:text-muted-foreground dark:hover:text-foreground"
+                  }`}
+                >
+                  30h
+                </button>
               </div>
             </div>
             <div className="flex items-center gap-1.5 mb-4">
@@ -261,7 +284,7 @@ export default function DashboardPage() {
               </span>
               <span className="text-xs text-[#8a8a7a] dark:text-muted-foreground">•</span>
               <span className="text-xs text-[#8a8a7a] dark:text-muted-foreground">
-                {formatNumber(totalMovement)} total pergerakan 7 hari
+                {formatNumber(totalMovement)} total pergerakan {period} hari
               </span>
             </div>
             <div className="flex gap-4 text-xs mb-3 text-[#8a8a7a] dark:text-muted-foreground">
@@ -288,7 +311,20 @@ export default function DashboardPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eae8e0" strokeOpacity={0.5} />
-                  <XAxis dataKey="date" tickFormatter={dayLabel} tick={{ fontSize: 11, fill: "#8a8a7a" }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(d: string) => {
+                      const dt = new Date(d);
+                      if (period === "30") {
+                        return dt.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+                      }
+                      return dt.toLocaleDateString("id-ID", { weekday: "short" });
+                    }}
+                    interval={period === "30" ? 4 : 0}
+                    tick={{ fontSize: 11, fill: "#8a8a7a" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <YAxis tick={{ fontSize: 11, fill: "#8a8a7a" }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{ borderRadius: 12, border: "1px solid #eae8e0", boxShadow: "0 4px 20px rgba(0,0,0,0.06)", fontSize: 12, backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}

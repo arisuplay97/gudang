@@ -20,7 +20,8 @@ router.get("/dashboard/summary", requireAuth, async (_req, res): Promise<void> =
   const stockInAll = await db.select().from(stockInTable);
   const stockOutAll = await db.select().from(stockOutTable);
 
-  const isFinalized = (status?: string) => !!status && ["finalized", "completed", "DIKIRIM"].includes(status);
+  const isFinalized = (status?: string) =>
+    !!status && ["finalized", "completed", "dikirim", "diproses", "selesai", "approved"].includes(status.toLowerCase());
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -87,28 +88,51 @@ router.get("/dashboard/low-stock", requireAuth, async (_req, res): Promise<void>
   res.json(rows.map(r => ({ ...r, unitName: null, categoryName: null })));
 });
 
-router.get("/dashboard/stock-movement", requireAuth, async (_req, res): Promise<void> => {
+router.get("/dashboard/stock-movement", requireAuth, async (req, res): Promise<void> => {
+  const daysParam = parseInt(req.query.days as string, 10);
+  const days = daysParam === 30 ? 30 : 7;
+  const isFinalized = (status?: string) =>
+    !!status && ["finalized", "completed", "dikirim", "diproses", "selesai", "approved"].includes(status.toLowerCase());
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (days - 1));
+  startDate.setHours(0, 0, 0, 0);
+
+  // Fetch all in range in 2 parallel queries instead of 60 sequential queries
+  const [allStockIn, allStockOut] = await Promise.all([
+    db.select({ transactionDate: stockInTable.transactionDate, status: stockInTable.status })
+      .from(stockInTable)
+      .where(gte(stockInTable.transactionDate, startDate)),
+    db.select({ transactionDate: stockOutTable.transactionDate, status: stockOutTable.status })
+      .from(stockOutTable)
+      .where(gte(stockOutTable.transactionDate, startDate)),
+  ]);
+
   const result: { date: string; stockIn: number; stockOut: number }[] = [];
-  const isFinalized = (status?: string) => !!status && ["finalized", "completed", "DIKIRIM"].includes(status);
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
 
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    date.setHours(0, 0, 0, 0);
-    const nextDate = new Date(date);
-    nextDate.setDate(nextDate.getDate() + 1);
+    const inCount = allStockIn.filter(r => {
+      if (!isFinalized(r.status)) return false;
+      const rDate = new Date(r.transactionDate).toISOString().split("T")[0];
+      return rDate === dateStr;
+    }).length;
 
-    const stockIn = await db.select().from(stockInTable)
-      .where(and(gte(stockInTable.transactionDate, date), lt(stockInTable.transactionDate, nextDate)));
-    const stockOut = await db.select().from(stockOutTable)
-      .where(and(gte(stockOutTable.transactionDate, date), lt(stockOutTable.transactionDate, nextDate)));
+    const outCount = allStockOut.filter(r => {
+      if (!isFinalized(r.status)) return false;
+      const rDate = new Date(r.transactionDate).toISOString().split("T")[0];
+      return rDate === dateStr;
+    }).length;
 
     result.push({
-      date: date.toISOString().split("T")[0],
-      stockIn: stockIn.filter(r => isFinalized(r.status)).length,
-      stockOut: stockOut.filter(r => isFinalized(r.status)).length,
+      date: dateStr,
+      stockIn: inCount,
+      stockOut: outCount,
     });
   }
+
   res.json(result);
 });
 
