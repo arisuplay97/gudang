@@ -144,7 +144,7 @@ router.get("/spi/pending", requireAuth, requireRole("SPI", "ADMIN"), async (req,
 });
 
 // ─── VERIFY EVIDENCE (Section 34, 35) ───
-router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI"), async (req, res): Promise<void> => {
+router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"), async (req, res): Promise<void> => {
     const { status, notes } = req.body; // TERVERIFIKASI | DITOLAK
     if (!["TERVERIFIKASI", "DITOLAK"].includes(status)) {
         res.status(400).json({ error: "Status harus TERVERIFIKASI atau DITOLAK" }); return;
