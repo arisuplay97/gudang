@@ -10,6 +10,7 @@ export interface CurrentUser {
   email: string | null;
   role: Role;
   branchId?: number | null;
+  branchName?: string | null;
   isActive: boolean;
 }
 

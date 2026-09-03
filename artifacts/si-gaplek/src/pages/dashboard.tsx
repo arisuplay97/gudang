@@ -39,6 +39,7 @@ import {
   Cell,
 } from "recharts";
 import { useLocation } from "wouter";
+import CabangDashboardPage from "./cabang/dashboard";
 
 /* ── Types ── */
 interface Summary {
@@ -132,6 +133,9 @@ function DashCard({ children, className = "" }: { children: React.ReactNode; cla
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  if (user?.role === "CABANG") {
+    return <CabangDashboardPage />;
+  }
   const [, navigate] = useLocation();
   const [period, setPeriod] = useState<"7" | "30">("7");
 

@@ -6,7 +6,7 @@
  * 26 (Idempotency), 27 (Race Condition)
  */
 import { Router, type IRouter } from "express";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, or, ilike } from "drizzle-orm";
 import crypto from "crypto";
 import {
     db,
@@ -19,6 +19,8 @@ import {
     installationAllocationsTable,
     installationEvidenceTable,
     branchesTable,
+    usersTable,
+    warehousesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
 
@@ -26,6 +28,329 @@ const router: IRouter = Router();
 
 const SLA_DAYS = 7;
 const MISMATCH_THRESHOLD_METERS = 100; // configurable
+
+// ─── LIST INCOMING SHIPMENTS FOR BRANCH ───
+router.get("/branch/shipments", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
+    let branchId = req.session.branchId;
+    if (!branchId && req.session.userRole === "ADMIN") {
+        if (req.query.branchId) branchId = parseInt(req.query.branchId as string);
+    }
+
+    const conditions: any[] = [
+        eq(stockOutTable.status, "DIKIRIM")
+    ];
+    if (branchId) {
+        conditions.push(eq(stockOutTable.destinationBranchId, branchId));
+    }
+
+    const shipments = await db
+        .select({
+            id: stockOutTable.id,
+            referenceNo: stockOutTable.referenceNo,
+            destinationBranchId: stockOutTable.destinationBranchId,
+            destinationBranchName: branchesTable.name,
+            warehouseId: stockOutTable.warehouseId,
+            warehouseName: warehousesTable.name,
+            qrToken: stockOutTable.qrToken,
+            notes: stockOutTable.notes,
+            transactionDate: stockOutTable.transactionDate,
+            releasedAt: stockOutTable.releasedAt,
+            createdAt: stockOutTable.createdAt,
+        })
+        .from(stockOutTable)
+        .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
+        .leftJoin(warehousesTable, eq(stockOutTable.warehouseId, warehousesTable.id))
+        .where(and(...conditions))
+        .orderBy(desc(stockOutTable.createdAt));
+
+    const result = await Promise.all(shipments.map(async (s) => {
+        const trackingUnits = await db
+            .select({
+                trackingId: materialTrackingTable.id,
+                trackingUuid: materialTrackingTable.uuid,
+                status: materialTrackingTable.status,
+                slaStartAt: materialTrackingTable.slaStartAt,
+                slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
+                receivedAt: materialTrackingTable.receivedAt,
+                receivedBy: materialTrackingTable.receivedBy,
+                receivedByName: usersTable.fullName,
+                itemId: itemsTable.id,
+                itemName: itemsTable.name,
+                itemCode: itemsTable.code,
+                txItemId: stockOutItemsTable.id,
+            })
+            .from(materialTrackingTable)
+            .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+            .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+            .leftJoin(usersTable, eq(materialTrackingTable.receivedBy, usersTable.id))
+            .where(eq(stockOutItemsTable.stockOutId, s.id))
+            .orderBy(materialTrackingTable.id);
+
+        const totalUnits = trackingUnits.length;
+        const receivedUnits = trackingUnits.filter(u => u.status !== "MENUNGGU_DITERIMA" || !!u.receivedAt).length;
+        const pendingUnits = totalUnits - receivedUnits;
+
+        let receiptStatus = "PENDING";
+        if (totalUnits > 0 && pendingUnits === 0) {
+            receiptStatus = "COMPLETED";
+        } else if (receivedUnits > 0) {
+            receiptStatus = "PARTIAL";
+        }
+
+        return {
+            ...s,
+            totalUnits,
+            receivedUnits,
+            pendingUnits,
+            receiptStatus,
+            isFullyReceived: totalUnits > 0 && pendingUnits === 0,
+            units: trackingUnits,
+        };
+    }));
+
+    res.json({ data: result });
+});
+
+// ─── GET DETAIL SHIPMENT (BY QR TOKEN, REF NO, OR ID) ───
+router.get("/branch/shipment/:tokenOrId", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
+    const param = req.params.tokenOrId;
+    const isNum = !isNaN(parseInt(param));
+
+    const [shipment] = await db
+        .select({
+            id: stockOutTable.id,
+            referenceNo: stockOutTable.referenceNo,
+            destinationBranchId: stockOutTable.destinationBranchId,
+            destinationBranchName: branchesTable.name,
+            warehouseId: stockOutTable.warehouseId,
+            warehouseName: warehousesTable.name,
+            qrToken: stockOutTable.qrToken,
+            notes: stockOutTable.notes,
+            transactionDate: stockOutTable.transactionDate,
+            releasedAt: stockOutTable.releasedAt,
+            createdAt: stockOutTable.createdAt,
+        })
+        .from(stockOutTable)
+        .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
+        .leftJoin(warehousesTable, eq(stockOutTable.warehouseId, warehousesTable.id))
+        .where(
+            or(
+                eq(stockOutTable.qrToken, param),
+                eq(stockOutTable.referenceNo, param),
+                ...(isNum ? [eq(stockOutTable.id, parseInt(param))] : [])
+            )
+        );
+
+    if (!shipment) {
+        res.status(404).json({ error: "Pengiriman tidak ditemukan" });
+        return;
+    }
+
+    const trackingUnits = await db
+        .select({
+            trackingId: materialTrackingTable.id,
+            trackingUuid: materialTrackingTable.uuid,
+            status: materialTrackingTable.status,
+            slaStartAt: materialTrackingTable.slaStartAt,
+            slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
+            receivedAt: materialTrackingTable.receivedAt,
+            receivedBy: materialTrackingTable.receivedBy,
+            receivedByName: usersTable.fullName,
+            itemId: itemsTable.id,
+            itemName: itemsTable.name,
+            itemCode: itemsTable.code,
+            txItemId: stockOutItemsTable.id,
+        })
+        .from(materialTrackingTable)
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .leftJoin(usersTable, eq(materialTrackingTable.receivedBy, usersTable.id))
+        .where(eq(stockOutItemsTable.stockOutId, shipment.id))
+        .orderBy(materialTrackingTable.id);
+
+    const totalUnits = trackingUnits.length;
+    const receivedUnits = trackingUnits.filter(u => u.status !== "MENUNGGU_DITERIMA" || !!u.receivedAt).length;
+    const pendingUnits = totalUnits - receivedUnits;
+
+    let receiptStatus = "PENDING";
+    if (totalUnits > 0 && pendingUnits === 0) {
+        receiptStatus = "COMPLETED";
+    } else if (receivedUnits > 0) {
+        receiptStatus = "PARTIAL";
+    }
+
+    res.json({
+        shipment,
+        totalUnits,
+        receivedUnits,
+        pendingUnits,
+        receiptStatus,
+        isFullyReceived: totalUnits > 0 && pendingUnits === 0,
+        units: trackingUnits,
+    });
+});
+
+// ─── RECEIVE SINGLE UNIT VIA SCAN (ENFORCES NO-RESCAN) ───
+router.post("/branch/receive-unit", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
+    const { trackingId, trackingUuid } = req.body;
+    if (!trackingId && !trackingUuid) {
+        res.status(400).json({ error: "ID atau UUID unit tracking wajib diisi" });
+        return;
+    }
+
+    const condition = trackingId 
+        ? eq(materialTrackingTable.id, parseInt(String(trackingId)))
+        : eq(materialTrackingTable.uuid, String(trackingUuid));
+
+    const [tracking] = await db
+        .select({
+            id: materialTrackingTable.id,
+            uuid: materialTrackingTable.uuid,
+            status: materialTrackingTable.status,
+            receivedAt: materialTrackingTable.receivedAt,
+            branchId: materialTrackingTable.branchId,
+            transactionItemId: materialTrackingTable.transactionItemId,
+            stockOutId: stockOutItemsTable.stockOutId,
+            itemId: stockOutItemsTable.itemId,
+            itemName: itemsTable.name,
+            itemCode: itemsTable.code,
+        })
+        .from(materialTrackingTable)
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .where(condition);
+
+    if (!tracking) {
+        res.status(404).json({ error: "Unit material tidak ditemukan" });
+        return;
+    }
+
+    // Check branch access (ADMIN can act for destination branch)
+    const userBranchId = req.session.branchId ?? (req.session.userRole === "ADMIN" ? tracking.branchId : null);
+    if (!userBranchId || (req.session.userRole !== "ADMIN" && tracking.branchId !== userBranchId)) {
+        res.status(403).json({ error: "Cabang Anda tidak sesuai dengan tujuan pengiriman material ini" });
+        return;
+    }
+
+    // Check if ALREADY received (Prevent Re-Scanning!)
+    if (tracking.status !== "MENUNGGU_DITERIMA" || tracking.receivedAt) {
+        res.status(400).json({
+            error: `Unit material "${tracking.itemName}" sudah diterima sebelumnya dan tidak dapat di-scan ulang!`,
+            alreadyReceived: true,
+            unit: tracking,
+        });
+        return;
+    }
+
+    const now = new Date();
+
+    // Process receipt
+    await db.transaction(async (tx) => {
+        await tx.update(materialTrackingTable).set({
+            status: "DITERIMA_CABANG",
+            receivedAt: now,
+            receivedBy: req.session.userId,
+        }).where(eq(materialTrackingTable.id, tracking.id));
+
+        await tx.insert(materialTrackingEventsTable).values({
+            trackingId: tracking.id,
+            eventType: "BRANCH_RECEIVED",
+            userId: req.session.userId,
+            metadata: { trackingUuid: tracking.uuid, itemId: tracking.itemId, itemName: tracking.itemName },
+        });
+
+        // Count remaining units for this shipment
+        const allUnits = await tx
+            .select({
+                id: materialTrackingTable.id,
+                status: materialTrackingTable.status,
+            })
+            .from(materialTrackingTable)
+            .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+            .where(eq(stockOutItemsTable.stockOutId, tracking.stockOutId));
+
+        const totalUnits = allUnits.length;
+        const receivedUnits = allUnits.filter(u => u.id === tracking.id || u.status !== "MENUNGGU_DITERIMA").length;
+        const remainingUnits = totalUnits - receivedUnits;
+
+        // If all units now received, record in materialReceiptsTable
+        if (remainingUnits === 0) {
+            const [existingReceipt] = await tx.select().from(materialReceiptsTable)
+                .where(and(
+                    eq(materialReceiptsTable.transactionId, tracking.stockOutId),
+                    eq(materialReceiptsTable.branchId, userBranchId)
+                ));
+            if (!existingReceipt) {
+                const [so] = await tx.select({ qrToken: stockOutTable.qrToken }).from(stockOutTable).where(eq(stockOutTable.id, tracking.stockOutId));
+                await tx.insert(materialReceiptsTable).values({
+                    transactionId: tracking.stockOutId,
+                    qrToken: so?.qrToken || `TX-${tracking.stockOutId}`,
+                    receivedBy: req.session.userId!,
+                    branchId: userBranchId,
+                });
+            }
+        }
+
+        res.json({
+            message: `Unit "${tracking.itemName}" berhasil diterima di cabang!`,
+            unit: { ...tracking, status: "DITERIMA_CABANG", receivedAt: now.toISOString() },
+            totalUnits,
+            receivedUnits,
+            remainingUnits,
+            isFullyReceived: remainingUnits === 0,
+        });
+    });
+});
+
+// ─── DASHBOARD STATS FOR CABANG ───
+router.get("/branch/dashboard-stats", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
+    let branchId = req.session.branchId;
+    if (!branchId && req.session.userRole === "ADMIN") {
+        if (req.query.branchId) branchId = parseInt(req.query.branchId as string);
+    }
+
+    let branchName = "Semua Cabang";
+    if (branchId) {
+        const [b] = await db.select().from(branchesTable).where(eq(branchesTable.id, branchId));
+        if (b) branchName = b.name;
+    }
+
+    const trkConditions: any[] = [];
+    if (branchId) trkConditions.push(eq(materialTrackingTable.branchId, branchId));
+    const whereTrk = trkConditions.length > 0 ? and(...trkConditions) : undefined;
+
+    const allTracking = await db
+        .select({
+            id: materialTrackingTable.id,
+            status: materialTrackingTable.status,
+            receivedAt: materialTrackingTable.receivedAt,
+        })
+        .from(materialTrackingTable)
+        .where(whereTrk);
+
+    const pendingUnits = allTracking.filter(t => t.status === "MENUNGGU_DITERIMA" || !t.receivedAt).length;
+    const receivedUnits = allTracking.filter(t => ["DITERIMA_CABANG", "MENUNGGU_PEMASANGAN"].includes(t.status)).length;
+    const installedUnits = allTracking.filter(t => ["TERPASANG", "MENUNGGU_VERIFIKASI", "TERVERIFIKASI"].includes(t.status)).length;
+    const verifiedUnits = allTracking.filter(t => t.status === "TERVERIFIKASI").length;
+
+    const soConditions: any[] = [eq(stockOutTable.status, "DIKIRIM")];
+    if (branchId) soConditions.push(eq(stockOutTable.destinationBranchId, branchId));
+
+    const activeShipments = await db
+        .select({ id: stockOutTable.id })
+        .from(stockOutTable)
+        .where(and(...soConditions));
+
+    res.json({
+        branchId,
+        branchName,
+        activeShipmentsCount: activeShipments.length,
+        pendingUnitsCount: pendingUnits,
+        receivedUnitsCount: receivedUnits,
+        installedUnitsCount: installedUnits,
+        verifiedUnitsCount: verifiedUnits,
+    });
+});
 
 // ─── SCAN QR / RECEIVE MATERIALS (Section 9.1) ───
 router.post("/branch/receive", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {

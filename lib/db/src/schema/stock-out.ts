@@ -55,6 +55,9 @@ export const stockOutItemsTable = pgTable("stock_out_items", {
   unitPrice: numeric("unit_price", { precision: 15, scale: 2 }).notNull().default("0"),
   locationId: integer("location_id").references(() => locationsTable.id),
   notes: text("notes"),
+  // Per-item receiving at branch (Section 9 enhanced)
+  receivedAt: timestamp("received_at", { withTimezone: true }),
+  receivedBy: integer("received_by").references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

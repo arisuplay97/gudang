@@ -193,6 +193,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/transaksi/retur": "Retur",
   "/transaksi/mutasi": "Mutasi Stok",
   "/transaksi/penyesuaian": "Penyesuaian",
+  "/cabang/dashboard": "Dashboard Cabang",
   "/cabang/receive": "Penerimaan",
   "/cabang/pemasangan": "Pemasangan",
   "/cabang/tracking": "Material Tracking",
@@ -576,6 +577,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <TooltipContent>Notifikasi</TooltipContent>
           </Tooltip>
 
+          {/* Branch badge for Cabang users */}
+          {user.branchName && (
+            <Badge variant="outline" className="hidden md:flex items-center gap-1.5 text-xs text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 font-medium">
+              <Building2 className="w-3.5 h-3.5 text-sky-600" />
+              {user.branchName}
+            </Badge>
+          )}
+
           {/* Dark mode toggle */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -614,6 +623,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Badge variant="secondary" className="text-xs h-4 px-1.5 mt-1">
                   {roleLabel(user.role)}
                 </Badge>
+                {user.branchName && (
+                  <p className="text-[11px] text-sky-600 dark:text-sky-400 font-semibold mt-1.5 flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    {user.branchName}
+                  </p>
+                )}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="cursor-pointer">

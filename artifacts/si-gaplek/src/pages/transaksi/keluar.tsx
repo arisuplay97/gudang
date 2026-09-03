@@ -34,6 +34,8 @@ interface StockOut {
   createdByName?: string;
   qrToken?: string | null;
   itemCount?: number;
+  totalItems?: number;
+  totalQuantity?: number;
 }
 interface Item { id: number; code: string; name: string; currentStock: number; unitName?: string; barcode?: string | null; status?: string; }
 interface Department { id: number; name: string; code: string; }
@@ -133,7 +135,7 @@ export default function BarangKeluarPage() {
       };
       return apiFetch("/api/stock-out", { method: "POST", body: JSON.stringify(body) });
     },
-    onSuccess: (_data, autoFinalize) => {
+    onSuccess: (data: any, autoFinalize) => {
       qc.invalidateQueries({ queryKey: ["stock-out"] });
       qc.invalidateQueries({ queryKey: ["items"] });
       setDialogOpen(false);
@@ -141,13 +143,16 @@ export default function BarangKeluarPage() {
         title: autoFinalize ? "Barang Keluar Disimpan & Dikirim" : "Draft Barang Keluar Disimpan",
         description: autoFinalize ? "Stok fisik barang telah berkurang dan Surat Jalan aktif." : "Transaksi disimpan sebagai draft.",
       });
+      if (autoFinalize && data?.id) {
+        handlePrintById(data.id, data.referenceNo);
+      }
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const finalizeMutation = useMutation({
     mutationFn: (id: number) => apiFetch(`/api/stock-out/${id}/finalize`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_data: any, id: number) => {
       qc.invalidateQueries({ queryKey: ["stock-out"] });
       qc.invalidateQueries({ queryKey: ["items"] });
       if (viewId) qc.invalidateQueries({ queryKey: ["stock-out", viewId] });
@@ -155,6 +160,7 @@ export default function BarangKeluarPage() {
         title: "Transaksi Selesai Difinalisasi",
         description: "Stok fisik barang telah berkurang dan Surat Jalan diterbitkan.",
       });
+      handlePrintById(id);
     },
     onError: (e: Error) => toast({ title: "Gagal Finalisasi", description: e.message, variant: "destructive" }),
   });
@@ -274,7 +280,9 @@ export default function BarangKeluarPage() {
                       <TableCell className="font-mono font-medium">{s.referenceNumber || s.referenceNo}</TableCell>
                       <TableCell className="text-sm">{formatDate(s.transactionDate || s.createdAt)}</TableCell>
                       <TableCell className="text-sm font-medium">{s.destinationBranchName || s.departmentName || "—"}</TableCell>
-                      <TableCell className="text-right font-medium">{s.itemCount ?? 0} item</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {s.totalQuantity ? `${s.totalQuantity} unit` : `${s.totalItems ?? s.itemCount ?? 0} item`}
+                      </TableCell>
                       <TableCell><Badge variant={s.status === "completed" || s.status === "DIKIRIM" ? "default" : "secondary"}>{s.status === "completed" || s.status === "DIKIRIM" ? "Selesai / Dikirim" : "Draft"}</Badge></TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">

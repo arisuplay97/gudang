@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,7 +39,6 @@ import {
   Camera,
   RotateCcw,
 } from "lucide-react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -65,6 +64,51 @@ const verifiedMarkerIcon = L.divIcon({
   iconAnchor: [16, 16],
   popupAnchor: [0, -16],
 });
+
+function TrackingMapLeaflet({ gisLocations }: { gisLocations: any[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<any>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    if (!mapInstance.current) {
+      const map = L.map(containerRef.current).setView([-8.6705, 116.1155], 11);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+      mapInstance.current = map;
+    }
+
+    const map = mapInstance.current;
+    map.eachLayer((layer: any) => {
+      if (layer instanceof L.Marker) {
+        map.removeLayer(layer);
+      }
+    });
+
+    if (Array.isArray(gisLocations)) {
+      gisLocations.forEach((loc: any) => {
+        const lat = parseFloat(loc.verifiedLatitude || loc.latitude);
+        const lon = parseFloat(loc.verifiedLongitude || loc.longitude);
+        if (isNaN(lat) || isNaN(lon)) return;
+
+        L.marker([lat, lon], { icon: verifiedMarkerIcon })
+          .addTo(map)
+          .bindPopup(`
+            <div style="font-size: 12px; line-height: 1.4;">
+              <p style="font-weight: bold; margin: 0 0 2px 0;">${loc.itemName}</p>
+              <p style="font-family: monospace; color: #666; margin: 0 0 2px 0;">${loc.itemCode} · Ref: ${loc.referenceNo}</p>
+              <p style="margin: 0;">Cabang: <strong>${loc.branchName}</strong></p>
+              <p style="margin: 0;">Kuantitas: <strong>${loc.allocationQuantity} unit</strong></p>
+              <p style="color: #059669; font-family: monospace; font-size: 10px; margin: 2px 0 0 0;">GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)}</p>
+            </div>
+          `);
+      });
+    }
+  }, [gisLocations]);
+
+  return <div ref={containerRef} style={{ height: "100%", width: "100%", zIndex: 1 }} />;
+}
 
 interface TrackingItem {
   id: number;
@@ -860,39 +904,7 @@ export default function CabangTrackingPage() {
                 justify-content: center !important;
               }
             `}</style>
-            <MapContainer
-              center={[-8.6705, 116.1155]} // Lombok center
-              zoom={11}
-              style={{ height: "100%", width: "100%" }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-
-              {Array.isArray(gisLocations) &&
-                gisLocations.map((loc: any) => {
-                  const lat = parseFloat(loc.verifiedLatitude || loc.latitude);
-                  const lon = parseFloat(loc.verifiedLongitude || loc.longitude);
-                  if (isNaN(lat) || isNaN(lon)) return null;
-
-                  return (
-                    <Marker key={loc.evidenceId} position={[lat, lon]} icon={verifiedMarkerIcon}>
-                      <Popup>
-                        <div className="space-y-1 p-1 text-xs">
-                          <p className="font-semibold text-sm text-foreground">{loc.itemName}</p>
-                          <p className="font-mono text-muted-foreground text-[11px]">{loc.itemCode} · Ref: {loc.referenceNo}</p>
-                          <p className="text-muted-foreground">Cabang: <strong>{loc.branchName}</strong></p>
-                          <p className="text-muted-foreground">Kuantitas Titik: <strong>{loc.allocationQuantity} unit</strong></p>
-                          <p className="font-mono text-[10px] text-emerald-600">
-                            GPS: {lat.toFixed(6)}, {lon.toFixed(6)}
-                          </p>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  );
-                })}
-            </MapContainer>
+            <TrackingMapLeaflet gisLocations={gisLocations} />
           </div>
         </Card>
       )}

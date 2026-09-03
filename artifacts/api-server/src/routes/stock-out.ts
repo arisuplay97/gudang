@@ -62,9 +62,12 @@ router.get("/stock-out", requireAuth, async (req, res): Promise<void> => {
 
   const result = await Promise.all(rows.map(async (row) => {
     const [itemCount] = await db.select({ count: sql<number>`count(*)` }).from(stockOutItemsTable).where(eq(stockOutItemsTable.stockOutId, row.id));
+    const [qtySum] = await db.select({ sum: sql<number>`coalesce(sum(${stockOutItemsTable.quantity}), 0)` }).from(stockOutItemsTable).where(eq(stockOutItemsTable.stockOutId, row.id));
     return {
       ...row,
+      itemCount: Number(itemCount.count),
       totalItems: Number(itemCount.count),
+      totalQuantity: Number(qtySum?.sum ?? 0),
       transactionDate: row.transactionDate instanceof Date ? row.transactionDate.toISOString() : new Date(row.transactionDate).toISOString(),
       createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
     };
@@ -178,11 +181,8 @@ router.post("/stock-out", requireAuth, async (req, res): Promise<void> => {
         });
       }
 
-      // Generate QR token jika ada TRACKED material
-      let qrToken = null;
-      if (hasTracked) {
-        qrToken = crypto.randomUUID();
-      }
+      // Generate official QR token for shipment verification
+      const qrToken = crypto.randomUUID();
 
       await tx.update(stockOutTable).set({
         status: "DIKIRIM",
@@ -190,23 +190,25 @@ router.post("/stock-out", requireAuth, async (req, res): Promise<void> => {
         qrToken,
       }).where(eq(stockOutTable.id, header.id));
 
-      if (hasTracked && header.destinationBranchId) {
+      if (header.destinationBranchId) {
         for (const item of txItems) {
-          if (item.trackingType !== "TRACKED") continue;
-          const [tracking] = await tx.insert(materialTrackingTable).values({
-            transactionItemId: item.id,
-            branchId: header.destinationBranchId,
-            status: "MENUNGGU_DITERIMA",
-            slaStartAt: releasedAt,
-            slaDeadlineAt: slaDeadline,
-          }).returning();
+          const qty = item.quantity || 1;
+          for (let i = 0; i < qty; i++) {
+            const [tracking] = await tx.insert(materialTrackingTable).values({
+              transactionItemId: item.id,
+              branchId: header.destinationBranchId,
+              status: "MENUNGGU_DITERIMA",
+              slaStartAt: releasedAt,
+              slaDeadlineAt: slaDeadline,
+            }).returning();
 
-          await tx.insert(materialTrackingEventsTable).values({
-            trackingId: tracking.id,
-            eventType: "WAREHOUSE_RELEASED",
-            userId: req.session.userId,
-            metadata: { transactionId: header.id, referenceNo: header.referenceNo, qrToken },
-          });
+            await tx.insert(materialTrackingEventsTable).values({
+              trackingId: tracking.id,
+              eventType: "WAREHOUSE_RELEASED",
+              userId: req.session.userId,
+              metadata: { transactionId: header.id, referenceNo: header.referenceNo, qrToken, unitIndex: i + 1, totalUnits: qty },
+            });
+          }
         }
       }
     });
@@ -330,11 +332,8 @@ router.post("/stock-out/:id/finalize", requireAuth, async (req, res): Promise<vo
         });
       }
 
-      // Generate QR token if any TRACKED items (Section 8)
-      let qrToken = null;
-      if (hasTracked) {
-        qrToken = crypto.randomUUID();
-      }
+      // Generate official QR token for shipment verification
+      const qrToken = crypto.randomUUID();
 
       // Update header status
       await tx.update(stockOutTable).set({
@@ -343,25 +342,27 @@ router.post("/stock-out/:id/finalize", requireAuth, async (req, res): Promise<vo
         qrToken,
       }).where(eq(stockOutTable.id, header.id));
 
-      // Create material_tracking for each TRACKED item (Section 11)
-      for (const item of txItems) {
-        if (item.trackingType !== "TRACKED") continue;
+      if (header.destinationBranchId) {
+        for (const item of txItems) {
+          const qty = item.quantity || 1;
+          for (let i = 0; i < qty; i++) {
+            const [tracking] = await tx.insert(materialTrackingTable).values({
+              transactionItemId: item.id,
+              branchId: header.destinationBranchId!,
+              status: "MENUNGGU_DITERIMA",
+              slaStartAt: releasedAt,
+              slaDeadlineAt: slaDeadline,
+            }).returning();
 
-        const [tracking] = await tx.insert(materialTrackingTable).values({
-          transactionItemId: item.id,
-          branchId: header.destinationBranchId!,
-          status: "MENUNGGU_DITERIMA",
-          slaStartAt: releasedAt,
-          slaDeadlineAt: slaDeadline,
-        }).returning();
-
-        // Record event
-        await tx.insert(materialTrackingEventsTable).values({
-          trackingId: tracking.id,
-          eventType: "WAREHOUSE_RELEASED",
-          userId: req.session.userId,
-          metadata: { transactionId: header.id, referenceNo: header.referenceNo, qrToken },
-        });
+            // Record event
+            await tx.insert(materialTrackingEventsTable).values({
+              trackingId: tracking.id,
+              eventType: "WAREHOUSE_RELEASED",
+              userId: req.session.userId,
+              metadata: { transactionId: header.id, referenceNo: header.referenceNo, qrToken, unitIndex: i + 1, totalUnits: qty },
+            });
+          }
+        }
       }
     });
   } catch (err: any) {

@@ -26,6 +26,7 @@ import LaporanNilaiPage from "@/pages/laporan/nilai";
 import AuditLogPage from "@/pages/laporan/log";
 import PenggunaPage from "@/pages/pengguna";
 import NotFound from "@/pages/not-found";
+import CabangDashboardPage from "@/pages/cabang/dashboard";
 import CabangReceivePage from "@/pages/cabang/receive";
 import CabangPemasanganPage from "@/pages/cabang/pemasangan";
 import CabangTrackingPage from "@/pages/cabang/tracking";
@@ -95,6 +96,7 @@ function AppRouter() {
         <Route path="/laporan/log" component={AuditLogPage} />
 
         {/* Cabang Routes */}
+        <Route path="/cabang/dashboard" component={CabangDashboardPage} />
         <Route path="/cabang/receive" component={CabangReceivePage} />
         <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
         <Route path="/cabang/tracking" component={CabangTrackingPage} />
