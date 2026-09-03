@@ -1669,7 +1669,7 @@ FROM pdam_material_gis;`;
                       Cara 1: Sambung Live Feed SI GAPLEK Langsung ke QGIS (Instan)
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      QGIS di laptop kantor dapat memuat layer titik material langsung via protokol HTTP GeoJSON tanpa perlu mengekspor shapefile:
+                      QGIS memuat layer titik material langsung via protokol GeoJSON:
                     </p>
 
                     <div className="flex items-center gap-2 pt-1">
