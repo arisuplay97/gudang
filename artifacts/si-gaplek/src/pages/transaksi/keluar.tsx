@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, Trash2, PackageMinus, Camera, Search, ScanBarcode, FolderOpen, Printer } from "lucide-react";
+import { Plus, Eye, Trash2, PackageMinus, Camera, Search, ScanBarcode, FolderOpen, Printer, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SuratJalanPrintModal, type SuratJalanData } from "@/components/print/surat-jalan-print";
 
@@ -114,17 +114,49 @@ export default function BarangKeluarPage() {
   }, [departmentsData]);
 
   const saveMutation = useMutation({
-    mutationFn: () => apiFetch("/api/stock-out", {
-      method: "POST",
-      body: JSON.stringify({
+    mutationFn: (autoFinalize: boolean = false) => {
+      const itemsPayload = details.map(d => ({
+        itemId: d.itemId,
+        quantity: d.quantity,
+        notes: d.notes,
+      }));
+      const body = {
         referenceNumber: form.referenceNumber,
+        referenceNo: form.referenceNumber,
         departmentId: form.departmentId ? parseInt(form.departmentId) : null,
+        transactionDate: form.date ? new Date(form.date).toISOString() : new Date().toISOString(),
+        date: form.date,
         notes: form.notes || null,
-        details: details.map(d => ({ itemId: d.itemId, quantity: d.quantity, notes: d.notes })),
-      }),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["stock-out"] }); qc.invalidateQueries({ queryKey: ["items"] }); setDialogOpen(false); toast({ title: "Barang keluar disimpan" }); },
+        items: itemsPayload,
+        details: itemsPayload,
+        autoFinalize,
+      };
+      return apiFetch("/api/stock-out", { method: "POST", body: JSON.stringify(body) });
+    },
+    onSuccess: (_data, autoFinalize) => {
+      qc.invalidateQueries({ queryKey: ["stock-out"] });
+      qc.invalidateQueries({ queryKey: ["items"] });
+      setDialogOpen(false);
+      toast({
+        title: autoFinalize ? "Barang Keluar Disimpan & Dikirim" : "Draft Barang Keluar Disimpan",
+        description: autoFinalize ? "Stok fisik barang telah berkurang dan Surat Jalan aktif." : "Transaksi disimpan sebagai draft.",
+      });
+    },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const finalizeMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/api/stock-out/${id}/finalize`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-out"] });
+      qc.invalidateQueries({ queryKey: ["items"] });
+      if (viewId) qc.invalidateQueries({ queryKey: ["stock-out", viewId] });
+      toast({
+        title: "Transaksi Selesai Difinalisasi",
+        description: "Stok fisik barang telah berkurang dan Surat Jalan diterbitkan.",
+      });
+    },
+    onError: (e: Error) => toast({ title: "Gagal Finalisasi", description: e.message, variant: "destructive" }),
   });
 
   const openCreate = () => {
@@ -140,12 +172,27 @@ export default function BarangKeluarPage() {
       toast({ title: "Barang tidak aktif", description: "Material tidak dapat digunakan untuk transaksi.", variant: "destructive" });
       return;
     }
+    const availStock = item.currentStock ?? 0;
+    if (availStock <= 0) {
+      toast({ title: "Stok Kosong", description: `Material ${item.name} saat ini tidak memiliki stok di gudang.`, variant: "destructive" });
+      return;
+    }
     setDetails(ds => {
       const existing = ds.find(d => d.itemId === item.id);
       if (existing) {
-        return ds.map(d => d.itemId === item.id ? { ...d, quantity: d.quantity + qty } : d);
+        const nextQty = existing.quantity + qty;
+        if (nextQty > availStock) {
+          toast({
+            title: "Batas Stok Terlampaui",
+            description: `Total kuantitas (${nextQty}) melebihi stok yang tersedia (${availStock}). Disesuaikan ke stok maksimal.`,
+            variant: "destructive",
+          });
+          return ds.map(d => d.itemId === item.id ? { ...d, quantity: availStock } : d);
+        }
+        return ds.map(d => d.itemId === item.id ? { ...d, quantity: nextQty } : d);
       }
-      return [...ds, { itemId: item.id, quantity: qty, notes: null, _item: item }];
+      const safeQty = Math.min(qty, availStock);
+      return [...ds, { itemId: item.id, quantity: safeQty, notes: null, _item: item }];
     });
     toast({ title: `${item.name} ditambahkan` });
   }, [toast]);
@@ -181,8 +228,16 @@ export default function BarangKeluarPage() {
     if (!detailForm.itemId) return;
     const item = items?.find(i => i.id === parseInt(detailForm.itemId));
     if (!item) return;
-    const qty = parseInt(detailForm.quantity);
-    if (item.currentStock < qty) { toast({ title: "Stok tidak cukup", description: `Stok tersedia: ${item.currentStock}`, variant: "destructive" }); return; }
+    const qty = parseInt(detailForm.quantity) || 1;
+    const availStock = item.currentStock ?? 0;
+    if (qty > availStock) {
+      toast({
+        title: "Stok tidak mencukupi",
+        description: `Stok tersedia untuk ${item.name} hanya ${availStock}.`,
+        variant: "destructive",
+      });
+      return;
+    }
     addItemToDraft(item, qty);
     setDetailForm({ itemId: "", quantity: "1" });
   };
@@ -223,6 +278,24 @@ export default function BarangKeluarPage() {
                       <TableCell><Badge variant={s.status === "completed" || s.status === "DIKIRIM" ? "default" : "secondary"}>{s.status === "completed" || s.status === "DIKIRIM" ? "Selesai / Dikirim" : "Draft"}</Badge></TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {s.status !== "completed" && s.status !== "DIKIRIM" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 gap-1 px-2 text-xs text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800"
+                                  onClick={() => finalizeMutation.mutate(s.id)}
+                                  disabled={finalizeMutation.isPending}
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Finalisasi</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Finalisasi transaksi & kurangi stok gudang</TooltipContent>
+                            </Tooltip>
+                          )}
+
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -264,10 +337,23 @@ export default function BarangKeluarPage() {
               <div className="space-y-1.5"><Label>No. Referensi *</Label><Input value={form.referenceNumber} onChange={e => setForm(f => ({ ...f, referenceNumber: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Tanggal</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1.5"><Label>Departemen Penerima</Label>
+            <div className="space-y-1.5"><Label>Departemen / Cabang Penerima</Label>
               <Select value={form.departmentId} onValueChange={v => setForm(f => ({ ...f, departmentId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Pilih departemen" /></SelectTrigger>
-                <SelectContent>{departments?.map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name} ({d.code})</SelectItem>)}</SelectContent>
+                <SelectTrigger><SelectValue placeholder="Pilih departemen atau cabang" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <div className="px-2 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Departemen Internal
+                  </div>
+                  {departments?.filter(d => !d.name.startsWith("Cabang ")).map(d => (
+                    <SelectItem key={d.id} value={d.id.toString()}>{d.name} ({d.code})</SelectItem>
+                  ))}
+                  <div className="px-2 py-1 text-[11px] font-bold text-sky-600 dark:text-sky-400 border-t mt-1.5 pt-1.5 uppercase tracking-wider">
+                    12 Unit Cabang (Lombok Tengah)
+                  </div>
+                  {departments?.filter(d => d.name.startsWith("Cabang ")).map(d => (
+                    <SelectItem key={d.id} value={d.id.toString()}>{d.name} ({d.code})</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
@@ -284,7 +370,7 @@ export default function BarangKeluarPage() {
                     value={barcodeInput}
                     onChange={e => setBarcodeInput(e.target.value)}
                     onKeyDown={handleBarcodeKey}
-                    placeholder="🔍 Cari berdasarkan nama/kode/barcode, tekan Enter..."
+                    placeholder="Cari berdasarkan nama/kode/barcode, tekan Enter..."
                     className="font-mono pl-9"
                   />
                 </div>
@@ -295,7 +381,7 @@ export default function BarangKeluarPage() {
                     onClick={() => setCameraScanOpen(true)}
                     className="gap-2"
                   >
-                    <Camera className="w-4 h-4" /> 📷 Scan Barcode
+                    <Camera className="w-4 h-4" /> Scan Barcode
                   </Button>
                 </motion.div>
               </div>
@@ -306,7 +392,32 @@ export default function BarangKeluarPage() {
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Atau pilih barang" /></SelectTrigger>
                   <SelectContent>{items?.filter(i => i.currentStock > 0).map(i => <SelectItem key={i.id} value={i.id.toString()}>{i.code} - {i.name} (stok: {i.currentStock})</SelectItem>)}</SelectContent>
                 </Select>
-                <Input type="number" min="1" value={detailForm.quantity} onChange={e => setDetailForm(f => ({ ...f, quantity: e.target.value }))} className="w-24" />
+                {(() => {
+                  const selItem = items?.find(i => i.id === parseInt(detailForm.itemId));
+                  const maxStock = selItem?.currentStock ?? 999999;
+                  return (
+                    <Input
+                      type="number"
+                      min="1"
+                      max={maxStock}
+                      value={detailForm.quantity}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (selItem && parseInt(val) > maxStock) {
+                          toast({
+                            title: "Melebihi Stok",
+                            description: `Stok tersedia untuk ${selItem.name} hanya ${maxStock}.`,
+                            variant: "destructive",
+                          });
+                          setDetailForm(f => ({ ...f, quantity: maxStock.toString() }));
+                          return;
+                        }
+                        setDetailForm(f => ({ ...f, quantity: val }));
+                      }}
+                      className="w-24"
+                    />
+                  );
+                })()}
                 <Button type="button" onClick={addDetail} disabled={!detailForm.itemId}>Tambah</Button>
               </div>
             </div>
@@ -340,12 +451,22 @@ export default function BarangKeluarPage() {
                             <Input
                               type="number"
                               min="1"
+                              max={d._item?.currentStock}
                               value={d.quantity}
                               onChange={(e) => {
-                                const newQty = parseInt(e.target.value) || 1;
+                                let newQty = parseInt(e.target.value) || 1;
+                                const maxStock = d._item?.currentStock ?? 999999;
+                                if (newQty > maxStock) {
+                                  toast({
+                                    title: "Melebihi Stok",
+                                    description: `Kuantitas disesuaikan ke stok maksimal (${maxStock}).`,
+                                    variant: "destructive",
+                                  });
+                                  newQty = maxStock;
+                                }
                                 setDetails(ds => ds.map((dd, j) => j === i ? { ...dd, quantity: newQty } : dd));
                               }}
-                              className="w-20 text-right inline-block"
+                              className="w-20 text-right inline-block font-medium"
                             />
                           </TableCell>
                           <TableCell className="text-right"><Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDetails(ds => ds.filter((_, j) => j !== i))}><Trash2 className="w-3.5 h-3.5" /></Button></TableCell>
@@ -357,9 +478,23 @@ export default function BarangKeluarPage() {
               )}
             </AnimatePresence>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}>{saveMutation.isPending ? "Menyimpan..." : "Simpan Transaksi"}</Button>
+            <Button
+              variant="secondary"
+              onClick={() => saveMutation.mutate(false)}
+              disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}
+            >
+              Simpan Draft
+            </Button>
+            <Button
+              onClick={() => saveMutation.mutate(true)}
+              disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}
+              className="bg-sky-700 hover:bg-sky-800 text-white gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {saveMutation.isPending ? "Menyimpan..." : "Simpan & Kurangi Stok"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -391,7 +526,21 @@ export default function BarangKeluarPage() {
             </div>
           )}
           <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
-            <Button variant="outline" onClick={() => setViewId(null)}>Tutup</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setViewId(null)}>Tutup</Button>
+              {viewData?.stockOut?.status !== "completed" && viewData?.stockOut?.status !== "DIKIRIM" && (
+                <Button
+                  onClick={() => {
+                    if (viewId) finalizeMutation.mutate(viewId);
+                  }}
+                  disabled={finalizeMutation.isPending}
+                  className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Finalisasi & Kurangi Stok
+                </Button>
+              )}
+            </div>
             <Button
               onClick={() => {
                 if (viewId) {
