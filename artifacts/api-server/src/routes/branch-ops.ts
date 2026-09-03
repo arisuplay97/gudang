@@ -262,9 +262,11 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
         idempotencyKey: idempotencyKey ?? null,
     }).returning();
 
-    // Update tracking status
+    // Update tracking status with exact photo installation time
     await db.update(materialTrackingTable).set({
         status: "MENUNGGU_VERIFIKASI",
+        installedAt: clientCaptureTime ? new Date(clientCaptureTime) : new Date(),
+        installedBy: req.session.userId,
     }).where(eq(materialTrackingTable.id, tracking.id));
 
     // Record events
