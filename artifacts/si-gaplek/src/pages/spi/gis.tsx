@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -31,12 +31,14 @@ import {
   Calendar,
   Building2,
   Compass,
+  Maximize2,
+  Minimize2,
+  Sparkles,
 } from "lucide-react";
 import {
   MapContainer,
   TileLayer,
   Marker,
-  Popup,
   Tooltip,
   Circle,
   Polyline,
@@ -194,6 +196,14 @@ function MapController({
     }
   }, [fitFeatures, map]);
 
+  // Invalidate map size on window/container resize
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [map]);
+
   return null;
 }
 
@@ -202,6 +212,7 @@ const DEFAULT_CENTER: [number, number] = [-8.7065, 116.2755];
 const DEFAULT_ZOOM = 11;
 
 export default function SpiGisPage() {
+  const mapWrapperRef = useRef<HTMLDivElement>(null);
   const { data: gisData, isLoading } = useQuery({
     queryKey: ["gis-materials"],
     queryFn: () => apiFetch<GeoCollection>("/api/gis/material-locations"),
@@ -224,6 +235,36 @@ export default function SpiGisPage() {
   );
   const [fitTrigger, setFitTrigger] = useState<number>(0);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  // Street View & Fullscreen States
+  const [streetViewFeature, setStreetViewFeature] = useState<GeoFeature | null>(
+    null
+  );
+  const [isStreetViewFullscreen, setIsStreetViewFullscreen] = useState(false);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+  const [streetViewMode, setStreetViewMode] = useState<"pano" | "map">("pano");
+
+  // Listen for native fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsMapFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  const toggleMapFullscreen = () => {
+    if (!document.fullscreenElement) {
+      mapWrapperRef.current?.requestFullscreen?.().catch((err) => {
+        console.error("Fullscreen error:", err);
+      });
+    } else {
+      document.exitFullscreen?.().catch((err) => {
+        console.error("Exit fullscreen error:", err);
+      });
+    }
+  };
 
   // Extract unique branches from dataset
   const branches = useMemo(() => {
@@ -300,6 +341,13 @@ export default function SpiGisPage() {
     );
   };
 
+  const handleOpenGoogleStreetView = (lat: number, lon: number) => {
+    window.open(
+      `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`,
+      "_blank"
+    );
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-3 h-[calc(100vh-3.5rem)] flex flex-col animate-page-enter">
       <style>{RADAR_CSS}</style>
@@ -319,12 +367,11 @@ export default function SpiGisPage() {
             </Badge>
           </div>
           <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-            Monitoring geospasial real-time & verifikasi titik pemasangan fisik
-            material perpipaan
+            Monitoring geospasial real-time, verifikasi titik fisik & Street View 360° perpipaan
           </p>
         </div>
 
-        {/* Live Status Indicators */}
+        {/* Live Status Indicators & Fullscreen Button */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background border border-border shadow-2xs text-xs">
             <span className="relative flex h-2 w-2">
@@ -360,7 +407,28 @@ export default function SpiGisPage() {
             title="Pusatkan seluruh titik material"
           >
             <Crosshair className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Pusatkan Peta</span>
+            <span className="hidden md:inline">Pusatkan</span>
+          </Button>
+
+          {/* Fullscreen Map Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleMapFullscreen}
+            className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+            title={isMapFullscreen ? "Keluar dari Layar Penuh" : "Mode Layar Penuh (Fullscreen)"}
+          >
+            {isMapFullscreen ? (
+              <>
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Normal</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Layar Penuh</span>
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -457,7 +525,12 @@ export default function SpiGisPage() {
       </div>
 
       {/* ─── Map Workspace Container ─── */}
-      <div className="flex-1 rounded-2xl overflow-hidden border border-border shadow-xs relative bg-muted flex">
+      <div
+        ref={mapWrapperRef}
+        className={`flex-1 overflow-hidden border border-border shadow-xs relative bg-muted flex ${
+          isMapFullscreen ? "h-screen w-screen rounded-none z-[9999]" : "rounded-2xl"
+        }`}
+      >
         {/* Loading Spinner */}
         {isLoading && (
           <div className="absolute inset-0 z-[1000] bg-background/60 flex items-center justify-center backdrop-blur-xs">
@@ -522,7 +595,8 @@ export default function SpiGisPage() {
             const { coordinates } = feature.geometry;
             const props = feature.properties;
             const isMismatch = props.locationMismatch;
-            const isSelected = selectedFeature?.properties.evidenceId === props.evidenceId;
+            const isSelected =
+              selectedFeature?.properties.evidenceId === props.evidenceId;
             const actualPosition: [number, number] = [
               coordinates[1],
               coordinates[0],
@@ -534,7 +608,11 @@ export default function SpiGisPage() {
                 {isMismatch && (
                   <Circle
                     center={actualPosition}
-                    radius={props.deviationMeters ? Math.max(props.deviationMeters, 35) : 40}
+                    radius={
+                      props.deviationMeters
+                        ? Math.max(props.deviationMeters, 35)
+                        : 40
+                    }
                     pathOptions={{
                       color: "#ef4444",
                       dashArray: "4 4",
@@ -606,7 +684,10 @@ export default function SpiGisPage() {
                       </p>
                       {isMismatch ? (
                         <p className="text-[10px] text-rose-600 font-semibold">
-                          ⚠ Deviasi {props.deviationMeters ? `${Math.round(props.deviationMeters)}m` : ""}
+                          ⚠ Deviasi{" "}
+                          {props.deviationMeters
+                            ? `${Math.round(props.deviationMeters)}m`
+                            : ""}
                         </p>
                       ) : (
                         <p className="text-[10px] text-emerald-600 font-medium">
@@ -621,7 +702,7 @@ export default function SpiGisPage() {
           })}
         </MapContainer>
 
-        {/* ─── Floating Basemap Switcher (Top Right) ─── */}
+        {/* ─── Floating Basemap Switcher & Fullscreen (Top Right) ─── */}
         <div className="absolute top-3 right-3 z-[400] flex items-center bg-card/90 dark:bg-card/90 backdrop-blur-md p-1 rounded-xl shadow-md border border-border text-xs gap-1">
           <button
             type="button"
@@ -663,6 +744,22 @@ export default function SpiGisPage() {
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Positron</span>
+          </button>
+
+          <div className="w-[1px] h-4 bg-border/80 mx-0.5" />
+
+          {/* Quick Fullscreen Button on Map */}
+          <button
+            type="button"
+            onClick={toggleMapFullscreen}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+            title={isMapFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
+          >
+            {isMapFullscreen ? (
+              <Minimize2 className="w-3.5 h-3.5 text-primary" />
+            ) : (
+              <Maximize2 className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
 
@@ -752,6 +849,26 @@ export default function SpiGisPage() {
 
             {/* Inspector Body (Scrollable) */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+              {/* Street View 360° Hero Banner Button */}
+              <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-600/10 via-teal-500/10 to-sky-600/10 border border-emerald-500/30 flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 text-emerald-600" /> Street View 360°
+                  </span>
+                  <p className="text-[10px] text-muted-foreground">
+                    Lihat panorama 360° kondisi jalan & fisik di titik pipa
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setStreetViewFeature(selectedFeature)}
+                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-2xs shrink-0"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Buka
+                </Button>
+              </div>
+
               {/* Evidence Installation Photo */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -768,7 +885,9 @@ export default function SpiGisPage() {
                   <div
                     className="relative rounded-xl overflow-hidden border border-border group cursor-pointer aspect-video bg-muted"
                     onClick={() =>
-                      setPreviewPhoto(selectedFeature.properties.photoUrl || null)
+                      setPreviewPhoto(
+                        selectedFeature.properties.photoUrl || null
+                      )
                     }
                   >
                     <img
@@ -910,9 +1029,20 @@ export default function SpiGisPage() {
             {/* Inspector Footer Action Buttons */}
             <div className="p-3 bg-muted/40 border-t border-border/80 flex items-center gap-2">
               <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 h-9 text-xs gap-1.5 border-emerald-600/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                onClick={() => setStreetViewFeature(selectedFeature)}
+                title="Buka Street View 360°"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Street View 360°
+              </Button>
+
+              <Button
                 variant="default"
                 size="sm"
-                className="flex-1 h-9 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                className="flex-1 h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
                 onClick={() =>
                   handleOpenGoogleMaps(
                     selectedFeature.geometry.coordinates[1],
@@ -921,7 +1051,7 @@ export default function SpiGisPage() {
                 }
               >
                 <Navigation className="w-3.5 h-3.5" />
-                Buka di Google Maps
+                Google Maps
               </Button>
 
               <Button
@@ -938,6 +1068,169 @@ export default function SpiGisPage() {
               >
                 <Crosshair className="w-3.5 h-3.5" />
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Interactive Street View 360° Dialog ─── */}
+        {streetViewFeature && (
+          <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-200">
+            <div
+              className={`relative bg-card rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
+                isStreetViewFullscreen
+                  ? "w-full h-full rounded-none"
+                  : "w-full max-w-5xl h-[88vh]"
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Street View Dialog Header */}
+              <div className="p-3.5 md:p-4 bg-muted/50 border-b border-border flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    <Eye className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm md:text-base font-semibold text-foreground">
+                        Street View 360° Panorama
+                      </h2>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-mono border-emerald-500/40 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+                      >
+                        Live Telemetry
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {streetViewFeature.properties.itemName} •{" "}
+                      {streetViewFeature.properties.branchName} • GPS:{" "}
+                      <span className="font-mono text-foreground">
+                        {streetViewFeature.geometry.coordinates[1].toFixed(6)},{" "}
+                        {streetViewFeature.geometry.coordinates[0].toFixed(6)}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Street View Header Actions */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setStreetViewMode("pano")}
+                      className={`px-2.5 py-1 rounded-md transition-all font-medium text-xs ${
+                        streetViewMode === "pano"
+                          ? "bg-primary text-primary-foreground shadow-2xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Panorama 360°
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStreetViewMode("map")}
+                      className={`px-2.5 py-1 rounded-md transition-all font-medium text-xs ${
+                        streetViewMode === "map"
+                          ? "bg-primary text-primary-foreground shadow-2xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Google Maps 3D
+                    </button>
+                  </div>
+
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                    onClick={() =>
+                      handleOpenGoogleStreetView(
+                        streetViewFeature.geometry.coordinates[1],
+                        streetViewFeature.geometry.coordinates[0]
+                      )
+                    }
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Buka Google Maps Penuh (Gratis)
+                  </Button>
+
+                  {/* Toggle Fullscreen Modal */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg"
+                    onClick={() =>
+                      setIsStreetViewFullscreen(!isStreetViewFullscreen)
+                    }
+                    title={
+                      isStreetViewFullscreen
+                        ? "Keluar Layar Penuh"
+                        : "Layar Penuh (Fullscreen)"
+                    }
+                  >
+                    {isStreetViewFullscreen ? (
+                      <Minimize2 className="w-4 h-4 text-primary" />
+                    ) : (
+                      <Maximize2 className="w-4 h-4" />
+                    )}
+                  </Button>
+
+                  {/* Close Dialog */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg"
+                    onClick={() => {
+                      setStreetViewFeature(null);
+                      setIsStreetViewFullscreen(false);
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Street View Iframe Body */}
+              <div className="flex-1 relative bg-black flex flex-col overflow-hidden">
+                <iframe
+                  key={`${streetViewFeature.properties.evidenceId}-${streetViewMode}`}
+                  title="Street View 360"
+                  src={
+                    streetViewMode === "pano"
+                      ? `https://maps.google.com/maps?layer=c&cbll=${streetViewFeature.geometry.coordinates[1]},${streetViewFeature.geometry.coordinates[0]}&cbp=11,0,0,0,0&output=svembed`
+                      : `https://maps.google.com/maps?q=${streetViewFeature.geometry.coordinates[1]},${streetViewFeature.geometry.coordinates[0]}&t=m&z=18&output=embed`
+                  }
+                  className="w-full h-full border-0"
+                  allowFullScreen
+                  loading="lazy"
+                />
+
+                {/* Subtle Interactive Instruction Bar */}
+                <div className="absolute bottom-3 left-3 right-3 pointer-events-none flex justify-center">
+                  <div className="bg-black/85 backdrop-blur-md text-white text-[11px] px-4 py-2 rounded-full shadow-lg border border-white/10 flex items-center gap-2.5 pointer-events-auto">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span>
+                      {streetViewMode === "pano"
+                        ? "Putar panorama 360° dengan mouse/sentuhan • Jika jalan belum tercover mobil Google:"
+                        : "Peta lokasi presisi koordinat GPS material • Untuk panorama 360°:"}
+                    </span>
+                    <button
+                      onClick={() =>
+                        handleOpenGoogleStreetView(
+                          streetViewFeature.geometry.coordinates[1],
+                          streetViewFeature.geometry.coordinates[0]
+                        )
+                      }
+                      className="text-emerald-400 hover:text-emerald-300 font-semibold underline flex items-center gap-1"
+                    >
+                      Buka di Google Maps <ExternalLink className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
