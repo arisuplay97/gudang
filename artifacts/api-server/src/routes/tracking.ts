@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, or, ilike, sql, desc } from "drizzle-orm";
 import {
     db,
     materialTrackingTable,
@@ -24,9 +24,9 @@ const SLA_DAYS = 7;
 
 // ─── LIST TRACKING ───
 router.get("/tracking", requireAuth, async (req, res): Promise<void> => {
-    const { status, branchId, page: pageStr, limit: limitStr } = req.query;
+    const { status, branchId, search, page: pageStr, limit: limitStr } = req.query;
     const page = Math.max(1, parseInt(pageStr as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(limitStr as string) || 20));
+    const limit = Math.min(200, Math.max(1, parseInt(limitStr as string) || 100));
     const offset = (page - 1) * limit;
 
     const conditions: any[] = [];
@@ -36,6 +36,15 @@ router.get("/tracking", requireAuth, async (req, res): Promise<void> => {
     // Filter by branch for CABANG users
     if (req.session.userRole === "CABANG" && req.session.branchId) {
         conditions.push(eq(materialTrackingTable.branchId, req.session.branchId));
+    }
+
+    if (search && String(search).trim()) {
+        const s = `%${String(search).trim()}%`;
+        conditions.push(or(
+            ilike(itemsTable.name, s),
+            ilike(itemsTable.code, s),
+            ilike(stockOutTable.referenceNo, s)
+        ));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -173,6 +182,7 @@ router.get("/tracking/:uuid", requireAuth, async (req, res): Promise<void> => {
 
     res.json({
         tracking,
+        item: txItem,
         transactionItem: txItem,
         branch,
         allocations: allocationsWithEvidence,
