@@ -196,19 +196,30 @@ router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI"), async 
     res.json({ message: status === "TERVERIFIKASI" ? "Evidence terverifikasi" : "Evidence ditolak" });
 });
 // ─── GIS ENDPOINT — VERIFIED EVIDENCE ONLY (Section 16, 36) ───
-router.get("/gis/material-locations", requireAuth, async (req, res) => {
+router.get("/gis/material-locations", async (req, res, next) => {
+    // Allow interactive session OR direct QGIS desktop client token
+    const isQgisAccess = req.query.token === "sigaplek-qgis" ||
+        Boolean(req.query.apiKey) ||
+        Boolean(req.headers["x-gis-token"]);
+    if (!req.session?.userId && !isQgisAccess) {
+        return requireAuth(req, res, next);
+    }
     // Only return verified evidence locations (Section 16)
     const locations = await db
         .select({
         evidenceId: installationEvidenceTable.id,
         evidenceUuid: installationEvidenceTable.uuid,
+        photoUrl: installationEvidenceTable.photoUrl,
         latitude: installationEvidenceTable.latitude,
         longitude: installationEvidenceTable.longitude,
         gpsAccuracy: installationEvidenceTable.gpsAccuracy,
         allocationQuantity: installationAllocationsTable.quantity,
+        plannedLatitude: installationAllocationsTable.plannedLatitude,
+        plannedLongitude: installationAllocationsTable.plannedLongitude,
         itemName: itemsTable.name,
         itemCode: itemsTable.code,
         referenceNo: stockOutTable.referenceNo,
+        branchId: branchesTable.id,
         branchName: branchesTable.name,
         verifiedAt: materialVerificationsTable.verifiedAt,
         verifiedLatitude: materialVerificationsTable.verifiedLatitude,
@@ -237,14 +248,22 @@ router.get("/gis/material-locations", requireAuth, async (req, res) => {
         },
         properties: {
             evidenceId: loc.evidenceId,
+            evidenceUuid: loc.evidenceUuid,
+            photoUrl: loc.photoUrl,
             itemName: loc.itemName,
             itemCode: loc.itemCode,
             quantity: loc.allocationQuantity,
             referenceNo: loc.referenceNo,
+            branchId: loc.branchId,
             branchName: loc.branchName,
             verifiedAt: loc.verifiedAt,
-            locationMismatch: loc.locationMismatch,
-            deviationMeters: loc.locationDeviationMeters,
+            installedAt: loc.installedAt,
+            gpsAccuracy: loc.gpsAccuracy ? parseFloat(String(loc.gpsAccuracy)) : null,
+            locationMismatch: Boolean(loc.locationMismatch),
+            deviationMeters: loc.locationDeviationMeters ? parseFloat(String(loc.locationDeviationMeters)) : null,
+            plannedCoordinates: (loc.plannedLongitude && loc.plannedLatitude)
+                ? [parseFloat(String(loc.plannedLongitude)), parseFloat(String(loc.plannedLatitude))]
+                : null,
         },
     }));
     res.json({

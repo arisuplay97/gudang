@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router } from "express";
 import { eq, desc, asc, isNull, and, or, ilike, sql } from "drizzle-orm";
-import { db, itemsTable, categoriesTable, unitsTable, suppliersTable, auditLogsTable, stockInTable, stockInItemsTable, stockOutTable, stockOutItemsTable, } from "@workspace/db";
+import { db, itemsTable, categoriesTable, unitsTable, suppliersTable, auditLogsTable, stockInTable, stockInItemsTable, stockOutTable, stockOutItemsTable, adjustmentsTable, adjustmentItemsTable, returnsTable, returnItemsTable, mutationsTable, mutationItemsTable, branchesTable, departmentsTable, } from "@workspace/db";
 import { CreateItemBody, GetItemParams, UpdateItemParams, UpdateItemBody, DeleteItemParams, GetItemByBarcodeParams, } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 const router = Router();
@@ -153,7 +153,7 @@ router.get("/items/low-stock", requireAuth, async (_req, res) => {
     const rows = await joinedItems().orderBy(itemsTable.currentStock);
     res.json(rows.filter(r => r.currentStock <= r.minimumStock).map(fmtItem));
 });
-// GET /items/:id/stock-card — kartu stok digital
+// GET /items/:id/stock-card — kartu stok digital komprehensif
 router.get("/items/:id/stock-card", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -165,23 +165,277 @@ router.get("/items/:id/stock-card", requireAuth, async (req, res) => {
         res.status(404).json({ error: "Barang tidak ditemukan" });
         return;
     }
+    // 1. Stock In (Barang Masuk)
     const stockIns = await db
-        .select({ referenceNo: stockInTable.referenceNo, date: stockInTable.transactionDate, quantity: stockInItemsTable.quantity, unitPrice: stockInItemsTable.unitPrice })
+        .select({
+        referenceNo: stockInTable.referenceNo,
+        date: stockInTable.transactionDate,
+        quantity: stockInItemsTable.quantity,
+        unitPrice: stockInItemsTable.unitPrice,
+        supplierName: suppliersTable.name,
+        notes: stockInTable.notes,
+    })
         .from(stockInItemsTable)
         .innerJoin(stockInTable, eq(stockInItemsTable.stockInId, stockInTable.id))
+        .leftJoin(suppliersTable, eq(stockInTable.supplierId, suppliersTable.id))
         .where(eq(stockInItemsTable.itemId, id));
+    // 2. Stock Out (Distribusi / Barang Keluar)
     const stockOuts = await db
-        .select({ referenceNo: stockOutTable.referenceNo, date: stockOutTable.transactionDate, quantity: stockOutItemsTable.quantity, unitPrice: stockOutItemsTable.unitPrice })
+        .select({
+        referenceNo: stockOutTable.referenceNo,
+        date: stockOutTable.transactionDate,
+        quantity: stockOutItemsTable.quantity,
+        unitPrice: stockOutItemsTable.unitPrice,
+        branchName: branchesTable.name,
+        departmentName: departmentsTable.name,
+        notes: stockOutTable.notes,
+    })
         .from(stockOutItemsTable)
         .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
+        .leftJoin(departmentsTable, eq(stockOutTable.departmentId, departmentsTable.id))
         .where(eq(stockOutItemsTable.itemId, id));
-    const entries = [
-        ...stockIns.map(s => ({ date: s.date instanceof Date ? s.date.toISOString() : s.date, type: "in", referenceNo: s.referenceNo, in: s.quantity, out: 0, unitPrice: parseFloat(s.unitPrice ?? "0") })),
-        ...stockOuts.map(s => ({ date: s.date instanceof Date ? s.date.toISOString() : s.date, type: "out", referenceNo: s.referenceNo, in: 0, out: s.quantity, unitPrice: parseFloat(s.unitPrice ?? "0") })),
+    // 3. Stock Adjustments (Penyesuaian Opname)
+    const adjustments = await db
+        .select({
+        referenceNo: adjustmentsTable.referenceNo,
+        date: adjustmentsTable.transactionDate,
+        quantityAdjusted: adjustmentItemsTable.quantityAdjusted,
+        reason: adjustmentsTable.reason,
+        notes: adjustmentsTable.notes,
+    })
+        .from(adjustmentItemsTable)
+        .innerJoin(adjustmentsTable, eq(adjustmentItemsTable.adjustmentId, adjustmentsTable.id))
+        .where(eq(adjustmentItemsTable.itemId, id));
+    // 4. Returns (Retur)
+    const returns = await db
+        .select({
+        referenceNo: returnsTable.referenceNo,
+        date: returnsTable.transactionDate,
+        quantity: returnItemsTable.quantity,
+        returnType: returnsTable.returnType,
+        notes: returnsTable.notes,
+    })
+        .from(returnItemsTable)
+        .innerJoin(returnsTable, eq(returnItemsTable.returnId, returnsTable.id))
+        .where(eq(returnItemsTable.itemId, id));
+    // 5. Mutations (Mutasi Antar Gudang)
+    const mutations = await db
+        .select({
+        referenceNo: mutationsTable.referenceNo,
+        date: mutationsTable.transactionDate,
+        quantity: mutationItemsTable.quantity,
+        notes: mutationsTable.notes,
+    })
+        .from(mutationItemsTable)
+        .innerJoin(mutationsTable, eq(mutationItemsTable.mutationId, mutationsTable.id))
+        .where(eq(mutationItemsTable.itemId, id));
+    const allEntries = [
+        ...stockIns.map(s => ({
+            date: s.date instanceof Date ? s.date.toISOString() : s.date,
+            type: "MASUK",
+            typeLabel: "Penerimaan Material",
+            referenceNo: s.referenceNo,
+            party: s.supplierName ? `Supplier: ${s.supplierName}` : "Gudang Masuk",
+            notes: s.notes || "-",
+            in: Number(s.quantity),
+            out: 0,
+            unitPrice: parseFloat(s.unitPrice ?? "0"),
+        })),
+        ...stockOuts.map(s => ({
+            date: s.date instanceof Date ? s.date.toISOString() : s.date,
+            type: "KELUAR",
+            typeLabel: "Distribusi Cabang",
+            referenceNo: s.referenceNo,
+            party: s.branchName ? `Cabang: ${s.branchName}` : s.departmentName ? `Dept: ${s.departmentName}` : "Distribusi",
+            notes: s.notes || "-",
+            in: 0,
+            out: Number(s.quantity),
+            unitPrice: parseFloat(s.unitPrice ?? "0"),
+        })),
+        ...adjustments.map(a => {
+            const q = Number(a.quantityAdjusted);
+            const isIncrease = q >= 0;
+            return {
+                date: a.date instanceof Date ? a.date.toISOString() : a.date,
+                type: isIncrease ? "PENYESUAIAN (+)" : "PENYESUAIAN (-)",
+                typeLabel: "Penyesuaian Opname",
+                referenceNo: a.referenceNo,
+                party: a.reason ? `Alasan: ${a.reason}` : "Koreksi Fisik",
+                notes: a.notes || "-",
+                in: isIncrease ? q : 0,
+                out: isIncrease ? 0 : Math.abs(q),
+                unitPrice: 0,
+            };
+        }),
+        ...returns.map(r => {
+            const isCustomerOrBranch = (r.returnType || "").toUpperCase() !== "SUPPLIER";
+            const qty = Number(r.quantity);
+            return {
+                date: r.date instanceof Date ? r.date.toISOString() : r.date,
+                type: isCustomerOrBranch ? "RETUR CABANG" : "RETUR SUPPLIER",
+                typeLabel: isCustomerOrBranch ? "Retur dari Cabang" : "Retur ke Supplier",
+                referenceNo: r.referenceNo,
+                party: isCustomerOrBranch ? "Pengembalian Sisa/Rusak Cabang" : "Pengembalian ke Supplier",
+                notes: r.notes || "-",
+                in: isCustomerOrBranch ? qty : 0,
+                out: isCustomerOrBranch ? 0 : qty,
+                unitPrice: 0,
+            };
+        }),
+        ...mutations.map(m => ({
+            date: m.date instanceof Date ? m.date.toISOString() : m.date,
+            type: "MUTASI",
+            typeLabel: "Mutasi Antar Gudang",
+            referenceNo: m.referenceNo,
+            party: "Perpindahan Fisik Gudang",
+            notes: m.notes || "-",
+            in: Number(m.quantity),
+            out: Number(m.quantity),
+            unitPrice: 0,
+        })),
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    let balance = 0;
-    const withBalance = entries.map(e => { balance += e.in - e.out; return { ...e, balance }; });
-    res.json({ item: fmtItem(item), entries: withBalance.reverse() });
+    let runningBalance = 0;
+    let totalIn = 0;
+    let totalOut = 0;
+    const withBalance = allEntries.map(e => {
+        runningBalance += e.in - e.out;
+        totalIn += e.in;
+        totalOut += e.out;
+        return {
+            ...e,
+            balance: runningBalance,
+        };
+    });
+    res.json({
+        item: fmtItem(item),
+        summary: {
+            totalIn,
+            totalOut,
+            currentBalance: runningBalance,
+            currentStock: item.currentStock,
+            totalTransactions: withBalance.length,
+        },
+        entries: withBalance.reverse(),
+    });
+});
+// POST /items/import — Import massal master material dari file Excel (.xlsx)
+router.post("/items/import", requireAuth, async (req, res) => {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ error: "Data material tidak boleh kosong" });
+        return;
+    }
+    const allCats = await db.select().from(categoriesTable);
+    const allUnits = await db.select().from(unitsTable);
+    const allSups = await db.select().from(suppliersTable);
+    const catMap = new Map(allCats.map(c => [c.name.toLowerCase().trim(), c.id]));
+    const unitMap = new Map(allUnits.map(u => [u.name.toLowerCase().trim(), u.id]));
+    const supMap = new Map(allSups.map(s => [s.name.toLowerCase().trim(), s.id]));
+    const imported = [];
+    const errors = [];
+    for (let idx = 0; idx < items.length; idx++) {
+        const raw = items[idx];
+        const code = String(raw.code || "").trim();
+        const name = String(raw.name || "").trim();
+        if (!code || !name) {
+            errors.push(`Baris ${idx + 1}: Kode Barang dan Nama Material wajib diisi.`);
+            continue;
+        }
+        // Resolve or create category
+        let categoryId = null;
+        const catName = String(raw.categoryName || "").trim();
+        if (catName) {
+            const cKey = catName.toLowerCase();
+            if (catMap.has(cKey)) {
+                categoryId = catMap.get(cKey);
+            }
+            else {
+                const [newCat] = await db.insert(categoriesTable).values({ name: catName }).returning();
+                categoryId = newCat.id;
+                catMap.set(cKey, categoryId);
+            }
+        }
+        // Resolve or create unit
+        let unitId = null;
+        const unitName = String(raw.unitName || "").trim() || "Buah";
+        if (unitName) {
+            const uKey = unitName.toLowerCase();
+            if (unitMap.has(uKey)) {
+                unitId = unitMap.get(uKey);
+            }
+            else {
+                const [newUnit] = await db.insert(unitsTable).values({ name: unitName, abbreviation: unitName.slice(0, 4) }).returning();
+                unitId = newUnit.id;
+                unitMap.set(uKey, unitId);
+            }
+        }
+        // Resolve supplier
+        let supplierId = null;
+        const supName = String(raw.supplierName || "").trim();
+        if (supName && supMap.has(supName.toLowerCase())) {
+            supplierId = supMap.get(supName.toLowerCase());
+        }
+        const minStock = Math.max(0, parseInt(String(raw.minimumStock || 0), 10) || 0);
+        const maxStock = Math.max(minStock, parseInt(String(raw.maximumStock || 100), 10) || 100);
+        const curStock = Math.max(0, parseInt(String(raw.currentStock || 0), 10) || 0);
+        const price = parseFloat(String(raw.unitPrice || 0)) || 0;
+        const barcode = String(raw.barcode || code).trim();
+        const trackingType = String(raw.trackingType || "NON_TRACKED").toUpperCase() === "TRACKED" ? "TRACKED" : "NON_TRACKED";
+        try {
+            const [existing] = await db.select().from(itemsTable).where(eq(itemsTable.code, code));
+            if (existing) {
+                const [updated] = await db
+                    .update(itemsTable)
+                    .set({
+                    name,
+                    barcode,
+                    categoryId: categoryId ?? existing.categoryId,
+                    unitId: unitId ?? existing.unitId,
+                    supplierId: supplierId ?? existing.supplierId,
+                    minimumStock: minStock,
+                    maximumStock: maxStock,
+                    unitPrice: price.toString(),
+                    trackingType,
+                    description: raw.description || existing.description,
+                    updatedAt: new Date(),
+                })
+                    .where(eq(itemsTable.id, existing.id))
+                    .returning();
+                imported.push(updated);
+            }
+            else {
+                const [created] = await db
+                    .insert(itemsTable)
+                    .values({
+                    code,
+                    name,
+                    barcode,
+                    categoryId,
+                    unitId,
+                    supplierId,
+                    description: raw.description || null,
+                    minimumStock: minStock,
+                    maximumStock: maxStock,
+                    currentStock: curStock,
+                    unitPrice: price.toString(),
+                    trackingType,
+                    status: "active",
+                })
+                    .returning();
+                imported.push(created);
+            }
+        }
+        catch (err) {
+            errors.push(`Baris ${idx + 1} (${code}): ${err.message}`);
+        }
+    }
+    res.json({
+        success: true,
+        totalReceived: items.length,
+        totalImported: imported.length,
+        errors,
+    });
 });
 // GET /items/barcode/:barcode
 router.get("/items/barcode/:barcode", requireAuth, async (req, res) => {

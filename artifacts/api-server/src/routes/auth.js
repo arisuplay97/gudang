@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, branchesTable } from "@workspace/db";
 import { LoginBody } from "@workspace/api-zod";
 import { hashPassword, comparePassword, requireAuth } from "../lib/auth";
 const router = Router();
@@ -26,11 +26,16 @@ router.post("/auth/login", async (req, res) => {
     req.session.userRole = user.role;
     req.session.username = user.username;
     req.session.branchId = user.branchId;
-    req.session.save((err) => {
+    req.session.save(async (err) => {
         if (err) {
             console.error("Session save error:", err);
             res.status(500).json({ error: "Gagal menyimpan sesi" });
             return;
+        }
+        let branchName = null;
+        if (user.branchId) {
+            const [b] = await db.select().from(branchesTable).where(eq(branchesTable.id, user.branchId));
+            branchName = b?.name ?? null;
         }
         res.json({
             user: {
@@ -40,6 +45,7 @@ router.post("/auth/login", async (req, res) => {
                 email: user.email,
                 role: user.role,
                 branchId: user.branchId,
+                branchName: branchName,
                 isActive: user.isActive,
                 createdAt: user.createdAt.toISOString(),
             },
@@ -58,12 +64,19 @@ router.get("/auth/me", requireAuth, async (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
+    let branchName = null;
+    if (user.branchId) {
+        const [b] = await db.select().from(branchesTable).where(eq(branchesTable.id, user.branchId));
+        branchName = b?.name ?? null;
+    }
     res.json({
         id: user.id,
         username: user.username,
         fullName: user.fullName,
         email: user.email,
         role: user.role,
+        branchId: user.branchId,
+        branchName: branchName,
         isActive: user.isActive,
         createdAt: user.createdAt.toISOString(),
     });

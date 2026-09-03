@@ -65,7 +65,7 @@ const verifiedMarkerIcon = L.divIcon({
   popupAnchor: [0, -16],
 });
 
-function TrackingMapLeaflet({ gisLocations }: { gisLocations: any[] }) {
+function TrackingMapLeaflet({ gisLocations = [] }: { gisLocations?: any[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
 

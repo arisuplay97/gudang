@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, itemsTable, categoriesTable, unitsTable, stockInTable, stockOutTable, stockOutItemsTable, branchesTable, auditLogsTable, usersTable } from "@workspace/db";
+import { db, itemsTable, categoriesTable, unitsTable, stockInTable, stockOutTable, stockOutItemsTable, branchesTable, auditLogsTable, usersTable, materialTrackingTable, installationAllocationsTable, installationEvidenceTable, materialReceiptsTable, } from "@workspace/db";
 import { GetStockReportQueryParams, GetTransactionReportQueryParams, ListAuditLogsQueryParams } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 const router = Router();
@@ -140,63 +140,170 @@ router.get("/audit-logs", requireAuth, async (req, res) => {
         createdAt: r.createdAt.toISOString(),
     })));
 });
-// ─── LAPORAN PEMASANGAN AKSESORIS PIPA ───
+// ─── LAPORAN PEMASANGAN AKSESORIS PIPA (BERDASARKAN MATERIAL TRACKING) ───
 router.get("/reports/pemasangan-aksesoris", requireAuth, async (req, res) => {
     const { branchId, month, year, search } = req.query;
-    // Real database query for stock out & branch installations
-    const stockOuts = await db
+    // 1. Ambil data Material Tracking berserta item, stock out, cabang, dan user
+    const trackingRows = await db
         .select({
-        id: stockOutTable.id,
+        trackingId: materialTrackingTable.id,
+        trackingUuid: materialTrackingTable.uuid,
+        trackingStatus: materialTrackingTable.status,
+        receivedAt: materialTrackingTable.receivedAt,
+        installedAt: materialTrackingTable.installedAt,
+        slaStartAt: materialTrackingTable.slaStartAt,
+        branchId: materialTrackingTable.branchId,
+        branchName: branchesTable.name,
+        stockOutId: stockOutTable.id,
         referenceNo: stockOutTable.referenceNo,
         transactionDate: stockOutTable.transactionDate,
-        notes: stockOutTable.notes,
+        releasedAt: stockOutTable.releasedAt,
+        stockOutNotes: stockOutTable.notes,
         requestedBy: stockOutTable.requestedBy,
-        branchId: stockOutTable.destinationBranchId,
-        branchName: branchesTable.name,
-        createdByName: usersTable.fullName,
+        stockOutCreatedByName: usersTable.fullName,
+        itemId: itemsTable.id,
+        itemCode: itemsTable.code,
+        itemName: itemsTable.name,
+        unitName: unitsTable.name,
+        itemQuantity: stockOutItemsTable.quantity,
     })
-        .from(stockOutTable)
-        .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
+        .from(materialTrackingTable)
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id))
+        .leftJoin(branchesTable, eq(materialTrackingTable.branchId, branchesTable.id))
         .leftJoin(usersTable, eq(stockOutTable.createdBy, usersTable.id))
-        .orderBy(desc(stockOutTable.transactionDate));
-    // Build groups from DB
-    const dbGroups = await Promise.all(stockOuts.map(async (so, idx) => {
-        const items = await db
+        .orderBy(desc(stockOutTable.transactionDate), desc(materialTrackingTable.id));
+    // 2. Ambil bukti foto pemasangan (installation_evidence) & alokasi titik
+    const enrichedRows = await Promise.all(trackingRows.map(async (tr) => {
+        // Ambil foto bukti fisik pemasangan lapangan
+        const [evidence] = await db
             .select({
-            id: stockOutItemsTable.id,
-            quantity: stockOutItemsTable.quantity,
-            itemName: itemsTable.name,
-            unitName: unitsTable.name,
+            id: installationEvidenceTable.id,
+            latitude: installationEvidenceTable.latitude,
+            longitude: installationEvidenceTable.longitude,
+            clientCaptureTime: installationEvidenceTable.clientCaptureTime,
+            createdAt: installationEvidenceTable.createdAt,
+            capturedByName: usersTable.fullName,
         })
-            .from(stockOutItemsTable)
-            .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
-            .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id))
-            .where(eq(stockOutItemsTable.stockOutId, so.id));
-        if (!items || items.length === 0)
-            return null;
-        const dt = new Date(so.transactionDate);
-        const formattedDate = `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+            .from(installationEvidenceTable)
+            .leftJoin(usersTable, eq(installationEvidenceTable.capturedBy, usersTable.id))
+            .where(eq(installationEvidenceTable.trackingId, tr.trackingId))
+            .orderBy(desc(installationEvidenceTable.createdAt))
+            .limit(1);
+        // Ambil alokasi kuantitas & koordinat
+        const [alloc] = await db
+            .select({
+            id: installationAllocationsTable.id,
+            quantity: installationAllocationsTable.quantity,
+            plannedLatitude: installationAllocationsTable.plannedLatitude,
+            plannedLongitude: installationAllocationsTable.plannedLongitude,
+        })
+            .from(installationAllocationsTable)
+            .where(eq(installationAllocationsTable.trackingId, tr.trackingId))
+            .orderBy(desc(installationAllocationsTable.createdAt))
+            .limit(1);
+        // Ambil riwayat scan penerimaan QR cabang jika ada
+        const [receipt] = await db
+            .select({
+            receivedAt: materialReceiptsTable.receivedAt,
+            receiverName: usersTable.fullName,
+        })
+            .from(materialReceiptsTable)
+            .leftJoin(usersTable, eq(materialReceiptsTable.receivedBy, usersTable.id))
+            .where(eq(materialReceiptsTable.transactionId, tr.stockOutId))
+            .limit(1);
+        // Tanggal Ambil: ketika barang keluar dari gudang / barang diterima cabang via scan QR
+        const rawAmbil = tr.receivedAt || receipt?.receivedAt || tr.releasedAt || tr.transactionDate;
+        const dAmbil = new Date(rawAmbil);
+        const tanggalAmbil = `${String(dAmbil.getDate()).padStart(2, '0')}/${String(dAmbil.getMonth() + 1).padStart(2, '0')}/${dAmbil.getFullYear()}`;
+        // Tanggal Terpasang: langsung tanggal pemasangan berdasarkan foto bukti di lapangan
+        const rawPasang = evidence?.clientCaptureTime || tr.installedAt || evidence?.createdAt;
+        let tanggalTerpasang = "-";
+        if (rawPasang) {
+            const dPasang = new Date(rawPasang);
+            tanggalTerpasang = `${String(dPasang.getDate()).padStart(2, '0')}/${String(dPasang.getMonth() + 1).padStart(2, '0')}/${dPasang.getFullYear()}`;
+        }
+        // Titik Koordinat: koordinat GPS dari foto pemasangan
+        let titikKoordinat = "-";
+        if (evidence?.latitude && evidence?.longitude) {
+            titikKoordinat = `${parseFloat(evidence.latitude).toFixed(4)}, ${parseFloat(evidence.longitude).toFixed(4)}`;
+        }
+        else if (alloc?.plannedLatitude && alloc?.plannedLongitude) {
+            titikKoordinat = `${parseFloat(alloc.plannedLatitude).toFixed(4)}, ${parseFloat(alloc.plannedLongitude).toFixed(4)}`;
+        }
+        // Petugas: petugas yang mengambil foto pemasangan langsung atau petugas penerima QR
+        const petugasList = [];
+        if (evidence?.capturedByName)
+            petugasList.push(evidence.capturedByName);
+        if (receipt?.receiverName && !petugasList.includes(receipt.receiverName))
+            petugasList.push(receipt.receiverName);
+        if (tr.requestedBy && !petugasList.includes(tr.requestedBy))
+            petugasList.push(tr.requestedBy);
+        if (petugasList.length === 0)
+            petugasList.push(tr.stockOutCreatedByName || "Petugas Cabang");
+        // Lokasi Terpasang
+        let lokasi = tr.branchName || "Lombok Tengah";
+        if (tr.stockOutNotes?.includes(" - ")) {
+            lokasi = tr.stockOutNotes.split(" - ")[1].trim();
+        }
+        else if (tr.stockOutNotes?.includes("ke Cabang ")) {
+            lokasi = tr.stockOutNotes.split("ke Cabang ")[1].trim();
+        }
+        // Keterangan
+        let keterangan = tr.stockOutNotes || "Pemasangan Aksesoris & Pipa Distribusi";
+        if (keterangan.includes(" - ")) {
+            keterangan = keterangan.split(" - ")[0].trim();
+        }
         return {
-            id: so.id,
-            no: idx + 1,
-            referenceNo: so.referenceNo,
-            tanggalAmbil: formattedDate,
-            rawDate: so.transactionDate,
-            branchId: so.branchId,
-            branchName: so.branchName || "Cabang Praya",
-            lokasiTerpasang: so.notes?.includes("Lokasi:") ? so.notes.split("Lokasi:")[1]?.trim() : (so.branchName ? `${so.branchName}, Lombok Tengah` : "Lombok Tengah"),
-            titikKoordinat: "-8.7063, 116.2704",
-            petugas: [so.requestedBy || so.createdByName || "Petugas PDAM", "Tim Distribusi"],
-            tanggalTerpasang: formattedDate,
-            keterangan: so.notes || "Pemeliharaan & Pemasangan Pipa Jaringan",
-            items: items.map(it => ({
-                namaAksesoris: it.itemName,
-                jumlah: it.quantity,
-                satuan: it.unitName || "Buah",
-            })),
+            trackingId: tr.trackingId,
+            stockOutId: tr.stockOutId,
+            referenceNo: tr.referenceNo,
+            tanggalAmbil,
+            rawDate: rawAmbil,
+            tanggalTerpasang,
+            rawTanggalTerpasang: rawPasang,
+            titikKoordinat,
+            petugas: petugasList,
+            lokasiTerpasang: lokasi,
+            branchId: tr.branchId,
+            branchName: tr.branchName,
+            keterangan,
+            item: {
+                namaAksesoris: tr.itemName,
+                jumlah: alloc?.quantity || tr.itemQuantity,
+                satuan: tr.unitName || "Buah",
+            },
         };
     }));
-    const validDbGroups = dbGroups.filter(Boolean);
+    // Group items by stockOutId (work order / surat jalan)
+    const groupedMap = new Map();
+    for (const row of enrichedRows) {
+        if (!groupedMap.has(row.stockOutId)) {
+            groupedMap.set(row.stockOutId, {
+                id: row.stockOutId,
+                referenceNo: row.referenceNo,
+                tanggalAmbil: row.tanggalAmbil,
+                rawDate: row.rawDate,
+                tanggalTerpasang: row.tanggalTerpasang,
+                lokasiTerpasang: row.lokasiTerpasang,
+                titikKoordinat: row.titikKoordinat,
+                petugas: row.petugas,
+                branchId: row.branchId,
+                branchName: row.branchName,
+                keterangan: row.keterangan,
+                items: [],
+            });
+        }
+        const grp = groupedMap.get(row.stockOutId);
+        grp.items.push(row.item);
+        if (row.tanggalTerpasang !== "-" && grp.tanggalTerpasang === "-") {
+            grp.tanggalTerpasang = row.tanggalTerpasang;
+            grp.titikKoordinat = row.titikKoordinat;
+        }
+    }
+    const dbGroups = Array.from(groupedMap.values());
     // Official Lombok Tengah dataset matching the user's template
     const officialTemplateData = [
         {
@@ -304,8 +411,8 @@ router.get("/reports/pemasangan-aksesoris", requireAuth, async (req, res) => {
         },
     ];
     // Combine DB groups + template data
-    const existingRefs = new Set(validDbGroups.map(g => g.referenceNo));
-    const combined = [...validDbGroups, ...officialTemplateData.filter(t => !existingRefs.has(t.referenceNo))];
+    const existingRefs = new Set(dbGroups.map(g => g.referenceNo));
+    const combined = [...dbGroups, ...officialTemplateData.filter(t => !existingRefs.has(t.referenceNo))];
     // Filter by search, branch, month, year
     const filtered = combined.filter(g => {
         if (search && String(search).trim()) {

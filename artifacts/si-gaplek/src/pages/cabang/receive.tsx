@@ -28,6 +28,7 @@ import {
   Check,
   Ban,
   Building2,
+  ScanBarcode,
 } from "lucide-react";
 
 interface TrackingUnit {

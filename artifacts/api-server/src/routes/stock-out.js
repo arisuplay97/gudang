@@ -2,7 +2,7 @@
 import { Router } from "express";
 import { eq, and, gte, lte, ilike, sql, desc } from "drizzle-orm";
 import crypto from "crypto";
-import { db, stockOutTable, stockOutItemsTable, itemsTable, departmentsTable, usersTable, locationsTable, warehousesTable, auditLogsTable, materialTrackingTable, materialTrackingEventsTable } from "@workspace/db";
+import { db, stockOutTable, stockOutItemsTable, itemsTable, unitsTable, departmentsTable, usersTable, locationsTable, warehousesTable, auditLogsTable, branchesTable, materialTrackingTable, materialTrackingEventsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { generateRefNo } from "../lib/refgen";
 import { StockService } from "../lib/stock-service";
@@ -38,8 +38,11 @@ router.get("/stock-out", requireAuth, async (req, res) => {
         departmentName: departmentsTable.name,
         warehouseId: stockOutTable.warehouseId,
         warehouseName: warehousesTable.name,
+        destinationBranchId: stockOutTable.destinationBranchId,
+        destinationBranchName: branchesTable.name,
         requestedBy: stockOutTable.requestedBy,
         status: stockOutTable.status,
+        qrToken: stockOutTable.qrToken,
         notes: stockOutTable.notes,
         createdBy: stockOutTable.createdBy,
         createdByName: usersTable.fullName,
@@ -49,6 +52,7 @@ router.get("/stock-out", requireAuth, async (req, res) => {
         .from(stockOutTable)
         .leftJoin(departmentsTable, eq(stockOutTable.departmentId, departmentsTable.id))
         .leftJoin(warehousesTable, eq(stockOutTable.warehouseId, warehousesTable.id))
+        .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
         .leftJoin(usersTable, eq(stockOutTable.createdBy, usersTable.id))
         .where(whereClause)
         .orderBy(desc(stockOutTable.createdAt))
@@ -56,9 +60,12 @@ router.get("/stock-out", requireAuth, async (req, res) => {
         .offset(offset);
     const result = await Promise.all(rows.map(async (row) => {
         const [itemCount] = await db.select({ count: sql `count(*)` }).from(stockOutItemsTable).where(eq(stockOutItemsTable.stockOutId, row.id));
+        const [qtySum] = await db.select({ sum: sql `coalesce(sum(${stockOutItemsTable.quantity}), 0)` }).from(stockOutItemsTable).where(eq(stockOutItemsTable.stockOutId, row.id));
         return {
             ...row,
+            itemCount: Number(itemCount.count),
             totalItems: Number(itemCount.count),
+            totalQuantity: Number(qtySum?.sum ?? 0),
             transactionDate: row.transactionDate instanceof Date ? row.transactionDate.toISOString() : new Date(row.transactionDate).toISOString(),
             createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
         };
@@ -67,16 +74,54 @@ router.get("/stock-out", requireAuth, async (req, res) => {
 });
 // ─── CREATE ───
 router.post("/stock-out", requireAuth, async (req, res) => {
-    const { departmentId, warehouseId, destinationBranchId, requestedBy, notes, transactionDate, items } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    let { departmentId, warehouseId, destinationBranchId, requestedBy, notes, transactionDate, items, details, autoFinalize } = req.body;
+    const rawItems = items || details || [];
+    if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
         res.status(400).json({ error: "Minimal 1 item harus diisi" });
         return;
     }
-    if (!transactionDate) {
-        res.status(400).json({ error: "Tanggal transaksi wajib diisi" });
-        return;
+    const rawDate = transactionDate || req.body.date || new Date();
+    const txDate = new Date(rawDate);
+    const refNo = req.body.referenceNumber || req.body.referenceNo || generateRefNo("BK");
+    // Jika warehouseId belum dipilih, ambil default gudang pusat/pertama
+    if (!warehouseId) {
+        const [defWh] = await db.select().from(warehousesTable).limit(1);
+        warehouseId = defWh ? defWh.id : null;
     }
-    const refNo = generateRefNo("BK");
+    else {
+        warehouseId = parseInt(warehouseId);
+    }
+    // Jika departmentId dipilih dan merujuk ke cabang, sinkronkan ke destinationBranchId
+    if (departmentId) {
+        departmentId = parseInt(departmentId);
+        if (!destinationBranchId) {
+            const [dept] = await db.select().from(departmentsTable).where(eq(departmentsTable.id, departmentId));
+            if (dept) {
+                const [matchedBranch] = await db.select().from(branchesTable).where(eq(branchesTable.name, dept.name)).limit(1);
+                if (matchedBranch) {
+                    destinationBranchId = matchedBranch.id;
+                }
+            }
+        }
+    }
+    else if (destinationBranchId) {
+        destinationBranchId = parseInt(destinationBranchId);
+    }
+    // Validasi stok sebelum disimpan
+    for (const item of rawItems) {
+        if (!item.itemId || !item.quantity || item.quantity <= 0)
+            continue;
+        const [itm] = await db.select().from(itemsTable).where(eq(itemsTable.id, item.itemId));
+        if (itm) {
+            const availStock = itm.currentStock ?? 0;
+            if (item.quantity > availStock) {
+                res.status(400).json({
+                    error: `Stok tidak mencukupi untuk "${itm.name}". Stok tersedia: ${availStock}, diminta: ${item.quantity}.`
+                });
+                return;
+            }
+        }
+    }
     const [header] = await db.insert(stockOutTable).values({
         referenceNo: refNo,
         departmentId: departmentId ?? null,
@@ -85,10 +130,10 @@ router.post("/stock-out", requireAuth, async (req, res) => {
         requestedBy: requestedBy ?? null,
         notes: notes ?? null,
         createdBy: req.session.userId ?? null,
-        transactionDate: new Date(transactionDate),
-        status: "DRAFT",
+        transactionDate: txDate,
+        status: autoFinalize ? "DIKIRIM" : (req.body.status || "DRAFT"),
     }).returning();
-    for (const item of items) {
+    for (const item of rawItems) {
         if (!item.itemId || !item.quantity || item.quantity <= 0)
             continue;
         await db.insert(stockOutItemsTable).values({
@@ -100,11 +145,66 @@ router.post("/stock-out", requireAuth, async (req, res) => {
             notes: item.notes ?? null,
         });
     }
+    // Jika autoFinalize dan warehouseId ada, langsung jalankan finalisasi (kurangi stok & buat tracking)
+    if (autoFinalize && warehouseId) {
+        const txItems = await db
+            .select({
+            id: stockOutItemsTable.id,
+            itemId: stockOutItemsTable.itemId,
+            quantity: stockOutItemsTable.quantity,
+            trackingType: itemsTable.trackingType,
+        })
+            .from(stockOutItemsTable)
+            .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+            .where(eq(stockOutItemsTable.stockOutId, header.id));
+        const hasTracked = txItems.some(i => i.trackingType === "TRACKED");
+        await db.transaction(async (tx) => {
+            const releasedAt = new Date();
+            const slaDeadline = new Date(releasedAt.getTime() + SLA_DAYS * 24 * 60 * 60 * 1000);
+            // Kurangi stok untuk semua item
+            for (const item of txItems) {
+                await StockService.decreaseStock(tx, item.itemId, warehouseId, item.quantity, {
+                    referenceType: "stock_out",
+                    referenceId: header.id,
+                    referenceNo: header.referenceNo,
+                    userId: req.session.userId,
+                    movementDate: header.transactionDate,
+                });
+            }
+            // Generate official QR token for shipment verification
+            const qrToken = crypto.randomUUID();
+            await tx.update(stockOutTable).set({
+                status: "DIKIRIM",
+                releasedAt,
+                qrToken,
+            }).where(eq(stockOutTable.id, header.id));
+            if (header.destinationBranchId) {
+                for (const item of txItems) {
+                    const qty = item.quantity || 1;
+                    for (let i = 0; i < qty; i++) {
+                        const [tracking] = await tx.insert(materialTrackingTable).values({
+                            transactionItemId: item.id,
+                            branchId: header.destinationBranchId,
+                            status: "MENUNGGU_DITERIMA",
+                            slaStartAt: releasedAt,
+                            slaDeadlineAt: slaDeadline,
+                        }).returning();
+                        await tx.insert(materialTrackingEventsTable).values({
+                            trackingId: tracking.id,
+                            eventType: "WAREHOUSE_RELEASED",
+                            userId: req.session.userId,
+                            metadata: { transactionId: header.id, referenceNo: header.referenceNo, qrToken, unitIndex: i + 1, totalUnits: qty },
+                        });
+                    }
+                }
+            }
+        });
+    }
     await db.insert(auditLogsTable).values({
         entityType: "stock_out",
         entityId: header.id,
-        action: "create",
-        description: `Barang keluar ${refNo} dibuat`,
+        action: autoFinalize ? "create_and_finalize" : "create",
+        description: `Barang keluar ${refNo} ${autoFinalize ? "dibuat dan langsung dikirim (stok berkurang)" : "dibuat (draft)"}`,
         userId: req.session.userId,
     });
     res.status(201).json({ ...header, referenceNo: refNo });
@@ -124,8 +224,12 @@ router.get("/stock-out/:id", requireAuth, async (req, res) => {
         departmentName: departmentsTable.name,
         warehouseId: stockOutTable.warehouseId,
         warehouseName: warehousesTable.name,
+        destinationBranchId: stockOutTable.destinationBranchId,
+        destinationBranchName: branchesTable.name,
         requestedBy: stockOutTable.requestedBy,
         status: stockOutTable.status,
+        qrToken: stockOutTable.qrToken,
+        releasedAt: stockOutTable.releasedAt,
         notes: stockOutTable.notes,
         createdByName: usersTable.fullName,
         transactionDate: stockOutTable.transactionDate,
@@ -134,6 +238,7 @@ router.get("/stock-out/:id", requireAuth, async (req, res) => {
         .from(stockOutTable)
         .leftJoin(departmentsTable, eq(stockOutTable.departmentId, departmentsTable.id))
         .leftJoin(warehousesTable, eq(stockOutTable.warehouseId, warehousesTable.id))
+        .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
         .leftJoin(usersTable, eq(stockOutTable.createdBy, usersTable.id))
         .where(eq(stockOutTable.id, id));
     if (!header) {
@@ -146,6 +251,7 @@ router.get("/stock-out/:id", requireAuth, async (req, res) => {
         itemId: stockOutItemsTable.itemId,
         itemCode: itemsTable.code,
         itemName: itemsTable.name,
+        unitName: unitsTable.name,
         quantity: stockOutItemsTable.quantity,
         unitPrice: stockOutItemsTable.unitPrice,
         locationId: stockOutItemsTable.locationId,
@@ -154,12 +260,14 @@ router.get("/stock-out/:id", requireAuth, async (req, res) => {
     })
         .from(stockOutItemsTable)
         .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id))
         .leftJoin(locationsTable, eq(stockOutItemsTable.locationId, locationsTable.id))
         .where(eq(stockOutItemsTable.stockOutId, id));
     res.json({
         ...header,
         transactionDate: header.transactionDate instanceof Date ? header.transactionDate.toISOString() : new Date(header.transactionDate).toISOString(),
         createdAt: header.createdAt instanceof Date ? header.createdAt.toISOString() : new Date(header.createdAt).toISOString(),
+        releasedAt: header.releasedAt instanceof Date ? header.releasedAt.toISOString() : header.releasedAt ? new Date(header.releasedAt).toISOString() : null,
         items: items.map(i => ({ ...i, unitPrice: parseFloat(String(i.unitPrice)) })),
     });
 });
@@ -222,35 +330,34 @@ router.post("/stock-out/:id/finalize", requireAuth, async (req, res) => {
                     movementDate: header.transactionDate,
                 });
             }
-            // Generate QR token if any TRACKED items (Section 8)
-            let qrToken = null;
-            if (hasTracked) {
-                qrToken = crypto.randomUUID();
-            }
+            // Generate official QR token for shipment verification
+            const qrToken = crypto.randomUUID();
             // Update header status
             await tx.update(stockOutTable).set({
                 status: "DIKIRIM",
                 releasedAt,
                 qrToken,
             }).where(eq(stockOutTable.id, header.id));
-            // Create material_tracking for each TRACKED item (Section 11)
-            for (const item of txItems) {
-                if (item.trackingType !== "TRACKED")
-                    continue;
-                const [tracking] = await tx.insert(materialTrackingTable).values({
-                    transactionItemId: item.id,
-                    branchId: header.destinationBranchId,
-                    status: "MENUNGGU_DITERIMA",
-                    slaStartAt: releasedAt,
-                    slaDeadlineAt: slaDeadline,
-                }).returning();
-                // Record event
-                await tx.insert(materialTrackingEventsTable).values({
-                    trackingId: tracking.id,
-                    eventType: "WAREHOUSE_RELEASED",
-                    userId: req.session.userId,
-                    metadata: { transactionId: header.id, referenceNo: header.referenceNo, qrToken },
-                });
+            if (header.destinationBranchId) {
+                for (const item of txItems) {
+                    const qty = item.quantity || 1;
+                    for (let i = 0; i < qty; i++) {
+                        const [tracking] = await tx.insert(materialTrackingTable).values({
+                            transactionItemId: item.id,
+                            branchId: header.destinationBranchId,
+                            status: "MENUNGGU_DITERIMA",
+                            slaStartAt: releasedAt,
+                            slaDeadlineAt: slaDeadline,
+                        }).returning();
+                        // Record event
+                        await tx.insert(materialTrackingEventsTable).values({
+                            trackingId: tracking.id,
+                            eventType: "WAREHOUSE_RELEASED",
+                            userId: req.session.userId,
+                            metadata: { transactionId: header.id, referenceNo: header.referenceNo, qrToken, unitIndex: i + 1, totalUnits: qty },
+                        });
+                    }
+                }
             }
         });
     }

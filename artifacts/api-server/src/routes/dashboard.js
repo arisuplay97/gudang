@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router } from "express";
 import { eq, sql, gte, and, lt, desc } from "drizzle-orm";
-import { db, itemsTable, stockInTable, stockOutTable, auditLogsTable, materialTrackingTable, stockOutItemsTable, installationEvidenceTable, } from "@workspace/db";
+import { db, itemsTable, stockInTable, stockOutTable, auditLogsTable, materialTrackingTable, stockOutItemsTable, installationEvidenceTable, branchesTable, } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 const router = Router();
 const SLA_DAYS = 7;
@@ -12,7 +12,7 @@ router.get("/dashboard/summary", requireAuth, async (_req, res) => {
     const inventoryValue = allItems.reduce((sum, i) => sum + i.currentStock * parseFloat(i.unitPrice), 0);
     const stockInAll = await db.select().from(stockInTable);
     const stockOutAll = await db.select().from(stockOutTable);
-    const isFinalized = (status) => !!status && ["finalized", "completed", "DIKIRIM"].includes(status);
+    const isFinalized = (status) => !!status && ["finalized", "completed", "dikirim", "diproses", "selesai", "approved"].includes(status.toLowerCase());
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStockIn = stockInAll.filter(r => r.transactionDate >= today && isFinalized(r.status)).length;
@@ -66,23 +66,43 @@ router.get("/dashboard/low-stock", requireAuth, async (_req, res) => {
         .limit(20);
     res.json(rows.map(r => ({ ...r, unitName: null, categoryName: null })));
 });
-router.get("/dashboard/stock-movement", requireAuth, async (_req, res) => {
+router.get("/dashboard/stock-movement", requireAuth, async (req, res) => {
+    const daysParam = parseInt(req.query.days, 10);
+    const days = daysParam === 30 ? 30 : 7;
+    const isFinalized = (status) => !!status && ["finalized", "completed", "dikirim", "diproses", "selesai", "approved"].includes(status.toLowerCase());
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - (days - 1));
+    startDate.setHours(0, 0, 0, 0);
+    // Fetch all in range in 2 parallel queries instead of 60 sequential queries
+    const [allStockIn, allStockOut] = await Promise.all([
+        db.select({ transactionDate: stockInTable.transactionDate, status: stockInTable.status })
+            .from(stockInTable)
+            .where(gte(stockInTable.transactionDate, startDate)),
+        db.select({ transactionDate: stockOutTable.transactionDate, status: stockOutTable.status })
+            .from(stockOutTable)
+            .where(gte(stockOutTable.transactionDate, startDate)),
+    ]);
     const result = [];
-    const isFinalized = (status) => !!status && ["finalized", "completed", "DIKIRIM"].includes(status);
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        date.setHours(0, 0, 0, 0);
-        const nextDate = new Date(date);
-        nextDate.setDate(nextDate.getDate() + 1);
-        const stockIn = await db.select().from(stockInTable)
-            .where(and(gte(stockInTable.transactionDate, date), lt(stockInTable.transactionDate, nextDate)));
-        const stockOut = await db.select().from(stockOutTable)
-            .where(and(gte(stockOutTable.transactionDate, date), lt(stockOutTable.transactionDate, nextDate)));
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split("T")[0];
+        const inCount = allStockIn.filter(r => {
+            if (!isFinalized(r.status))
+                return false;
+            const rDate = new Date(r.transactionDate).toISOString().split("T")[0];
+            return rDate === dateStr;
+        }).length;
+        const outCount = allStockOut.filter(r => {
+            if (!isFinalized(r.status))
+                return false;
+            const rDate = new Date(r.transactionDate).toISOString().split("T")[0];
+            return rDate === dateStr;
+        }).length;
         result.push({
-            date: date.toISOString().split("T")[0],
-            stockIn: stockIn.filter(r => isFinalized(r.status)).length,
-            stockOut: stockOut.filter(r => isFinalized(r.status)).length,
+            date: dateStr,
+            stockIn: inCount,
+            stockOut: outCount,
         });
     }
     res.json(result);
@@ -225,6 +245,55 @@ router.get("/dashboard/activity", requireAuth, async (_req, res) => {
         })));
     }
     catch (err) {
+        res.json([]);
+    }
+});
+/* ── NEW: Cabang Material Terbanyak ── */
+router.get("/dashboard/top-branches", requireAuth, async (_req, res) => {
+    try {
+        const rows = await db
+            .select({
+            branchId: branchesTable.id,
+            branchName: branchesTable.name,
+            totalQty: sql `COALESCE(CAST(SUM(${stockOutItemsTable.quantity}) AS INTEGER), 0)`,
+            itemCount: sql `COALESCE(CAST(COUNT(DISTINCT ${stockOutItemsTable.itemId}) AS INTEGER), 0)`,
+        })
+            .from(branchesTable)
+            .leftJoin(stockOutTable, eq(branchesTable.id, stockOutTable.destinationBranchId))
+            .leftJoin(stockOutItemsTable, eq(stockOutTable.id, stockOutItemsTable.stockOutId))
+            .groupBy(branchesTable.id, branchesTable.name)
+            .orderBy(sql `COALESCE(SUM(${stockOutItemsTable.quantity}), 0) DESC`)
+            .limit(5);
+        let results = rows.filter(r => r.totalQty > 0);
+        if (results.length === 0) {
+            const trackingRows = await db
+                .select({
+                branchId: branchesTable.id,
+                branchName: branchesTable.name,
+                totalQty: sql `COALESCE(CAST(SUM(${stockOutItemsTable.quantity}) AS INTEGER), 0)`,
+                itemCount: sql `COALESCE(CAST(COUNT(DISTINCT ${stockOutItemsTable.itemId}) AS INTEGER), 0)`,
+            })
+                .from(materialTrackingTable)
+                .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+                .innerJoin(branchesTable, eq(materialTrackingTable.branchId, branchesTable.id))
+                .groupBy(branchesTable.id, branchesTable.name)
+                .orderBy(sql `COALESCE(SUM(${stockOutItemsTable.quantity}), 0) DESC`)
+                .limit(5);
+            results = trackingRows;
+        }
+        if (results.length === 0) {
+            const allBranches = await db.select({ branchId: branchesTable.id, branchName: branchesTable.name }).from(branchesTable).limit(5);
+            results = allBranches.map(b => ({
+                branchId: b.branchId,
+                branchName: b.branchName,
+                totalQty: 0,
+                itemCount: 0,
+            }));
+        }
+        res.json(results);
+    }
+    catch (err) {
+        console.error("top-branches error:", err);
         res.json([]);
     }
 });
