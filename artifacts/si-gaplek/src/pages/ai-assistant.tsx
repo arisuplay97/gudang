@@ -140,6 +140,28 @@ export function resolveChatEndpoint(baseUrl?: string, provider?: AiProvider): st
   return `${clean}/v1/chat/completions`;
 }
 
+/**
+ * Helper to render clean markdown formatting without excessive raw asterisks
+ */
+export function renderFormattedText(text: string) {
+  if (!text) return "";
+  // Split by markdown bold (**...**) and italic (*...*)
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length >= 4) {
+      return (
+        <strong key={i} className="font-semibold text-foreground">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*") && part.length >= 2) {
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
 const STARTER_PROMPTS = [
   {
     category: "Stok & Kebutuhan",
@@ -448,7 +470,10 @@ export default function AiAssistantPage() {
           messages: [
             {
               role: "system",
-              content: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data gudang berikut:\n${warehouseContext}`,
+              content: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional, ramah, dan rapi berbasis data gudang berikut:\n${warehouseContext}\n\nPANDUAN FORMAT TEKS:
+- HINDARI penggunaan tanda bintang ganda (**) berlebihan pada setiap kata atau nama cabang/material.
+- Gunakan teks biasa yang bersih, natural, dan mudah dibaca.
+- Gunakan penekanan tebal (bold) hanya sesekali untuk judul bagian atau angka kunci penting.`,
             },
             { role: "user", content: userPrompt },
           ],
@@ -822,7 +847,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                   variant="outline"
                   className="text-[10px] py-0 border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/30 hidden sm:inline-flex"
                 >
-                  {config.apiKey || config.customBaseUrl ? `${config.customProviderName || PROVIDER_MODELS[config.provider]?.label || config.provider}: ${config.model}` : "Mesin Analitik Lokal"}
+                  Tanya Seputar Gudang,Audit,dan GIS.
                 </Badge>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">
@@ -961,11 +986,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                     {/* Header info */}
                     <div className="flex items-center justify-between text-[10px] opacity-70 gap-3 border-b border-current/10 pb-1.5">
                       <span className="font-semibold">
-                        {msg.role === "user"
-                          ? "Anda"
-                          : `TIARA AI (${
-                              msg.isLocalEngine ? "Analitik Lokal" : config.model
-                            })`}
+                        {msg.role === "user" ? "Anda" : "TIARA AI"}
                       </span>
                       <span>{msg.timestamp}</span>
                     </div>
@@ -989,8 +1010,8 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                                 <thead className="bg-muted/60 text-foreground font-semibold border-b border-border">
                                   <tr>
                                     {header?.map((h, hIdx) => (
-                                      <th key={hIdx} className="p-2 whitespace-nowrap">
-                                        {h.trim()}
+                                      <th key={hIdx} className="p-2 whitespace-nowrap font-semibold">
+                                        {renderFormattedText(h.trim())}
                                       </th>
                                     ))}
                                   </tr>
@@ -1003,7 +1024,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                                     >
                                       {row.map((col, cIdx) => (
                                         <td key={cIdx} className="p-2">
-                                          {col.trim()}
+                                          {renderFormattedText(col.trim())}
                                         </td>
                                       ))}
                                     </tr>
@@ -1021,7 +1042,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                               key={pIdx}
                               className="border-l-2 border-sky-500 bg-sky-500/10 p-2.5 rounded-r-md text-[11px] my-2 text-foreground"
                             >
-                              {para.replace(/^>\s*/, "")}
+                              {renderFormattedText(para.replace(/^>\s*/, ""))}
                             </div>
                           );
                         }
@@ -1033,13 +1054,17 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                               key={pIdx}
                               className="text-sm font-bold text-foreground mt-2 mb-1"
                             >
-                              {para.replace("### ", "")}
+                              {renderFormattedText(para.replace("### ", ""))}
                             </h3>
                           );
                         }
 
                         // Default paragraph
-                        return <p key={pIdx} className="m-0">{para}</p>;
+                        return (
+                          <p key={pIdx} className="m-0 leading-relaxed">
+                            {renderFormattedText(para)}
+                          </p>
+                        );
                       })}
                     </div>
 

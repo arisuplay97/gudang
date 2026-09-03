@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Eye, ScanBarcode, Trash2, PackagePlus, FolderOpen, Printer } from "lucide-react";
+import { Plus, Pencil, Eye, ScanBarcode, Trash2, PackagePlus, FolderOpen, Printer, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BuktiPenerimaanPrintModal, type BuktiPenerimaanData } from "@/components/print/bukti-penerimaan-print";
 
@@ -143,28 +143,53 @@ export default function BarangMasukPage() {
   const filteredLocations = locations?.filter(l => !form.warehouseId || l.warehouseId === parseInt(form.warehouseId));
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (autoFinalize: boolean = false) => {
+      const itemsPayload = details.map(d => ({
+        itemId: d.itemId,
+        quantity: d.quantity,
+        unitPrice: d.unitPrice || null,
+        warehouseId: d.warehouseId || (form.warehouseId ? parseInt(form.warehouseId) : null),
+        locationId: d.locationId || null,
+        notes: d.notes || null,
+      }));
       const body = {
         referenceNumber: form.referenceNumber,
+        referenceNo: form.referenceNumber,
         supplierId: form.supplierId ? parseInt(form.supplierId) : null,
+        warehouseId: form.warehouseId ? parseInt(form.warehouseId) : null,
+        transactionDate: form.date ? new Date(form.date).toISOString() : new Date().toISOString(),
+        date: form.date,
         notes: form.notes || null,
-        details: details.map(d => ({
-          itemId: d.itemId, quantity: d.quantity,
-          unitPrice: d.unitPrice || null,
-          warehouseId: d.warehouseId || null,
-          locationId: d.locationId || null,
-          notes: d.notes || null,
-        })),
+        items: itemsPayload,
+        details: itemsPayload,
+        autoFinalize,
       };
       return apiFetch("/api/stock-in", { method: "POST", body: JSON.stringify(body) });
     },
-    onSuccess: () => {
+    onSuccess: (_data, autoFinalize) => {
       qc.invalidateQueries({ queryKey: ["stock-in"] });
       qc.invalidateQueries({ queryKey: ["items"] });
       setDialogOpen(false);
-      toast({ title: "Barang masuk disimpan" });
+      toast({
+        title: autoFinalize ? "Barang Masuk Disimpan & Difinalisasi" : "Draft Barang Masuk Disimpan",
+        description: autoFinalize ? "Stok fisik barang telah bertambah di gudang." : "Transaksi disimpan sebagai draft.",
+      });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const finalizeMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/api/stock-in/${id}/finalize`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-in"] });
+      qc.invalidateQueries({ queryKey: ["items"] });
+      if (viewId) qc.invalidateQueries({ queryKey: ["stock-in", viewId] });
+      toast({
+        title: "Transaksi Selesai Difinalisasi",
+        description: "Stok fisik barang di gudang telah bertambah.",
+      });
+    },
+    onError: (e: Error) => toast({ title: "Gagal Finalisasi", description: e.message, variant: "destructive" }),
   });
 
   const openCreate = () => {
@@ -237,9 +262,31 @@ export default function BarangMasukPage() {
                       <TableCell className="text-sm">{formatDate(s.transactionDate || s.createdAt)}</TableCell>
                       <TableCell className="text-sm">{s.supplierName ?? "—"}</TableCell>
                       <TableCell className="text-right font-medium">{s.itemCount ?? 0} item</TableCell>
-                      <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
+                      <TableCell>
+                        <Badge variant={s.status === "completed" || s.status === "finalized" ? "default" : "secondary"}>
+                          {s.status === "completed" || s.status === "finalized" ? "Selesai" : "Draft"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {s.status !== "completed" && s.status !== "finalized" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 gap-1 px-2 text-xs text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800"
+                                  onClick={() => finalizeMutation.mutate(s.id)}
+                                  disabled={finalizeMutation.isPending}
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Finalisasi</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Finalisasi transaksi & tambah stok ke gudang</TooltipContent>
+                            </Tooltip>
+                          )}
+
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -328,10 +375,22 @@ export default function BarangMasukPage() {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}>
-              {saveMutation.isPending ? "Menyimpan..." : "Simpan Transaksi"}
+            <Button
+              variant="secondary"
+              onClick={() => saveMutation.mutate(false)}
+              disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}
+            >
+              Simpan Draft
+            </Button>
+            <Button
+              onClick={() => saveMutation.mutate(true)}
+              disabled={!form.referenceNumber || details.length === 0 || saveMutation.isPending}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {saveMutation.isPending ? "Menyimpan..." : "Simpan & Tambah Stok"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -355,7 +414,21 @@ export default function BarangMasukPage() {
             </div>
           )}
           <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
-            <Button variant="outline" onClick={() => setViewId(null)}>Tutup</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setViewId(null)}>Tutup</Button>
+              {viewData?.stockIn?.status !== "finalized" && viewData?.stockIn?.status !== "completed" && (
+                <Button
+                  onClick={() => {
+                    if (viewId) finalizeMutation.mutate(viewId);
+                  }}
+                  disabled={finalizeMutation.isPending}
+                  className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Finalisasi Stok Sekarang
+                </Button>
+              )}
+            </div>
             <Button
               onClick={() => {
                 if (viewId) handlePrintById(viewId, viewData?.stockIn?.referenceNumber);

@@ -71,14 +71,19 @@ router.get("/stock-in", requireAuth, async (req, res): Promise<void> => {
 
 // ─── CREATE ───
 router.post("/stock-in", requireAuth, async (req, res): Promise<void> => {
-  const { supplierId, warehouseId, notes, transactionDate, items } = req.body;
+  const supplierId = req.body.supplierId ? parseInt(req.body.supplierId) : null;
+  const warehouseId = req.body.warehouseId ? parseInt(req.body.warehouseId) : null;
+  const notes = req.body.notes ?? null;
+  const rawDate = req.body.transactionDate || req.body.date || new Date();
+  const transactionDate = new Date(rawDate);
+  const rawItems = req.body.items || req.body.details || [];
+  const autoFinalize = !!req.body.autoFinalize;
 
-  if (!items || !Array.isArray(items) || items.length === 0) {
+  if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
     res.status(400).json({ error: "Minimal 1 item harus diisi" }); return;
   }
-  if (!transactionDate) { res.status(400).json({ error: "Tanggal transaksi wajib diisi" }); return; }
 
-  const refNo = generateRefNo("BM");
+  const refNo = req.body.referenceNumber || req.body.referenceNo || generateRefNo("BM");
 
   const [header] = await db.insert(stockInTable).values({
     referenceNo: refNo,
@@ -86,11 +91,11 @@ router.post("/stock-in", requireAuth, async (req, res): Promise<void> => {
     warehouseId: warehouseId ?? null,
     notes: notes ?? null,
     createdBy: req.session.userId ?? null,
-    transactionDate: new Date(transactionDate),
-    status: "draft",
+    transactionDate,
+    status: autoFinalize ? "finalized" : "draft",
   }).returning();
 
-  for (const item of items) {
+  for (const item of rawItems) {
     if (!item.itemId || !item.quantity || item.quantity <= 0) continue;
     await db.insert(stockInItemsTable).values({
       stockInId: header.id,
@@ -102,11 +107,27 @@ router.post("/stock-in", requireAuth, async (req, res): Promise<void> => {
     });
   }
 
+  // Jika autoFinalize dan warehouseId ada, langsung tambahkan stok fisik
+  if (autoFinalize && warehouseId) {
+    await db.transaction(async (tx) => {
+      for (const item of rawItems) {
+        if (!item.itemId || !item.quantity || item.quantity <= 0) continue;
+        await StockService.increaseStock(tx, item.itemId, warehouseId, item.quantity, {
+          referenceType: "stock_in",
+          referenceId: header.id,
+          referenceNo: refNo,
+          userId: req.session.userId,
+          movementDate: transactionDate,
+        });
+      }
+    });
+  }
+
   await db.insert(auditLogsTable).values({
     entityType: "stock_in",
     entityId: header.id,
-    action: "create",
-    description: `Barang masuk ${refNo} dibuat`,
+    action: autoFinalize ? "create_and_finalize" : "create",
+    description: `Barang masuk ${refNo} ${autoFinalize ? "dibuat dan langsung difinalisasi (stok bertambah)" : "dibuat (draft)"}`,
     userId: req.session.userId,
   });
 
