@@ -59,26 +59,33 @@ export default function SpiVerifikasiPage() {
 
                 <ScrollArea className="flex-1">
                     <div className="space-y-3 pr-4">
-                        {pendingList.map(item => (
-                            <Card
-                                key={item.trackingId}
-                                className={`cursor-pointer transition-colors ${selectedPending?.trackingId === item.trackingId ? 'border-primary shadow-sm bg-primary/5' : 'hover:border-primary/50'}`}
-                                onClick={() => setSelectedPending(item)}
-                            >
-                                <CardHeader className="p-4 pb-2">
-                                    <div className="flex justify-between items-start">
-                                        <CardTitle className="text-sm font-semibold">{item.itemName}</CardTitle>
-                                        {item.locationMismatch && <Badge variant="destructive" className="text-[10px]">MISMATCH</Badge>}
-                                    </div>
-                                    <CardDescription className="text-xs">Cabang: {item.branchName}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="p-4 pt-2">
-                                    <div className="flex gap-4 text-xs text-muted-foreground">
-                                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(item.installedAt).toLocaleDateString()}</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                        {pendingList.map((item: any, idx: number) => {
+                            const isSelected = selectedPending?.evidenceId === item.evidenceId || (selectedPending?.evidenceUuid && selectedPending?.evidenceUuid === item.evidenceUuid);
+                            const itemDate = item.createdAt || item.installedAt || item.clientCaptureTime;
+                            return (
+                                <Card
+                                    key={item.evidenceId || item.evidenceUuid || idx}
+                                    className={`cursor-pointer transition-colors ${isSelected ? 'border-primary shadow-sm bg-primary/5' : 'hover:border-primary/50'}`}
+                                    onClick={() => setSelectedPending(item)}
+                                >
+                                    <CardHeader className="p-4 pb-2">
+                                        <div className="flex justify-between items-start">
+                                            <CardTitle className="text-sm font-semibold">{item.itemName}</CardTitle>
+                                            {item.locationMismatch && <Badge variant="destructive" className="text-[10px]">MISMATCH</Badge>}
+                                        </div>
+                                        <CardDescription className="text-xs">Cabang: {item.branchName || "—"}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-4 pt-2">
+                                        <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="w-3 h-3" /> {itemDate ? new Date(itemDate).toLocaleDateString("id-ID") : "—"}
+                                            </span>
+                                            <span className="font-mono">{item.referenceNo}</span>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
                         {pendingList.length === 0 && (
                             <div className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
                                 Tidak ada data yang perlu diverifikasi.
@@ -100,7 +107,9 @@ export default function SpiVerifikasiPage() {
                         <div className="mb-6 flex justify-between items-start">
                             <div>
                                 <h2 className="text-2xl font-bold tracking-tight">{selectedPending.itemName}</h2>
-                                <p className="text-muted-foreground font-mono text-sm">Ref: {selectedPending.referenceNo} | Qty: {selectedPending.installedQuantity}</p>
+                                <p className="text-muted-foreground font-mono text-sm">
+                                    Ref: {selectedPending.referenceNo} | Qty: {selectedPending.allocationQuantity ?? selectedPending.installedQuantity ?? 1} unit
+                                </p>
                             </div>
                             <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">MENUNGGU VERIFIKASI</Badge>
                         </div>
@@ -109,12 +118,24 @@ export default function SpiVerifikasiPage() {
                             <div className="space-y-4">
                                 <h3 className="font-semibold flex items-center gap-2"><Camera className="w-4 h-4" /> Bukti Foto</h3>
                                 <div className="aspect-video bg-black rounded-lg overflow-hidden relative group">
-                                    <img src={selectedPending.evidence.photoUrl} alt="Bukti Pemasangan" className="w-full h-full object-cover" />
+                                    {selectedPending.photoUrl || selectedPending.evidence?.photoUrl ? (
+                                        <img
+                                            src={selectedPending.photoUrl || selectedPending.evidence?.photoUrl}
+                                            alt="Bukti Pemasangan"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-white/50 text-xs">
+                                            Foto tidak tersedia
+                                        </div>
+                                    )}
                                     <div className="absolute inset-0 bg-black/40 flex items-end p-4">
                                         <div className="text-white font-mono text-xs space-y-1">
-                                            <p>LAT: {selectedPending.evidence.latitude}</p>
-                                            <p>LON: {selectedPending.evidence.longitude}</p>
-                                            <p>CHECKSUM: {selectedPending.evidence.checksum.substring(0, 16)}...</p>
+                                            <p>LAT: {selectedPending.latitude || selectedPending.evidence?.latitude || "—"}</p>
+                                            <p>LON: {selectedPending.longitude || selectedPending.evidence?.longitude || "—"}</p>
+                                            {(selectedPending.photoChecksum || selectedPending.evidence?.checksum) && (
+                                                <p>CHECKSUM: {String(selectedPending.photoChecksum || selectedPending.evidence?.checksum).substring(0, 16)}...</p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -137,8 +158,8 @@ export default function SpiVerifikasiPage() {
                                             </p>
                                             <p className={`text-xs mt-1 ${selectedPending.locationMismatch ? "text-red-700" : "text-green-700"}`}>
                                                 {selectedPending.locationMismatch
-                                                    ? `Jarak deviasi: ${(selectedPending.deviationMeters || 0).toFixed(1)} meter dari target cabang. Harap periksa apakah titik ini valid atau fraud.`
-                                                    : "Jarak deviasi berada dalam batas wajar sistem."}
+                                                    ? `Jarak deviasi: ${(parseFloat(selectedPending.locationDeviationMeters || selectedPending.deviationMeters) || 0).toFixed(1)} meter dari target rencana. Harap periksa apakah titik ini valid atau fraud.`
+                                                    : "Jarak deviasi berada dalam batas wajar sistem (<100m)."}
                                             </p>
                                         </div>
                                     </CardContent>
