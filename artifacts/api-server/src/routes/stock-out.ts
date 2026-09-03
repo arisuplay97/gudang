@@ -2,7 +2,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, ilike, sql, desc } from "drizzle-orm";
 import crypto from "crypto";
-import { db, stockOutTable, stockOutItemsTable, itemsTable, departmentsTable, usersTable, locationsTable, warehousesTable, auditLogsTable, branchesTable, materialTrackingTable, materialTrackingEventsTable } from "@workspace/db";
+import { db, stockOutTable, stockOutItemsTable, itemsTable, unitsTable, departmentsTable, usersTable, locationsTable, warehousesTable, auditLogsTable, branchesTable, materialTrackingTable, materialTrackingEventsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { generateRefNo } from "../lib/refgen";
 import { StockService } from "../lib/stock-service";
@@ -39,8 +39,11 @@ router.get("/stock-out", requireAuth, async (req, res): Promise<void> => {
       departmentName: departmentsTable.name,
       warehouseId: stockOutTable.warehouseId,
       warehouseName: warehousesTable.name,
+      destinationBranchId: stockOutTable.destinationBranchId,
+      destinationBranchName: branchesTable.name,
       requestedBy: stockOutTable.requestedBy,
       status: stockOutTable.status,
+      qrToken: stockOutTable.qrToken,
       notes: stockOutTable.notes,
       createdBy: stockOutTable.createdBy,
       createdByName: usersTable.fullName,
@@ -50,6 +53,7 @@ router.get("/stock-out", requireAuth, async (req, res): Promise<void> => {
     .from(stockOutTable)
     .leftJoin(departmentsTable, eq(stockOutTable.departmentId, departmentsTable.id))
     .leftJoin(warehousesTable, eq(stockOutTable.warehouseId, warehousesTable.id))
+    .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
     .leftJoin(usersTable, eq(stockOutTable.createdBy, usersTable.id))
     .where(whereClause)
     .orderBy(desc(stockOutTable.createdAt))
@@ -128,8 +132,12 @@ router.get("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
       departmentName: departmentsTable.name,
       warehouseId: stockOutTable.warehouseId,
       warehouseName: warehousesTable.name,
+      destinationBranchId: stockOutTable.destinationBranchId,
+      destinationBranchName: branchesTable.name,
       requestedBy: stockOutTable.requestedBy,
       status: stockOutTable.status,
+      qrToken: stockOutTable.qrToken,
+      releasedAt: stockOutTable.releasedAt,
       notes: stockOutTable.notes,
       createdByName: usersTable.fullName,
       transactionDate: stockOutTable.transactionDate,
@@ -138,6 +146,7 @@ router.get("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
     .from(stockOutTable)
     .leftJoin(departmentsTable, eq(stockOutTable.departmentId, departmentsTable.id))
     .leftJoin(warehousesTable, eq(stockOutTable.warehouseId, warehousesTable.id))
+    .leftJoin(branchesTable, eq(stockOutTable.destinationBranchId, branchesTable.id))
     .leftJoin(usersTable, eq(stockOutTable.createdBy, usersTable.id))
     .where(eq(stockOutTable.id, id));
 
@@ -149,6 +158,7 @@ router.get("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
       itemId: stockOutItemsTable.itemId,
       itemCode: itemsTable.code,
       itemName: itemsTable.name,
+      unitName: unitsTable.name,
       quantity: stockOutItemsTable.quantity,
       unitPrice: stockOutItemsTable.unitPrice,
       locationId: stockOutItemsTable.locationId,
@@ -157,6 +167,7 @@ router.get("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
     })
     .from(stockOutItemsTable)
     .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+    .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id))
     .leftJoin(locationsTable, eq(stockOutItemsTable.locationId, locationsTable.id))
     .where(eq(stockOutItemsTable.stockOutId, id));
 
@@ -164,6 +175,7 @@ router.get("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
     ...header,
     transactionDate: header.transactionDate instanceof Date ? header.transactionDate.toISOString() : new Date(header.transactionDate).toISOString(),
     createdAt: header.createdAt instanceof Date ? header.createdAt.toISOString() : new Date(header.createdAt).toISOString(),
+    releasedAt: header.releasedAt instanceof Date ? header.releasedAt.toISOString() : header.releasedAt ? new Date(header.releasedAt).toISOString() : null,
     items: items.map(i => ({ ...i, unitPrice: parseFloat(String(i.unitPrice)) })),
   });
 });

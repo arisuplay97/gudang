@@ -15,10 +15,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, Trash2, PackageMinus, Camera, Search, ScanBarcode, FolderOpen } from "lucide-react";
+import { Plus, Eye, Trash2, PackageMinus, Camera, Search, ScanBarcode, FolderOpen, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SuratJalanPrintModal, type SuratJalanData } from "@/components/print/surat-jalan-print";
 
-interface StockOut { id: number; referenceNumber: string; departmentId: number | null; notes: string | null; status: string; createdAt: string; departmentName?: string; itemCount?: number; }
+interface StockOut {
+  id: number;
+  referenceNumber?: string;
+  referenceNo?: string;
+  departmentId: number | null;
+  notes: string | null;
+  status: string;
+  createdAt: string;
+  transactionDate?: string;
+  departmentName?: string;
+  destinationBranchName?: string;
+  warehouseName?: string;
+  createdByName?: string;
+  qrToken?: string | null;
+  itemCount?: number;
+}
 interface Item { id: number; code: string; name: string; currentStock: number; unitName?: string; barcode?: string | null; status?: string; }
 interface Department { id: number; name: string; code: string; }
 interface DetailEntry { itemId: number; quantity: number; notes: string | null; _item?: Item; }
@@ -26,6 +42,7 @@ interface DetailEntry { itemId: number; quantity: number; notes: string | null; 
 export default function BarangKeluarPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewId, setViewId] = useState<number | null>(null);
+  const [printData, setPrintData] = useState<SuratJalanData | null>(null);
   const [details, setDetails] = useState<DetailEntry[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [cameraScanOpen, setCameraScanOpen] = useState(false);
@@ -33,6 +50,39 @@ export default function BarangKeluarPage() {
   const [detailForm, setDetailForm] = useState({ itemId: "", quantity: "1" });
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const handlePrintById = async (id: number, fallbackRef?: string) => {
+    try {
+      const detail = await apiFetch<any>(`/api/stock-out/${id}`);
+      setPrintData({
+        id: detail.id,
+        referenceNo: detail.referenceNo || fallbackRef || `BK-${id}`,
+        transactionDate: detail.transactionDate || detail.createdAt || new Date().toISOString(),
+        releasedAt: detail.releasedAt,
+        departmentName: detail.departmentName,
+        destinationBranchName: detail.destinationBranchName,
+        warehouseName: detail.warehouseName,
+        createdByName: detail.createdByName,
+        qrToken: detail.qrToken,
+        notes: detail.notes,
+        items: (detail.items || []).map((it: any) => ({
+          id: it.id,
+          itemCode: it.itemCode,
+          itemName: it.itemName,
+          quantity: it.quantity,
+          unitName: it.unitName || "Buah",
+          locationName: it.locationName,
+          notes: it.notes,
+        })),
+      });
+    } catch (err: any) {
+      toast({
+        title: "Gagal memuat Surat Jalan",
+        description: err.message || "Terjadi kesalahan saat memuat data.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const { data: stockOutsData, isLoading } = useQuery({ queryKey: ["stock-out"], queryFn: () => apiFetch<StockOut[] | { data: StockOut[] }>("/api/stock-out") });
   const { data: itemsData } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[] | { data: Item[] }>("/api/items?limit=100") });
@@ -160,21 +210,43 @@ export default function BarangKeluarPage() {
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card><CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow className="bg-muted/30"><TableHead>No. Referensi</TableHead><TableHead>Tanggal</TableHead><TableHead>Departemen</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="bg-muted/30"><TableHead>No. Referensi / SPK</TableHead><TableHead>Tanggal</TableHead><TableHead>Tujuan / Cabang</TableHead><TableHead className="text-right">Jml Item</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
             <TableBody>
               {isLoading ? Array(4).fill(0).map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>) :
                 !stockOuts?.length ? <TableRow><TableCell colSpan={6} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada transaksi keluar</p><p className="text-xs mt-1">Klik Transaksi Baru untuk memulai</p></TableCell></TableRow> :
                   stockOuts.map(s => (
                     <TableRow key={s.id} className="group">
-                      <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
-                      <TableCell className="text-sm">{formatDate(s.createdAt)}</TableCell>
-                      <TableCell className="text-sm">{s.departmentName ?? "—"}</TableCell>
+                      <TableCell className="font-mono font-medium">{s.referenceNumber || s.referenceNo}</TableCell>
+                      <TableCell className="text-sm">{formatDate(s.transactionDate || s.createdAt)}</TableCell>
+                      <TableCell className="text-sm font-medium">{s.destinationBranchName || s.departmentName || "—"}</TableCell>
                       <TableCell className="text-right font-medium">{s.itemCount ?? 0} item</TableCell>
-                      <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
+                      <TableCell><Badge variant={s.status === "completed" || s.status === "DIKIRIM" ? "default" : "secondary"}>{s.status === "completed" || s.status === "DIKIRIM" ? "Selesai / Dikirim" : "Draft"}</Badge></TableCell>
                       <TableCell className="text-right">
-                        <Tooltip><TooltipTrigger asChild>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button>
-                        </TooltipTrigger><TooltipContent>Lihat Detail</TooltipContent></Tooltip>
+                        <div className="flex items-center justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1 px-2 text-xs text-sky-700 border-sky-300 dark:text-sky-400 dark:border-sky-800"
+                                onClick={() => handlePrintById(s.id, s.referenceNumber || s.referenceNo)}
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Surat Jalan</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Cetak Surat Jalan & BPB</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setViewId(s.id)}>
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Lihat Detail</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -318,9 +390,29 @@ export default function BarangKeluarPage() {
               </Table>
             </div>
           )}
-          <DialogFooter><Button onClick={() => setViewId(null)}>Tutup</Button></DialogFooter>
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+            <Button variant="outline" onClick={() => setViewId(null)}>Tutup</Button>
+            <Button
+              onClick={() => {
+                if (viewId) {
+                  handlePrintById(viewId, viewData?.stockOut?.referenceNumber);
+                }
+              }}
+              className="gap-1.5 bg-sky-700 hover:bg-sky-800 text-white"
+            >
+              <Printer className="w-4 h-4" />
+              Cetak Surat Jalan (BPB)
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Printable Surat Jalan Modal ──────────────────────────── */}
+      <SuratJalanPrintModal
+        open={printData !== null}
+        onClose={() => setPrintData(null)}
+        data={printData}
+      />
     </div>
   );
 }

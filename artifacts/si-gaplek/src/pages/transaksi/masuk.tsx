@@ -14,17 +14,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Eye, ScanBarcode, Trash2, PackagePlus, FolderOpen } from "lucide-react";
+import { Plus, Pencil, Eye, ScanBarcode, Trash2, PackagePlus, FolderOpen, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { BuktiPenerimaanPrintModal, type BuktiPenerimaanData } from "@/components/print/bukti-penerimaan-print";
 
 interface StockIn {
   id: number;
-  referenceNumber: string;
+  referenceNumber?: string;
+  referenceNo?: string;
   supplierId: number | null;
   notes: string | null;
   status: string;
   createdAt: string;
+  transactionDate?: string;
   supplierName?: string;
+  warehouseName?: string;
   itemCount?: number;
   totalItems?: number;
 }
@@ -49,6 +53,7 @@ interface StockInDetail {
 export default function BarangMasukPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewId, setViewId] = useState<number | null>(null);
+  const [printData, setPrintData] = useState<BuktiPenerimaanData | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
   const barcodeRef = useRef<HTMLInputElement>(null);
   const [details, setDetails] = useState<StockInDetail[]>([]);
@@ -56,6 +61,37 @@ export default function BarangMasukPage() {
   const [detailForm, setDetailForm] = useState({ itemId: "", quantity: "1", unitPrice: "", locationId: "", notes: "" });
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const handlePrintById = async (id: number, fallbackRef?: string) => {
+    try {
+      const detail = await apiFetch<any>(`/api/stock-in/${id}`);
+      setPrintData({
+        id: detail.id,
+        referenceNo: detail.referenceNo || fallbackRef || `BM-${id}`,
+        transactionDate: detail.transactionDate || detail.createdAt || new Date().toISOString(),
+        supplierName: detail.supplierName,
+        warehouseName: detail.warehouseName,
+        createdByName: detail.createdByName,
+        notes: detail.notes,
+        items: (detail.items || []).map((it: any) => ({
+          id: it.id,
+          itemCode: it.itemCode,
+          itemName: it.itemName,
+          quantity: it.quantity,
+          unitName: it.unitName || "Buah",
+          unitPrice: it.unitPrice ? parseFloat(String(it.unitPrice)) : undefined,
+          locationName: it.locationName,
+          notes: it.notes,
+        })),
+      });
+    } catch (err: any) {
+      toast({
+        title: "Gagal memuat Bukti Penerimaan",
+        description: err.message || "Terjadi kesalahan saat memuat data.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const { data: stockInsData, isLoading } = useQuery({ queryKey: ["stock-in"], queryFn: () => apiFetch<StockIn[] | { data: StockIn[] }>("/api/stock-in"), refetchInterval: 15_000 });
   const { data: itemsData } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[] | { data: Item[] }>("/api/items?limit=100") });
@@ -197,15 +233,37 @@ export default function BarangMasukPage() {
                 !stockIns?.length ? <TableRow><TableCell colSpan={6} className="text-center py-16 text-muted-foreground"><FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className="font-medium">Belum ada transaksi masuk</p><p className="text-xs mt-1">Klik Transaksi Baru untuk memulai</p></TableCell></TableRow> :
                   stockIns.map(s => (
                     <TableRow key={s.id} className="group">
-                      <TableCell className="font-mono font-medium">{s.referenceNumber}</TableCell>
-                      <TableCell className="text-sm">{formatDate(s.createdAt)}</TableCell>
+                      <TableCell className="font-mono font-medium">{s.referenceNumber || s.referenceNo}</TableCell>
+                      <TableCell className="text-sm">{formatDate(s.transactionDate || s.createdAt)}</TableCell>
                       <TableCell className="text-sm">{s.supplierName ?? "—"}</TableCell>
                       <TableCell className="text-right font-medium">{s.itemCount ?? 0} item</TableCell>
                       <TableCell><Badge variant={s.status === "completed" ? "default" : "secondary"}>{s.status === "completed" ? "Selesai" : "Draft"}</Badge></TableCell>
                       <TableCell className="text-right">
-                        <Tooltip><TooltipTrigger asChild>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setViewId(s.id)}><Eye className="w-4 h-4" /></Button>
-                        </TooltipTrigger><TooltipContent>Lihat Detail</TooltipContent></Tooltip>
+                        <div className="flex items-center justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1 px-2 text-xs text-emerald-700 border-emerald-300 dark:text-emerald-400 dark:border-emerald-800"
+                                onClick={() => handlePrintById(s.id, s.referenceNumber || s.referenceNo)}
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Bukti Masuk</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Cetak Bukti Penerimaan (GRN)</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setViewId(s.id)}>
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Lihat Detail</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -296,9 +354,27 @@ export default function BarangMasukPage() {
               </Table>
             </div>
           )}
-          <DialogFooter><Button onClick={() => setViewId(null)}>Tutup</Button></DialogFooter>
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+            <Button variant="outline" onClick={() => setViewId(null)}>Tutup</Button>
+            <Button
+              onClick={() => {
+                if (viewId) handlePrintById(viewId, viewData?.stockIn?.referenceNumber);
+              }}
+              className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
+            >
+              <Printer className="w-4 h-4" />
+              Cetak Bukti Penerimaan (GRN)
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Printable Bukti Penerimaan Modal ────────────────────── */}
+      <BuktiPenerimaanPrintModal
+        open={printData !== null}
+        onClose={() => setPrintData(null)}
+        data={printData}
+      />
     </div>
   );
 }

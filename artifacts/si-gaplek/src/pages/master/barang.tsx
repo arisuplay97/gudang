@@ -24,9 +24,12 @@ import {
   Eye, Printer, Download, Tag, X, ChevronLeft, ChevronRight,
   ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, CheckCircle2,
   AlertCircle, XCircle, Radio, MoreHorizontal, ScanLine, Info,
-  Filter, Columns3,
+  Filter, Columns3, FileSpreadsheet, Archive,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ImportMaterialDialog } from "@/components/import-material-dialog";
+import { KartuStokDialog } from "@/components/kartu-stok-dialog";
+import { LabelQrPrintDialog, type LabelItem } from "@/components/label-qr-print-dialog";
 
 /* ── Types ──────────────────────────────────────────────────── */
 interface Item {
@@ -159,6 +162,9 @@ export default function BarangPage() {
   const [editing, setEditing] = useState<Item | null>(null);
   const [detailItem, setDetailItem] = useState<Item | null>(null);
   const [cameraScanOpen, setCameraScanOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [stockCardItemId, setStockCardItemId] = useState<number | null>(null);
+  const [labelPrintItems, setLabelPrintItems] = useState<LabelItem[]>([]);
 
   const [form, setForm] = useState({
     code: "", name: "", barcode: "", categoryId: "", unitId: "", supplierId: "",
@@ -334,7 +340,14 @@ export default function BarangPage() {
           <h1 className="text-2xl font-bold tracking-tight">Master Barang</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Kelola material, stok, lokasi, barcode, dan status barang.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="gap-2 text-emerald-700 border-emerald-300 dark:text-emerald-400 dark:border-emerald-800"
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Import Excel
+          </Button>
           <Button variant="outline" onClick={() => setCameraScanOpen(true)} className="gap-2">
             <ScanLine className="w-4 h-4" /> Scan Barcode
           </Button>
@@ -521,6 +534,24 @@ export default function BarangPage() {
             }}>
               <Printer className="w-3.5 h-3.5" /> Print Barcode
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1.5 text-sky-700 border-sky-300 dark:text-sky-400 dark:border-sky-800"
+              onClick={() => {
+                const selected = items.filter(i => selectedIds.includes(i.id)).map(i => ({
+                  id: i.id,
+                  code: i.code,
+                  name: i.name,
+                  barcode: i.barcode,
+                  categoryName: i.categoryName,
+                  unitName: i.unitName,
+                }));
+                setLabelPrintItems(selected);
+              }}
+            >
+              <Tag className="w-3.5 h-3.5" /> Cetak Label QR ({selectedIds.length})
+            </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export
             </Button>
@@ -669,6 +700,39 @@ export default function BarangPage() {
                             <TableCell className="text-sm">{item.supplierName ?? <span className="text-muted-foreground">-</span>}</TableCell>
                             <TableCell className="text-right pr-4">
                               <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-sky-600 hover:text-sky-700 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                                      onClick={() => setStockCardItemId(item.id)}
+                                    >
+                                      <Archive className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Kartu Stok (Ledger)</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                      onClick={() => setLabelPrintItems([{
+                                        id: item.id,
+                                        code: item.code,
+                                        name: item.name,
+                                        barcode: item.barcode,
+                                        categoryName: item.categoryName,
+                                        unitName: item.unitName,
+                                      }])}
+                                    >
+                                      <Tag className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Cetak Label QR</TooltipContent>
+                                </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDetailItem(item)}>
@@ -891,16 +955,40 @@ export default function BarangPage() {
                   )}
 
                   {/* Action buttons */}
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 gap-1.5" onClick={() => handlePrint(detailItem)}>
-                      <Printer className="w-4 h-4" /> Print
+                  <div className="space-y-2 pt-1">
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 text-sky-700 border-sky-300 dark:text-sky-400 dark:border-sky-800 font-medium"
+                      onClick={() => setStockCardItemId(detailItem.id)}
+                    >
+                      <Archive className="w-4 h-4" /> Buka Kartu Stok Material (Ledger)
                     </Button>
-                    <Button variant="outline" className="flex-1 gap-1.5" onClick={() => { setDetailItem(null); openEdit(detailItem); }}>
-                      <Pencil className="w-4 h-4" /> Edit
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 text-emerald-700 border-emerald-300 dark:text-emerald-400 dark:border-emerald-800 font-medium"
+                      onClick={() => setLabelPrintItems([{
+                        id: detailItem.id,
+                        code: detailItem.code,
+                        name: detailItem.name,
+                        barcode: detailItem.barcode,
+                        categoryName: detailItem.categoryName,
+                        unitName: detailItem.unitName,
+                      }])}
+                    >
+                      <Tag className="w-4 h-4" /> Cetak Stiker Label QR & Rak
                     </Button>
-                    <Button variant="outline" className="flex-1 gap-1.5 text-red-500 hover:text-red-600" onClick={() => { setDetailItem(null); setDeleteId(detailItem.id); }}>
-                      <Trash2 className="w-4 h-4" /> Hapus
-                    </Button>
+
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="outline" className="flex-1 gap-1.5" onClick={() => handlePrint(detailItem)}>
+                        <Printer className="w-4 h-4" /> Print Barcode
+                      </Button>
+                      <Button variant="outline" className="flex-1 gap-1.5" onClick={() => { setDetailItem(null); openEdit(detailItem); }}>
+                        <Pencil className="w-4 h-4" /> Edit
+                      </Button>
+                      <Button variant="outline" className="flex-1 gap-1.5 text-red-500 hover:text-red-600" onClick={() => { setDetailItem(null); setDeleteId(detailItem.id); }}>
+                        <Trash2 className="w-4 h-4" /> Hapus
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -908,6 +996,27 @@ export default function BarangPage() {
           })()}
         </SheetContent>
       </Sheet>
+
+      {/* ── Dialog Import Material dari Excel ─────────────────── */}
+      <ImportMaterialDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={() => qc.invalidateQueries({ queryKey: ["items"] })}
+      />
+
+      {/* ── Dialog Kartu Stok Material (Ledger) ───────────────── */}
+      <KartuStokDialog
+        itemId={stockCardItemId}
+        open={stockCardItemId !== null}
+        onClose={() => setStockCardItemId(null)}
+      />
+
+      {/* ── Dialog Cetak Stiker Label QR Material & Rak ───────── */}
+      <LabelQrPrintDialog
+        items={labelPrintItems}
+        open={labelPrintItems.length > 0}
+        onClose={() => setLabelPrintItems([])}
+      />
     </div>
   );
 }
