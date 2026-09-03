@@ -52,13 +52,18 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const verifiedMarkerIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
+const verifiedMarkerIcon = L.divIcon({
+  className: "gis-radar-marker",
+  html: `
+    <div class="relative flex items-center justify-center w-8 h-8 cursor-pointer group pointer-events-auto">
+      <span class="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-45 animate-ping" style="animation-duration: 2.2s;"></span>
+      <span class="absolute inline-flex w-5 h-5 rounded-full bg-emerald-500/25"></span>
+      <span class="relative inline-flex rounded-full w-3.5 h-3.5 bg-emerald-600 border-2 border-white shadow-md transition-transform duration-200 group-hover:scale-125"></span>
+    </div>
+  `,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -16],
 });
 
 interface TrackingItem {
@@ -846,6 +851,15 @@ export default function CabangTrackingPage() {
           </div>
 
           <div className="h-[500px] w-full relative">
+            <style>{`
+              .gis-radar-marker {
+                background: transparent !important;
+                border: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+            `}</style>
             <MapContainer
               center={[-8.6705, 116.1155]} // Lombok center
               zoom={11}

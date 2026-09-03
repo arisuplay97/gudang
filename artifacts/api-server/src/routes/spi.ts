@@ -228,13 +228,17 @@ router.get("/gis/material-locations", requireAuth, async (req, res): Promise<voi
         .select({
             evidenceId: installationEvidenceTable.id,
             evidenceUuid: installationEvidenceTable.uuid,
+            photoUrl: installationEvidenceTable.photoUrl,
             latitude: installationEvidenceTable.latitude,
             longitude: installationEvidenceTable.longitude,
             gpsAccuracy: installationEvidenceTable.gpsAccuracy,
             allocationQuantity: installationAllocationsTable.quantity,
+            plannedLatitude: installationAllocationsTable.plannedLatitude,
+            plannedLongitude: installationAllocationsTable.plannedLongitude,
             itemName: itemsTable.name,
             itemCode: itemsTable.code,
             referenceNo: stockOutTable.referenceNo,
+            branchId: branchesTable.id,
             branchName: branchesTable.name,
             verifiedAt: materialVerificationsTable.verifiedAt,
             verifiedLatitude: materialVerificationsTable.verifiedLatitude,
@@ -267,14 +271,22 @@ router.get("/gis/material-locations", requireAuth, async (req, res): Promise<voi
         },
         properties: {
             evidenceId: loc.evidenceId,
+            evidenceUuid: loc.evidenceUuid,
+            photoUrl: loc.photoUrl,
             itemName: loc.itemName,
             itemCode: loc.itemCode,
             quantity: loc.allocationQuantity,
             referenceNo: loc.referenceNo,
+            branchId: loc.branchId,
             branchName: loc.branchName,
             verifiedAt: loc.verifiedAt,
-            locationMismatch: loc.locationMismatch,
-            deviationMeters: loc.locationDeviationMeters,
+            installedAt: loc.installedAt,
+            gpsAccuracy: loc.gpsAccuracy ? parseFloat(String(loc.gpsAccuracy)) : null,
+            locationMismatch: Boolean(loc.locationMismatch),
+            deviationMeters: loc.locationDeviationMeters ? parseFloat(String(loc.locationDeviationMeters)) : null,
+            plannedCoordinates: (loc.plannedLongitude && loc.plannedLatitude)
+                ? [parseFloat(String(loc.plannedLongitude)), parseFloat(String(loc.plannedLatitude))] as [number, number]
+                : null,
         },
     }));
 
