@@ -107,32 +107,31 @@ function useCountUp(target: number, duration = 600) {
 }
 
 /* ── KPI Card Component ──────────────────────────────────────── */
-function KpiCard({ label, value, icon: Icon, color, delay = 0, onClick }: {
+function KpiCard({ label, value, icon: Icon, isActive = false, delay = 0, onClick }: {
   label: string; value: number; icon: React.ElementType;
-  color: string; delay?: number; onClick?: () => void;
+  isActive?: boolean; delay?: number; onClick?: () => void;
 }) {
   const animatedValue = useCountUp(value);
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
+      transition={{ duration: 0.3, delay }}
     >
       <Card
         className={cn(
-          "cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
+          "cursor-pointer transition-all border border-border/80 bg-card hover:border-foreground/30 shadow-xs rounded-xl",
+          isActive && "border-foreground/50 bg-muted/30"
         )}
         onClick={onClick}
       >
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-              <p className="text-2xl font-bold mt-1">{formatNumber(animatedValue)}</p>
-            </div>
-            <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", color)}>
-              <Icon className="w-5 h-5" />
-            </div>
+        <CardContent className="p-3.5 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="text-2xl font-semibold tracking-tight text-foreground mt-0.5">{formatNumber(animatedValue)}</p>
+          </div>
+          <div className="w-8 h-8 rounded-md bg-muted/60 flex items-center justify-center text-muted-foreground">
+            <Icon className="w-4 h-4" />
           </div>
         </CardContent>
       </Card>
@@ -339,38 +338,69 @@ export default function BarangPage() {
           <Button variant="outline" onClick={() => setCameraScanOpen(true)} className="gap-2">
             <ScanLine className="w-4 h-4" /> Scan Barcode
           </Button>
-          <Button onClick={openCreate} className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
+          <Button onClick={openCreate} className="gap-2 shadow-xs">
             <Plus className="w-4 h-4" /> Tambah Barang
           </Button>
         </div>
       </motion.div>
 
       {/* ── KPI Cards ───────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard
-          label="Total Barang" value={summary?.total ?? 0}
-          icon={Package} color="bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400"
+          label="Total Barang"
+          value={summary?.total ?? 0}
+          icon={Package}
+          isActive={!filterStatus && !filterTracking && !filterCategory}
           delay={0}
+          onClick={() => { setFilterStatus(""); setFilterCategory(""); setFilterTracking(""); }}
         />
         <KpiCard
-          label="Stok Aman" value={summary?.stokAman ?? 0}
-          icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
-          delay={0.05} onClick={() => { setFilterStatus("AMAN"); setFilterCategory(""); setFilterTracking(""); }}
+          label="Stok Aman"
+          value={summary?.stokAman ?? 0}
+          icon={CheckCircle2}
+          isActive={filterStatus === "AMAN"}
+          delay={0.04}
+          onClick={() => {
+            setFilterStatus(filterStatus === "AMAN" ? "" : "AMAN");
+            setFilterCategory("");
+            setFilterTracking("");
+          }}
         />
         <KpiCard
-          label="Stok Menipis" value={summary?.stokMenipis ?? 0}
-          icon={AlertTriangle} color="bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400"
-          delay={0.1} onClick={() => { setFilterStatus("MENIPIS"); setFilterCategory(""); setFilterTracking(""); }}
+          label="Stok Menipis"
+          value={summary?.stokMenipis ?? 0}
+          icon={AlertTriangle}
+          isActive={filterStatus === "MENIPIS"}
+          delay={0.08}
+          onClick={() => {
+            setFilterStatus(filterStatus === "MENIPIS" ? "" : "MENIPIS");
+            setFilterCategory("");
+            setFilterTracking("");
+          }}
         />
         <KpiCard
-          label="Stok Habis" value={summary?.stokHabis ?? 0}
-          icon={XCircle} color="bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
-          delay={0.15} onClick={() => { setFilterStatus("HABIS"); setFilterCategory(""); setFilterTracking(""); }}
+          label="Stok Habis"
+          value={summary?.stokHabis ?? 0}
+          icon={XCircle}
+          isActive={filterStatus === "HABIS"}
+          delay={0.12}
+          onClick={() => {
+            setFilterStatus(filterStatus === "HABIS" ? "" : "HABIS");
+            setFilterCategory("");
+            setFilterTracking("");
+          }}
         />
         <KpiCard
-          label="Tracked" value={summary?.tracked ?? 0}
-          icon={Radio} color="bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-400"
-          delay={0.2} onClick={() => { setFilterTracking("TRACKED"); setFilterCategory(""); setFilterStatus(""); }}
+          label="Tracked"
+          value={summary?.tracked ?? 0}
+          icon={Radio}
+          isActive={filterTracking === "TRACKED"}
+          delay={0.16}
+          onClick={() => {
+            setFilterTracking(filterTracking === "TRACKED" ? "" : "TRACKED");
+            setFilterCategory("");
+            setFilterStatus("");
+          }}
         />
       </div>
 
@@ -381,15 +411,18 @@ export default function BarangPage() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="flex items-center gap-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3"
+            className="flex items-center justify-between gap-3 bg-muted/30 border border-border rounded-xl px-4 py-2.5 text-xs text-muted-foreground"
           >
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-800 dark:text-amber-300 flex-1">
-              <span className="font-semibold">{lowStockCount} barang</span> stok menipis dan memerlukan pengadaan ulang.
-            </p>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-muted-foreground shrink-0" />
+              <p>
+                <span className="font-semibold text-foreground">{lowStockCount} barang</span> stok menipis dan memerlukan pengadaan ulang.
+              </p>
+            </div>
             <Button
-              variant="ghost" size="sm"
-              className="text-amber-700 hover:text-amber-900 dark:text-amber-400 text-xs"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs shadow-xs"
               onClick={() => { setFilterStatus("MENIPIS"); setFilterCategory(""); setFilterTracking(""); }}
             >
               Lihat Detail →
