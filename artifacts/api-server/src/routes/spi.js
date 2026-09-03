@@ -116,7 +116,7 @@ router.get("/spi/pending", requireAuth, requireRole("SPI", "ADMIN"), async (req,
     res.json({ data: rows, pagination: { page, limit, total: Number(count), totalPages: Math.ceil(Number(count) / limit) } });
 });
 // ─── VERIFY EVIDENCE (Section 34, 35) ───
-router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI"), async (req, res) => {
+router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"), async (req, res) => {
     const { status, notes } = req.body; // TERVERIFIKASI | DITOLAK
     if (!["TERVERIFIKASI", "DITOLAK"].includes(status)) {
         res.status(400).json({ error: "Status harus TERVERIFIKASI atau DITOLAK" });
