@@ -58,31 +58,37 @@ export function BarcodePrintLabel({
 }) {
     return (
         <div
-            className="flex flex-col items-center gap-1.5 p-4 bg-white text-black"
+            className="flex flex-col items-center justify-between text-center aspect-square w-[230px] p-3.5 bg-white text-black border-2 border-zinc-900 rounded-lg shadow-xs"
             id="barcode-print-label"
         >
-            <img src="/logo-perumdam.png" alt="Logo Perumdam" className="h-10 w-auto object-contain mb-0.5" />
-            <p className="text-[10px] font-bold text-center tracking-wider uppercase leading-tight">
-                PERUMDAM TIRTA ARDHIA RINJANI
-            </p>
-            <p className="text-sm font-semibold text-center leading-tight">
-                {itemName}
-            </p>
-            <p className="text-xs font-mono text-gray-600">{itemCode}</p>
-            <QRCodeSVG
-                value={barcode}
-                size={160}
-                level="H"
-                bgColor="#ffffff"
-                fgColor="#000000"
-                imageSettings={{
-                    src: "/logo-qr-icon.png",
-                    height: 38,
-                    width: 38,
-                    excavate: true,
-                }}
-            />
-            <p className="text-xs font-mono font-bold">{barcode}</p>
+            <div className="w-full pb-1 border-b border-zinc-300">
+                <p className="text-[9px] font-black uppercase tracking-wider text-zinc-700 leading-tight">
+                    PERUMDAM TIRTA ARDHIA
+                </p>
+                <p className="text-xs font-bold text-zinc-950 line-clamp-2 leading-snug mt-0.5">
+                    {itemName}
+                </p>
+            </div>
+            <div className="w-full py-1">
+                <p className="text-sm font-mono font-black tracking-widest text-zinc-950 uppercase">
+                    {itemCode}
+                </p>
+            </div>
+            <div className="p-1.5 bg-white border border-zinc-300 rounded-md flex items-center justify-center">
+                <QRCodeSVG
+                    value={barcode}
+                    size={120}
+                    level="H"
+                    bgColor="#ffffff"
+                    fgColor="#000000"
+                    imageSettings={{
+                        src: "/logo-qr-icon.png",
+                        height: 32,
+                        width: 32,
+                        excavate: true,
+                    }}
+                />
+            </div>
         </div>
     );
 }

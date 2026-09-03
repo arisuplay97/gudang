@@ -106,99 +106,91 @@ export function LabelQrPrintDialog({ items, open, onClose }: LabelQrPrintDialogP
         {/* ── Printable Labels Container ── */}
         <div className="flex-1 overflow-y-auto p-6 bg-muted/30 dark:bg-zinc-950/60 print:p-0 print:bg-white flex justify-center">
           {layoutMode === "sheet" ? (
-            /* Sheet Mode (A4 Grid 3 columns) */
-            <div className="w-full max-w-[800px] bg-white text-zinc-900 p-6 rounded-lg shadow-sm print:shadow-none print:p-0 print:border-0 border border-zinc-200">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 print:grid-cols-3 gap-3 print:gap-2">
+            /* Sheet Mode (A4 Grid Square Labels) */
+            <div className="w-full max-w-[860px] bg-white text-zinc-900 p-6 rounded-lg shadow-sm print:shadow-none print:p-0 print:border-0 border border-zinc-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 print:grid-cols-3 gap-4 print:gap-3">
                 {printItems.map((item, index) => (
                   <div
                     key={index}
-                    className="border border-zinc-400 p-2.5 rounded-sm bg-white text-black flex flex-col justify-between h-[120px] print:h-[110px] print:break-inside-avoid shadow-2xs print:shadow-none"
+                    className="border-2 border-zinc-900 p-3.5 rounded-lg bg-white text-black flex flex-col items-center justify-between text-center aspect-square shadow-xs print:shadow-none print:break-inside-avoid print:border-2"
                   >
-                    <div className="border-b border-zinc-300 pb-1">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-zinc-800 leading-tight">
+                    {/* Header: Perumdam & Nama Barang */}
+                    <div className="w-full pb-1.5 border-b border-zinc-300">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-zinc-700 leading-tight">
                         PERUMDAM TIRTA ARDHIA
                       </p>
-                      <p className="text-[10px] font-bold text-zinc-950 truncate leading-snug">
+                      <p className="text-xs font-bold text-zinc-950 line-clamp-2 leading-snug mt-0.5 px-1">
                         {item.name}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <div className="space-y-0.5 text-[9px] min-w-0">
-                        <p className="font-mono font-bold text-zinc-900 truncate">
-                          {item.code}
-                        </p>
-                        <p className="text-zinc-600 truncate text-[8px]">
-                          {item.categoryName || "Aksesoris"}
-                        </p>
-                        <p className="text-zinc-500 font-mono text-[8px] truncate">
-                          {item.rackCode ? `Rak: ${item.rackCode}` : `Satuan: ${item.unitName || "Buah"}`}
-                        </p>
-                      </div>
+                    {/* Kode diatas barcode */}
+                    <div className="w-full py-1">
+                      <p className="text-sm font-mono font-black tracking-widest text-zinc-950 uppercase">
+                        {item.code}
+                      </p>
+                    </div>
 
-                      <div className="shrink-0 bg-white p-0.5 border border-zinc-200 rounded">
-                        <QRCodeSVG
-                          value={item.barcode || item.code}
-                          size={54}
-                          level="H"
-                          bgColor="#ffffff"
-                          fgColor="#000000"
-                          imageSettings={{
-                            src: "/logo-qr-icon.png",
-                            height: 14,
-                            width: 14,
-                            excavate: true,
-                          }}
-                        />
-                      </div>
+                    {/* Large QR Code with prominent center logo */}
+                    <div className="p-1.5 bg-white border border-zinc-300 rounded-md flex items-center justify-center">
+                      <QRCodeSVG
+                        value={item.barcode || item.code}
+                        size={110}
+                        level="H"
+                        bgColor="#ffffff"
+                        fgColor="#000000"
+                        imageSettings={{
+                          src: "/logo-qr-icon.png",
+                          height: 28,
+                          width: 28,
+                          excavate: true,
+                        }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            /* Thermal Mode (Compact 50x30 mm layout) */
-            <div className="w-full max-w-[400px] space-y-3 print:space-y-0">
+            /* Thermal Mode (Square Sticker layout) */
+            <div className="w-full max-w-[400px] space-y-4 print:space-y-0">
               {printItems.map((item, index) => (
                 <div
                   key={index}
-                  className="w-full bg-white text-zinc-900 border-2 border-zinc-800 p-2 rounded flex items-center justify-between gap-2 h-[110px] print:h-[110px] print:break-after-page print:border-0"
+                  className="w-full max-w-[240px] aspect-square bg-white text-zinc-900 border-2 border-zinc-900 p-3.5 rounded-lg flex flex-col items-center justify-between text-center mx-auto print:w-[60mm] print:h-[60mm] print:break-after-page print:border-2"
                 >
-                  <div className="flex-1 min-w-0 space-y-0.5">
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <img src="/logo-perumdam.png" alt="Logo" className="h-3.5 w-auto object-contain shrink-0" />
-                      <p className="text-[7px] font-black uppercase tracking-wider text-zinc-700 leading-none">
-                        PERUMDAM LOMBOK TENGAH
-                      </p>
-                    </div>
-                    <p className="text-[10px] font-bold text-zinc-900 line-clamp-2 leading-tight">
+                  {/* Header */}
+                  <div className="w-full pb-1.5 border-b border-zinc-300">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-zinc-700 leading-none">
+                      PERUMDAM LOMBOK TENGAH
+                    </p>
+                    <p className="text-xs font-bold text-zinc-950 line-clamp-2 leading-tight mt-0.5">
                       {item.name}
-                    </p>
-                    <p className="text-[9px] font-mono font-extrabold text-zinc-950 pt-0.5">
-                      {item.code}
-                    </p>
-                    <p className="text-[7.5px] text-zinc-600 font-mono truncate">
-                      {item.categoryName || "-"} • {item.unitName || "Buah"}
                     </p>
                   </div>
 
-                  <div className="shrink-0 bg-white p-1 border border-zinc-300 rounded flex flex-col items-center">
+                  {/* Kode diatas barcode */}
+                  <div className="w-full py-1">
+                    <p className="text-sm font-mono font-black tracking-widest text-zinc-950 uppercase">
+                      {item.code}
+                    </p>
+                  </div>
+
+                  {/* Large QR Code with prominent logo */}
+                  <div className="p-1.5 bg-white border border-zinc-300 rounded flex items-center justify-center">
                     <QRCodeSVG
                       value={item.barcode || item.code}
-                      size={66}
+                      size={115}
                       level="H"
                       bgColor="#ffffff"
                       fgColor="#000000"
                       imageSettings={{
                         src: "/logo-qr-icon.png",
-                        height: 17,
-                        width: 17,
+                        height: 30,
+                        width: 30,
                         excavate: true,
                       }}
                     />
-                    <span className="text-[7px] font-mono text-zinc-500 mt-0.5 font-bold">
-                      {item.barcode || item.code}
-                    </span>
                   </div>
                 </div>
               ))}
