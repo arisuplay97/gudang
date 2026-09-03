@@ -51,10 +51,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 /* ── Type Definitions ── */
-export type AiProvider = "gemini" | "openai" | "claude" | "deepseek" | "ollama";
+export type AiProvider = "gemini" | "openai" | "claude" | "deepseek" | "ollama" | "custom";
 
 export interface AiConfig {
   provider: AiProvider;
+  customProviderName?: string;
   apiKey: string;
   model: string;
   customBaseUrl?: string;
@@ -97,11 +98,11 @@ const PROVIDER_MODELS: Record<AiProvider, { label: string; models: string[] }> =
   },
   openai: {
     label: "OpenAI",
-    models: ["gpt-4o", "gpt-4o-mini", "o3-mini"],
+    models: ["gpt-4o", "gpt-4o-mini", "o3-mini", "gpt-4-turbo"],
   },
   claude: {
     label: "Anthropic Claude",
-    models: ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+    models: ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
   },
   deepseek: {
     label: "DeepSeek",
@@ -109,7 +110,11 @@ const PROVIDER_MODELS: Record<AiProvider, { label: string; models: string[] }> =
   },
   ollama: {
     label: "Local LLM / Ollama",
-    models: ["llama3.2", "qwen2.5-coder", "mistral", "custom"],
+    models: ["llama3.2", "qwen2.5-coder", "mistral", "deepseek-r1:8b"],
+  },
+  custom: {
+    label: "Custom / Mandiri (OpenAI-Compatible REST)",
+    models: ["custom-model", "llama-3.3-70b", "mixtral-8x7b", "qwen-2.5-72b"],
   },
 };
 
@@ -319,11 +324,14 @@ export default function AiAssistantPage() {
       .join("; ")}).
 - Pemasangan Terverifikasi SPI: ${verifiedGis.length} titik.
 - Cabang Pelaksana: Cabang Praya, Cabang Pujut, Cabang Kopang, Cabang Jonggat.
-- Kantor Pusat: Jl. Pariwisata No. 1 Praya, Lombok Tengah.
+- Kantor Pusat: Jl. Jend. A Yani No 11, Telp: 0821-1400-5005, Praya, Lombok Tengah.
 `;
 
-    // If user has provided their real API Key:
-    if (config.apiKey && config.apiKey.trim().length > 5) {
+    // If user has provided their real API Key (or for Ollama/Custom local endpoints without key):
+    const hasCustomUrl = !!config.customBaseUrl?.trim();
+    const hasValidKey = !!(config.apiKey && config.apiKey.trim().length > 3);
+
+    if (hasValidKey || (config.provider === "ollama" || config.provider === "custom" && hasCustomUrl)) {
       try {
         if (config.provider === "gemini") {
           const res = await fetch(
@@ -337,7 +345,7 @@ export default function AiAssistantPage() {
                     role: "user",
                     parts: [
                       {
-                        text: `Anda adalah AI Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dengan gaya bahasa resmi Indonesia, ringkas, taktis, berbasis data riil, dan sertakan tabel analitik jika relevan.\n\nKonteks Data Gudang Terkini:\n${warehouseContext}\n\nPertanyaan Pengguna: ${userPrompt}`,
+                        text: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dengan gaya bahasa resmi Indonesia, ringkas, taktis, berbasis data riil, dan sertakan tabel analitik jika relevan.\n\nKonteks Data Gudang Terkini:\n${warehouseContext}\n\nPertanyaan Pengguna: ${userPrompt}`,
                       },
                     ],
                   },
@@ -368,24 +376,65 @@ export default function AiAssistantPage() {
           };
         }
 
-        // OpenAI / DeepSeek / Custom endpoint
+        if (config.provider === "claude" && !config.customBaseUrl) {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": config.apiKey.trim(),
+              "anthropic-version": "2023-06-01",
+              "dangerously-allow-browser": "true",
+            },
+            body: JSON.stringify({
+              model: config.model,
+              max_tokens: 1500,
+              system: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data gudang berikut:\n${warehouseContext}`,
+              messages: [{ role: "user", content: userPrompt }],
+            }),
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData?.error?.message || `HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          const reply =
+            data?.content?.[0]?.text ||
+            "Maaf, tidak ada respon yang diterima dari model AI.";
+          const actionLinks: ActionLink[] = [
+            { label: "Buka Peta Material GIS", href: "/spi/gis", icon: "map" },
+            { label: "Lihat Master Material", href: "/master/barang", icon: "box" },
+          ];
+          return {
+            content: reply,
+            isLocalEngine: false,
+            actionLinks,
+          };
+        }
+
+        // OpenAI / DeepSeek / Ollama / Custom (OpenAI-compatible) endpoint
         const endpoint =
           config.provider === "deepseek"
-            ? "https://api.deepseek.com/v1/chat/completions"
+            ? (config.customBaseUrl || "https://api.deepseek.com/v1/chat/completions")
+            : config.provider === "ollama"
+            ? `${config.customBaseUrl || "http://localhost:11434"}/v1/chat/completions`
             : config.customBaseUrl || "https://api.openai.com/v1/chat/completions";
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (config.apiKey?.trim()) {
+          headers["Authorization"] = `Bearer ${config.apiKey.trim()}`;
+        }
 
         const res = await fetch(endpoint, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${config.apiKey.trim()}`,
-          },
+          headers,
           body: JSON.stringify({
             model: config.model,
             messages: [
               {
                 role: "system",
-                content: `Anda adalah AI Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data gudang berikut:\n${warehouseContext}`,
+                content: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data gudang berikut:\n${warehouseContext}`,
               },
               { role: "user", content: userPrompt },
             ],
@@ -717,13 +766,13 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="text-sm font-bold text-foreground truncate">
-                  AI Assistant Logistik & Distribusi
+                  TIARA AI - Asisten Logistik & Distribusi
                 </h1>
                 <Badge
                   variant="outline"
                   className="text-[10px] py-0 border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/30 hidden sm:inline-flex"
                 >
-                  {config.apiKey ? config.model : "Mesin Analitik Lokal"}
+                  {config.apiKey || config.customBaseUrl ? `${config.customProviderName || PROVIDER_MODELS[config.provider]?.label || config.provider}: ${config.model}` : "Mesin Analitik Lokal"}
                 </Badge>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">
@@ -864,7 +913,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                       <span className="font-semibold">
                         {msg.role === "user"
                           ? "Anda"
-                          : `AI Assistant (${
+                          : `TIARA AI (${
                               msg.isLocalEngine ? "Analitik Lokal" : config.model
                             })`}
                       </span>
@@ -1028,7 +1077,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                   handleSubmit();
                 }
               }}
-              placeholder="Ketik pertanyaan atau instruksi logistik... (Contoh: 'Tampilkan sisa pipa HDPE dan titik deviasi GIS')"
+              placeholder="Tanyakan apa saja kepada TIARA AI terkait stok pipa, GIS, deviasi lapangan, surat jalan..."
               className="w-full min-h-[50px] max-h-[160px] p-1.5 text-xs border-0 focus-visible:ring-0 resize-none bg-transparent"
               rows={2}
             />
@@ -1103,24 +1152,82 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
               </Select>
             </div>
 
-            {/* Model Selector */}
+            {/* If Custom Provider: Name & Endpoint */}
+            {config.provider === "custom" && (
+              <div className="space-y-3 p-3 rounded-lg bg-muted/40 border border-border">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-foreground">Nama Penyedia Kustom</label>
+                  <Input
+                    value={config.customProviderName || ""}
+                    onChange={(e) =>
+                      setConfig({ ...config, customProviderName: e.target.value })
+                    }
+                    placeholder="Contoh: Groq, OpenRouter, Together AI, vLLM"
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-foreground">Endpoint Base URL (OpenAI-Compatible)</label>
+                  <Input
+                    value={config.customBaseUrl || ""}
+                    onChange={(e) =>
+                      setConfig({ ...config, customBaseUrl: e.target.value })
+                    }
+                    placeholder="Contoh: https://api.groq.com/openai/v1/chat/completions"
+                    className="h-9 text-xs font-mono"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Mendukung endpoint format chat completions OpenAI (OpenRouter, Groq, Mistral, dll).
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Base URL (if Ollama) */}
+            {config.provider === "ollama" && (
+              <div className="space-y-1.5">
+                <label className="font-semibold text-foreground">Endpoint Base URL</label>
+                <Input
+                  value={config.customBaseUrl || "http://localhost:11434"}
+                  onChange={(e) =>
+                    setConfig({ ...config, customBaseUrl: e.target.value })
+                  }
+                  placeholder="http://localhost:11434"
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+            )}
+
+            {/* Model Selector & Manual Edit */}
             <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">Pilihan Model</label>
-              <Select
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-foreground">Pilihan Model AI (Bisa Diedit Manual)</label>
+                <span className="text-[10px] text-muted-foreground">Ketik bebas atau klik preset</span>
+              </div>
+              <Input
                 value={config.model}
-                onValueChange={(m) => setConfig({ ...config, model: m })}
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROVIDER_MODELS[config.provider]?.models.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                placeholder="Ketik nama model (misal: gpt-4o, gemini-1.5-pro, claude-3-7-sonnet, deepseek-chat)..."
+                className="h-9 text-xs font-mono"
+              />
+              {/* Preset Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-muted-foreground">Preset cepat:</span>
+                {PROVIDER_MODELS[config.provider]?.models.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setConfig({ ...config, model: m })}
+                    className={`text-[10px] px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                      config.model === m
+                        ? "bg-primary text-primary-foreground border-primary font-medium"
+                        : "bg-muted/70 hover:bg-muted text-muted-foreground border-border"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* API Key Input */}
@@ -1139,6 +1246,8 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                       ? "AIzaSy..."
                       : config.provider === "openai"
                       ? "sk-proj-..."
+                      : config.provider === "ollama"
+                      ? "Opsional untuk Ollama..."
                       : "Masukkan Kunci API..."
                   }
                   className="h-9 text-xs font-mono pr-9"
@@ -1152,24 +1261,9 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                 </button>
               </div>
               <p className="text-[10px] text-muted-foreground">
-                Jika dikosongkan, sistem akan otomatis menggunakan <strong>Mesin Analitik Lokal</strong> yang membaca data gudang secara gratis tanpa kuota eksternal.
+                Jika dikosongkan, sistem akan otomatis menggunakan <strong>Mesin Analitik Lokal</strong> yang membaca data gudang tanpa kuota eksternal.
               </p>
             </div>
-
-            {/* Custom Base URL (if Ollama / Custom) */}
-            {config.provider === "ollama" && (
-              <div className="space-y-1.5">
-                <label className="font-semibold text-foreground">Endpoint Base URL</label>
-                <Input
-                  value={config.customBaseUrl || "http://localhost:11434/v1"}
-                  onChange={(e) =>
-                    setConfig({ ...config, customBaseUrl: e.target.value })
-                  }
-                  placeholder="http://localhost:11434/v1"
-                  className="h-9 text-xs font-mono"
-                />
-              </div>
-            )}
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">

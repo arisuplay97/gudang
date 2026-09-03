@@ -109,7 +109,7 @@ export function SuratJalanPrintModal({ open, onClose, data }: SuratJalanPrintPro
                     KABUPATEN LOMBOK TENGAH
                   </p>
                   <p className="text-[11px] text-zinc-500 mt-1 leading-tight">
-                    Kantor Pusat Logistik: Jl. Pariwisata No. 1 Praya, Lombok Tengah, NTB • Telp: (0370) 654123
+                    Kantor Pusat Logistik: Jl. Jend. A Yani No 11, Telp: 0821-1400-5005
                   </p>
                 </div>
               </div>

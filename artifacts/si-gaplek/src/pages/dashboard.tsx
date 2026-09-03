@@ -87,13 +87,11 @@ interface AgingData {
   "181-365": number;
   ">365": number;
 }
-interface Exceptions {
-  overdue: number;
-  locationMismatch: number;
-  evidenceRejected: number;
-  waitingVerification: number;
-  stockCritical: number;
-  stockEmpty: number;
+interface TopBranch {
+  branchId: number;
+  branchName: string;
+  totalQty: number;
+  itemCount: number;
 }
 interface TopOutgoing {
   itemId: number;
@@ -166,9 +164,9 @@ export default function DashboardPage() {
     queryKey: ["dashboard-aging"],
     queryFn: () => apiFetch<AgingData>("/api/dashboard/aging"),
   });
-  const { data: exceptions } = useQuery({
-    queryKey: ["dashboard-exceptions"],
-    queryFn: () => apiFetch<Exceptions>("/api/dashboard/exceptions"),
+  const { data: topBranches, isLoading: loadingBranches } = useQuery({
+    queryKey: ["dashboard-top-branches"],
+    queryFn: () => apiFetch<TopBranch[]>("/api/dashboard/top-branches"),
   });
   const { data: topOutgoing } = useQuery({
     queryKey: ["dashboard-top-outgoing"],
@@ -207,15 +205,6 @@ export default function DashboardPage() {
     { label: "> 1 Tahun", count: aging[">365"] },
   ] : [];
 
-  /* ── Exception items ── */
-  const exceptionItems = exceptions ? [
-    { label: "Overdue", count: exceptions.overdue, severity: "🔴", href: "/cabang/tracking" },
-    { label: "Location Mismatch", count: exceptions.locationMismatch, severity: "🟠", href: "/spi/verifikasi" },
-    { label: "Evidence Rejected", count: exceptions.evidenceRejected, severity: "🟡", href: "/spi/verifikasi" },
-    { label: "Waiting Verification", count: exceptions.waitingVerification, severity: "🔵", href: "/spi/verifikasi" },
-    { label: "Stock Critical", count: exceptions.stockCritical, severity: "🟡", href: "/laporan/stok" },
-    { label: "Stock Habis", count: exceptions.stockEmpty, severity: "🔴", href: "/laporan/stok" },
-  ].filter(e => e.count > 0) : [];
 
   return (
     <div className="min-h-screen bg-[#f7f6f3] dark:bg-background transition-colors duration-200">
@@ -403,7 +392,7 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* ── Row 2: Stock Health + Aging + Exception Center ── */}
+        {/* ── Row 2: Stock Health + Aging + Cabang Material Terbanyak ── */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
           {/* Stock Health (Section 15) */}
@@ -472,38 +461,62 @@ export default function DashboardPage() {
             )}
           </DashCard>
 
-          {/* Exception Center (Section 18) */}
+          {/* Cabang Material Terbanyak (Menggantikan Exception Center) */}
           <DashCard>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground">Exception Center</p>
-                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Tindakan diperlukan</p>
+                <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground">Cabang Material Terbanyak</p>
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Distribusi volume material cabang</p>
               </div>
-              <AlertCircle className="w-4 h-4 text-[#c27c5a] dark:text-red-400" />
+              <MapPin className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
             </div>
-            {!exceptions ? (
-              <div className="space-y-2.5">{[1, 2, 3].map(i => <Skeleton key={i} className="h-7 w-full rounded" />)}</div>
-            ) : exceptionItems.length === 0 ? (
+            {loadingBranches || !topBranches ? (
+              <div className="space-y-2.5">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-7 w-full rounded" />)}</div>
+            ) : topBranches.length === 0 ? (
               <div className="h-32 flex flex-col items-center justify-center text-[#8a8a7a] dark:text-muted-foreground">
-                <CheckCircle className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-sm">Semua baik</p>
-                <p className="text-xs">Tidak ada exception</p>
+                <Package className="w-8 h-8 mb-2 opacity-30" />
+                <p className="text-sm">Belum ada distribusi cabang</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {exceptionItems.map(item => (
-                  <button
-                    key={item.label}
-                    onClick={() => navigate(item.href)}
-                    className="w-full flex items-center justify-between hover:bg-muted/50 rounded-lg px-2 py-1.5 transition-colors group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">{item.severity}</span>
-                      <span className="text-xs text-[#6b6b5e] dark:text-muted-foreground group-hover:text-foreground">{item.label}</span>
+              <div className="space-y-2.5">
+                {topBranches.map((b, idx) => {
+                  const maxQty = Math.max(...topBranches.map(t => t.totalQty), 1);
+                  const pct = b.totalQty > 0 ? Math.max(12, Math.round((b.totalQty / maxQty) * 100)) : 0;
+                  const barGradients = [
+                    "bg-[#5b7553]",
+                    "bg-[#5b7553]/85",
+                    "bg-[#e8c468]",
+                    "bg-[#e8c468]/85",
+                    "bg-[#c27c5a]",
+                  ];
+                  return (
+                    <div
+                      key={b.branchId}
+                      onClick={() => navigate("/cabang/tracking")}
+                      className="cursor-pointer group hover:bg-muted/40 p-1 rounded-lg transition-colors"
+                      title="Klik untuk melihat tracking material cabang"
+                    >
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-medium text-[#2d2d2a] dark:text-foreground truncate max-w-[68%] flex items-center gap-1.5 group-hover:text-primary transition-colors">
+                          <span className="w-4 h-4 rounded-full bg-[#eae8e0] dark:bg-muted text-[10px] flex items-center justify-center font-bold text-[#6b6b5e] dark:text-muted-foreground shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="truncate">{b.branchName}</span>
+                        </span>
+                        <span className="font-bold text-[#2d2d2a] dark:text-foreground text-right shrink-0">
+                          {formatNumber(b.totalQty)}{" "}
+                          <span className="text-[10px] font-normal text-[#8a8a7a] dark:text-muted-foreground">unit</span>
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-[#f0efe9] dark:bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${barGradients[idx % barGradients.length]}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
-                    <Badge variant="secondary" className="text-xs">{item.count}</Badge>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </DashCard>

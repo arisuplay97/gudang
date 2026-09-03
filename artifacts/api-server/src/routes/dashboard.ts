@@ -281,5 +281,58 @@ router.get("/dashboard/activity", requireAuth, async (_req, res): Promise<void> 
   }
 });
 
+/* ── NEW: Cabang Material Terbanyak ── */
+router.get("/dashboard/top-branches", requireAuth, async (_req, res): Promise<void> => {
+  try {
+    const rows = await db
+      .select({
+        branchId: branchesTable.id,
+        branchName: branchesTable.name,
+        totalQty: sql<number>`COALESCE(CAST(SUM(${stockOutItemsTable.quantity}) AS INTEGER), 0)`,
+        itemCount: sql<number>`COALESCE(CAST(COUNT(DISTINCT ${stockOutItemsTable.itemId}) AS INTEGER), 0)`,
+      })
+      .from(branchesTable)
+      .leftJoin(stockOutTable, eq(branchesTable.id, stockOutTable.destinationBranchId))
+      .leftJoin(stockOutItemsTable, eq(stockOutTable.id, stockOutItemsTable.stockOutId))
+      .groupBy(branchesTable.id, branchesTable.name)
+      .orderBy(sql`COALESCE(SUM(${stockOutItemsTable.quantity}), 0) DESC`)
+      .limit(5);
+
+    let results = rows.filter(r => r.totalQty > 0);
+
+    if (results.length === 0) {
+      const trackingRows = await db
+        .select({
+          branchId: branchesTable.id,
+          branchName: branchesTable.name,
+          totalQty: sql<number>`COALESCE(CAST(SUM(${stockOutItemsTable.quantity}) AS INTEGER), 0)`,
+          itemCount: sql<number>`COALESCE(CAST(COUNT(DISTINCT ${stockOutItemsTable.itemId}) AS INTEGER), 0)`,
+        })
+        .from(materialTrackingTable)
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .innerJoin(branchesTable, eq(materialTrackingTable.branchId, branchesTable.id))
+        .groupBy(branchesTable.id, branchesTable.name)
+        .orderBy(sql`COALESCE(SUM(${stockOutItemsTable.quantity}), 0) DESC`)
+        .limit(5);
+      results = trackingRows;
+    }
+
+    if (results.length === 0) {
+      const allBranches = await db.select({ branchId: branchesTable.id, branchName: branchesTable.name }).from(branchesTable).limit(5);
+      results = allBranches.map(b => ({
+        branchId: b.branchId,
+        branchName: b.branchName,
+        totalQty: 0,
+        itemCount: 0,
+      }));
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error("top-branches error:", err);
+    res.json([]);
+  }
+});
+
 export default router;
 

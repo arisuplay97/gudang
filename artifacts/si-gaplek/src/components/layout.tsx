@@ -163,7 +163,7 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "AI Assistant",
+    label: "TIARA AI",
     href: "/ai-assistant",
     icon: Sparkles,
     roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
@@ -204,7 +204,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/laporan/pemasangan-aksesoris": "Laporan Pemasangan Aksesoris",
   "/laporan/nilai": "Nilai Inventaris",
   "/laporan/log": "Audit Log",
-  "/ai-assistant": "AI Assistant Logistik",
+  "/ai-assistant": "TIARA AI",
   "/pengguna": "Pengguna",
 };
 

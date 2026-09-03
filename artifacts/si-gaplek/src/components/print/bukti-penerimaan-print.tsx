@@ -102,7 +102,7 @@ export function BuktiPenerimaanPrintModal({ open, onClose, data }: BuktiPenerima
                     KABUPATEN LOMBOK TENGAH
                   </p>
                   <p className="text-[11px] text-zinc-500 mt-1 leading-tight">
-                    Divisi Pengadaan & Gudang Logistik • Jl. Pariwisata No. 1 Praya, Lombok Tengah
+                    Divisi Pengadaan & Gudang Logistik • Jl. Jend. A Yani No 11, Telp: 0821-1400-5005
                   </p>
                 </div>
               </div>

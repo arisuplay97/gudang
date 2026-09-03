@@ -1364,7 +1364,7 @@ FROM pdam_material_gis;`;
                     }
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Buka Google Maps Penuh (Gratis)
+                    Buka Google Maps Penuh
                   </Button>
 
                   {/* Toggle Fullscreen Modal */}
@@ -1491,7 +1491,7 @@ FROM pdam_material_gis;`;
                     </Badge>
                   </DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                    Sinkronisasi dua arah antara QGIS laptop kantor, database PostgreSQL/PostGIS server IT, dan peta tracking SI GAPLEK.
+                    Sinkronisasi dua arah antara QGIS, database PostgreSQL/PostGIS server IT, dan peta tracking SI GAPLEK.
                   </DialogDescription>
                 </div>
               </div>
