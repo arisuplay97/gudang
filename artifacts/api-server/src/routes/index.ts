@@ -20,6 +20,7 @@ import branchOpsRouter from "./branch-ops";
 import spiRouter from "./spi";
 import searchRouter from "./search";
 import notificationsRouter from "./notifications";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -43,6 +44,7 @@ router.use(branchOpsRouter);
 router.use(spiRouter);
 router.use(searchRouter);
 router.use(notificationsRouter);
+router.use(aiRouter);
 
 export default router;
 

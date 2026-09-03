@@ -118,6 +118,28 @@ const PROVIDER_MODELS: Record<AiProvider, { label: string; models: string[] }> =
   },
 };
 
+/**
+ * Normalizes user-provided base URL to standard /chat/completions endpoint
+ */
+export function resolveChatEndpoint(baseUrl?: string, provider?: AiProvider): string {
+  if (provider === "gemini") return "";
+  if (provider === "claude" && !baseUrl?.trim()) return "https://api.anthropic.com/v1/messages";
+  if (provider === "deepseek" && !baseUrl?.trim()) return "https://api.deepseek.com/v1/chat/completions";
+  if (provider === "ollama" && !baseUrl?.trim()) return "http://localhost:11434/v1/chat/completions";
+
+  let clean = (baseUrl || "").trim().replace(/\/+$/, "");
+  if (!clean) {
+    return "https://api.openai.com/v1/chat/completions";
+  }
+  if (clean.endsWith("/chat/completions")) {
+    return clean;
+  }
+  if (clean.endsWith("/v1") || clean.endsWith("/v1beta")) {
+    return `${clean}/chat/completions`;
+  }
+  return `${clean}/v1/chat/completions`;
+}
+
 const STARTER_PROMPTS = [
   {
     category: "Stok & Kebutuhan",
@@ -411,13 +433,8 @@ export default function AiAssistantPage() {
           };
         }
 
-        // OpenAI / DeepSeek / Ollama / Custom (OpenAI-compatible) endpoint
-        const endpoint =
-          config.provider === "deepseek"
-            ? (config.customBaseUrl || "https://api.deepseek.com/v1/chat/completions")
-            : config.provider === "ollama"
-            ? `${config.customBaseUrl || "http://localhost:11434"}/v1/chat/completions`
-            : config.customBaseUrl || "https://api.openai.com/v1/chat/completions";
+        // Resolve and normalize OpenAI-compatible endpoint
+        const endpoint = resolveChatEndpoint(config.customBaseUrl, config.provider);
 
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -426,31 +443,64 @@ export default function AiAssistantPage() {
           headers["Authorization"] = `Bearer ${config.apiKey.trim()}`;
         }
 
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            model: config.model,
-            messages: [
-              {
-                role: "system",
-                content: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data gudang berikut:\n${warehouseContext}`,
-              },
-              { role: "user", content: userPrompt },
-            ],
-            temperature: config.temperature,
-          }),
-        });
+        const requestPayload = {
+          model: config.model,
+          messages: [
+            {
+              role: "system",
+              content: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data gudang berikut:\n${warehouseContext}`,
+            },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: config.temperature,
+        };
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData?.error?.message || `HTTP ${res.status}`);
+        let reply = "";
+        try {
+          // 1. Coba koneksi langsung dari browser
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(requestPayload),
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData?.error?.message || errData?.message || `HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          reply = data?.choices?.[0]?.message?.content || "";
+        } catch (directErr: any) {
+          // 2. Jika gagal karena CORS atau network browser, fallback melalui backend proxy server
+          console.warn("Direct fetch failed, attempting backend proxy:", directErr);
+          const proxyRes = await fetch("/api/ai/proxy-chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              endpoint,
+              apiKey: config.apiKey,
+              model: config.model,
+              temperature: config.temperature,
+              messages: requestPayload.messages,
+            }),
+          });
+
+          if (!proxyRes.ok) {
+            const errData = await proxyRes.json().catch(() => ({}));
+            throw new Error(errData?.error || directErr.message || `Proxy HTTP ${proxyRes.status}`);
+          }
+
+          const data = await proxyRes.json();
+          reply = data?.choices?.[0]?.message?.content || "";
         }
 
-        const data = await res.json();
-        const reply =
-          data?.choices?.[0]?.message?.content ||
-          "Maaf, tidak ada respon yang diterima dari model AI.";
+        if (!reply) {
+          throw new Error("Tidak ada teks balasan yang diterima dari model AI.");
+        }
+
         const actionLinks: ActionLink[] = [
           { label: "Buka Peta Material GIS", href: "/spi/gis", icon: "map" },
           { label: "Lihat Master Material", href: "/master/barang", icon: "box" },
@@ -1173,11 +1223,11 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                     onChange={(e) =>
                       setConfig({ ...config, customBaseUrl: e.target.value })
                     }
-                    placeholder="Contoh: https://api.groq.com/openai/v1/chat/completions"
+                    placeholder="Contoh: https://gateway.dahono.com/v1"
                     className="h-9 text-xs font-mono"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Mendukung endpoint format chat completions OpenAI (OpenRouter, Groq, Mistral, dll).
+                    Cukup masukkan Base URL (misal: <code>https://gateway.dahono.com/v1</code>). Sistem otomatis mengarahkannya ke <code>/chat/completions</code> dengan perlindungan anti-CORS.
                   </p>
                 </div>
               </div>
