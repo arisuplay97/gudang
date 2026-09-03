@@ -460,12 +460,16 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG", "ADMIN"), 
     // Race condition protection (Section 27) — use transaction + row lock
     try {
         const result = await db.transaction(async (tx) => {
-            // Lock existing allocations to prevent concurrent over-allocation
+            // Lock tracking row to prevent concurrent over-allocation
+            await tx.select({ id: materialTrackingTable.id })
+                .from(materialTrackingTable)
+                .where(eq(materialTrackingTable.id, tracking.id))
+                .for("update");
+
             const existingAllocs = await tx.select({
                 total: sql<number>`COALESCE(SUM(${installationAllocationsTable.quantity}), 0)`
             }).from(installationAllocationsTable)
-                .where(eq(installationAllocationsTable.trackingId, tracking.id))
-                .for("update");
+                .where(eq(installationAllocationsTable.trackingId, tracking.id));
 
             const currentAllocated = Number(existingAllocs[0]?.total ?? 0);
             if (currentAllocated + resolvedQty > totalQty) {
