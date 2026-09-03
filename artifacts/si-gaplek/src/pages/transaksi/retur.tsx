@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
@@ -28,6 +28,31 @@ interface Return {
 }
 
 interface ReturnItem {
+  id: number;
+  itemId: number;
+  itemName?: string;
+  itemCode?: string;
+  quantity: number;
+  condition: string;
+  unitPrice: number;
+  serialNumber?: string | null;
+  notes?: string | null;
+}
+
+interface Item {
+  id: number;
+  code: string;
+  name: string;
+  currentStock: number;
+  unitPrice?: string | number;
+}
+
+interface Warehouse {
+  id: number;
+  name: string;
+}
+
+interface ItemEntry {
   itemId: number;
   quantity: number;
   condition: string;
@@ -37,19 +62,16 @@ interface ReturnItem {
   _item?: Item;
 }
 
-interface Item { id: number; code: string; name: string; }
-interface Warehouse { id: number; name: string; }
-
 export default function ReturPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewId, setViewId] = useState<number | null>(null);
-  const [items, setItems_] = useState<ReturnItem[]>([]);
   const [form, setForm] = useState({
     type: "from_field",
     warehouseId: "",
     notes: "",
     transactionDate: new Date().toISOString().split("T")[0],
   });
+  const [items, setItems_] = useState<ItemEntry[]>([]);
   const [detailForm, setDetailForm] = useState({
     itemId: "",
     quantity: "1",
@@ -62,18 +84,45 @@ export default function ReturPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: returns, isLoading } = useQuery({
+  const { data: returnsData, isLoading } = useQuery({
     queryKey: ["returns"],
-    queryFn: () => apiFetch<Return[]>("/api/returns"),
+    queryFn: () => apiFetch<Return[] | { data: Return[] }>("/api/returns"),
   });
-  const { data: allItems } = useQuery({
+
+  const { data: allItemsData } = useQuery({
     queryKey: ["items"],
-    queryFn: () => apiFetch<Item[]>("/api/items"),
+    queryFn: () => apiFetch<Item[] | { data: Item[] }>("/api/items?limit=100"),
   });
-  const { data: warehouses } = useQuery({
+
+  const { data: warehousesData } = useQuery({
     queryKey: ["warehouses"],
-    queryFn: () => apiFetch<Warehouse[]>("/api/warehouses"),
+    queryFn: () => apiFetch<Warehouse[] | { data: Warehouse[] }>("/api/warehouses"),
   });
+
+  const returns: Return[] = useMemo(() => {
+    if (Array.isArray(returnsData)) return returnsData;
+    if (returnsData && typeof returnsData === "object" && Array.isArray((returnsData as any).data)) {
+      return (returnsData as any).data;
+    }
+    return [];
+  }, [returnsData]);
+
+  const allItems: Item[] = useMemo(() => {
+    if (Array.isArray(allItemsData)) return allItemsData;
+    if (allItemsData && typeof allItemsData === "object" && Array.isArray((allItemsData as any).data)) {
+      return (allItemsData as any).data;
+    }
+    return [];
+  }, [allItemsData]);
+
+  const warehouses: Warehouse[] = useMemo(() => {
+    if (Array.isArray(warehousesData)) return warehousesData;
+    if (warehousesData && typeof warehousesData === "object" && Array.isArray((warehousesData as any).data)) {
+      return (warehousesData as any).data;
+    }
+    return [];
+  }, [warehousesData]);
+
   const { data: viewData } = useQuery({
     queryKey: ["return", viewId],
     queryFn: () => apiFetch<any>(`/api/returns/${viewId}`),

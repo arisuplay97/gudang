@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
@@ -57,12 +57,52 @@ export default function BarangMasukPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: stockIns, isLoading } = useQuery({ queryKey: ["stock-in"], queryFn: () => apiFetch<StockIn[]>("/api/stock-in"), refetchInterval: 15_000 });
-  const { data: items } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[]>("/api/items") });
-  const { data: suppliers } = useQuery({ queryKey: ["suppliers"], queryFn: () => apiFetch<Supplier[]>("/api/suppliers") });
-  const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => apiFetch<Warehouse[]>("/api/warehouses") });
-  const { data: locations } = useQuery({ queryKey: ["locations"], queryFn: () => apiFetch<Location[]>("/api/locations") });
+  const { data: stockInsData, isLoading } = useQuery({ queryKey: ["stock-in"], queryFn: () => apiFetch<StockIn[] | { data: StockIn[] }>("/api/stock-in"), refetchInterval: 15_000 });
+  const { data: itemsData } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[] | { data: Item[] }>("/api/items?limit=100") });
+  const { data: suppliersData } = useQuery({ queryKey: ["suppliers"], queryFn: () => apiFetch<Supplier[] | { data: Supplier[] }>("/api/suppliers") });
+  const { data: warehousesData } = useQuery({ queryKey: ["warehouses"], queryFn: () => apiFetch<Warehouse[] | { data: Warehouse[] }>("/api/warehouses") });
+  const { data: locationsData } = useQuery({ queryKey: ["locations"], queryFn: () => apiFetch<Location[] | { data: Location[] }>("/api/locations") });
   const { data: viewData } = useQuery({ queryKey: ["stock-in", viewId], queryFn: () => apiFetch<{ stockIn: StockIn; details: StockInDetail[] }>(`/api/stock-in/${viewId}`), enabled: !!viewId });
+
+  const stockIns: StockIn[] = useMemo(() => {
+    if (Array.isArray(stockInsData)) return stockInsData;
+    if (stockInsData && typeof stockInsData === "object" && Array.isArray((stockInsData as any).data)) {
+      return (stockInsData as any).data;
+    }
+    return [];
+  }, [stockInsData]);
+
+  const items: Item[] = useMemo(() => {
+    if (Array.isArray(itemsData)) return itemsData;
+    if (itemsData && typeof itemsData === "object" && Array.isArray((itemsData as any).data)) {
+      return (itemsData as any).data;
+    }
+    return [];
+  }, [itemsData]);
+
+  const suppliers: Supplier[] = useMemo(() => {
+    if (Array.isArray(suppliersData)) return suppliersData;
+    if (suppliersData && typeof suppliersData === "object" && Array.isArray((suppliersData as any).data)) {
+      return (suppliersData as any).data;
+    }
+    return [];
+  }, [suppliersData]);
+
+  const warehouses: Warehouse[] = useMemo(() => {
+    if (Array.isArray(warehousesData)) return warehousesData;
+    if (warehousesData && typeof warehousesData === "object" && Array.isArray((warehousesData as any).data)) {
+      return (warehousesData as any).data;
+    }
+    return [];
+  }, [warehousesData]);
+
+  const locations: Location[] = useMemo(() => {
+    if (Array.isArray(locationsData)) return locationsData;
+    if (locationsData && typeof locationsData === "object" && Array.isArray((locationsData as any).data)) {
+      return (locationsData as any).data;
+    }
+    return [];
+  }, [locationsData]);
 
   const filteredLocations = locations?.filter(l => !form.warehouseId || l.warehouseId === parseInt(form.warehouseId));
 

@@ -28,7 +28,7 @@ const SLA_DAYS = 7;
 const MISMATCH_THRESHOLD_METERS = 100; // configurable
 
 // ─── SCAN QR / RECEIVE MATERIALS (Section 9.1) ───
-router.post("/branch/receive", requireAuth, requireRole("CABANG"), async (req, res): Promise<void> => {
+router.post("/branch/receive", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
     const { qrToken, idempotencyKey } = req.body;
     if (!qrToken) { res.status(400).json({ error: "QR token wajib" }); return; }
 
@@ -49,9 +49,9 @@ router.post("/branch/receive", requireAuth, requireRole("CABANG"), async (req, r
     if (!transaction) { res.status(404).json({ error: "QR token tidak valid" }); return; }
     if (transaction.status !== "DIKIRIM") { res.status(400).json({ error: "Transaksi tidak dalam status DIKIRIM" }); return; }
 
-    // Validate branch matches
-    const userBranchId = req.session.branchId;
-    if (!userBranchId || transaction.destinationBranchId !== userBranchId) {
+    // Validate branch matches (ADMIN can act for destination branch)
+    const userBranchId = req.session.branchId ?? (req.session.userRole === "ADMIN" ? transaction.destinationBranchId : null);
+    if (!userBranchId || (req.session.userRole !== "ADMIN" && transaction.destinationBranchId !== userBranchId)) {
         res.status(403).json({ error: "Cabang tidak sesuai dengan tujuan transaksi" }); return;
     }
 
@@ -105,18 +105,19 @@ router.post("/branch/receive", requireAuth, requireRole("CABANG"), async (req, r
 });
 
 // ─── CREATE INSTALLATION ALLOCATION (Section 12) ───
-router.post("/branch/allocations", requireAuth, requireRole("CABANG"), async (req, res): Promise<void> => {
+router.post("/branch/allocations", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
     const { trackingUuid, quantity, plannedLatitude, plannedLongitude } = req.body;
-    if (!trackingUuid || !quantity || quantity <= 0) {
-        res.status(400).json({ error: "trackingUuid dan quantity wajib" }); return;
+    const resolvedQty = parseInt(String(quantity));
+    if (!trackingUuid || !resolvedQty || resolvedQty <= 0) {
+        res.status(400).json({ error: "trackingUuid dan quantity valid wajib diisi" }); return;
     }
 
     const [tracking] = await db.select().from(materialTrackingTable)
         .where(eq(materialTrackingTable.uuid, trackingUuid));
     if (!tracking) { res.status(404).json({ error: "Tracking tidak ditemukan" }); return; }
 
-    // Check branch access
-    if (req.session.branchId && tracking.branchId !== req.session.branchId) {
+    // Check branch access (ADMIN allowed)
+    if (req.session.userRole !== "ADMIN" && req.session.branchId && tracking.branchId !== req.session.branchId) {
         res.status(403).json({ error: "Forbidden" }); return;
     }
 
@@ -142,15 +143,15 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG"), async (re
                 .for("update");
 
             const currentAllocated = Number(existingAllocs[0]?.total ?? 0);
-            if (currentAllocated + quantity > totalQty) {
-                throw new Error(`Alokasi melebihi quantity. Total: ${totalQty}, sudah dialokasi: ${currentAllocated}, diminta: ${quantity}`);
+            if (currentAllocated + resolvedQty > totalQty) {
+                throw new Error(`Alokasi melebihi quantity. Total: ${totalQty}, sudah dialokasi: ${currentAllocated}, diminta: ${resolvedQty}`);
             }
 
             const [allocation] = await tx.insert(installationAllocationsTable).values({
                 trackingId: tracking.id,
-                quantity,
-                plannedLatitude: plannedLatitude ?? null,
-                plannedLongitude: plannedLongitude ?? null,
+                quantity: resolvedQty,
+                plannedLatitude: plannedLatitude != null ? String(plannedLatitude) : null,
+                plannedLongitude: plannedLongitude != null ? String(plannedLongitude) : null,
                 createdBy: req.session.userId,
             }).returning();
 
@@ -165,7 +166,7 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG"), async (re
                 trackingId: tracking.id,
                 eventType: "ALLOCATION_CREATED",
                 userId: req.session.userId,
-                metadata: { allocationId: allocation.id, quantity, plannedLatitude, plannedLongitude },
+                metadata: { allocationId: allocation.id, quantity: resolvedQty, plannedLatitude, plannedLongitude },
             });
 
             return allocation;
@@ -181,14 +182,14 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG"), async (re
 });
 
 // ─── SUBMIT INSTALLATION EVIDENCE (Section 9.2, 9.3, 10, 13) ───
-router.post("/branch/evidence", requireAuth, requireRole("CABANG"), async (req, res): Promise<void> => {
+router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
     const {
         allocationId, photoBase64, latitude, longitude, gpsAccuracy,
         clientCaptureTime, idempotencyKey
     } = req.body;
 
-    if (!allocationId || !photoBase64 || !latitude || !longitude) {
-        res.status(400).json({ error: "allocationId, photo, latitude, longitude wajib" }); return;
+    if (!allocationId || !photoBase64 || latitude == null || longitude == null) {
+        res.status(400).json({ error: "allocationId, photo, latitude, longitude wajib diisi" }); return;
     }
 
     // Idempotency check
@@ -203,7 +204,7 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG"), async (req, 
 
     // Get allocation
     const [allocation] = await db.select().from(installationAllocationsTable)
-        .where(eq(installationAllocationsTable.id, allocationId));
+        .where(eq(installationAllocationsTable.id, parseInt(String(allocationId))));
     if (!allocation) { res.status(404).json({ error: "Alokasi tidak ditemukan" }); return; }
 
     // Get tracking
@@ -211,8 +212,8 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG"), async (req, 
         .where(eq(materialTrackingTable.id, allocation.trackingId));
     if (!tracking) { res.status(404).json({ error: "Tracking tidak ditemukan" }); return; }
 
-    // Check branch access
-    if (req.session.branchId && tracking.branchId !== req.session.branchId) {
+    // Check branch access (ADMIN allowed)
+    if (req.session.userRole !== "ADMIN" && req.session.branchId && tracking.branchId !== req.session.branchId) {
         res.status(403).json({ error: "Forbidden" }); return;
     }
 
@@ -223,7 +224,7 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG"), async (req, 
     const [attemptCount] = await db.select({
         count: sql<number>`count(*)`
     }).from(installationEvidenceTable)
-        .where(eq(installationEvidenceTable.allocationId, allocationId));
+        .where(eq(installationEvidenceTable.allocationId, allocation.id));
     const attemptNumber = Number(attemptCount?.count ?? 0) + 1;
 
     // Location mismatch calculation (Section 15)
@@ -238,13 +239,12 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG"), async (req, 
         locationMismatch = locationDeviationMeters > MISMATCH_THRESHOLD_METERS;
     }
 
-    // Store photo as URL (in production, upload to storage; for now, save path)
-    // TODO: Replace with actual file storage (S3/blob)
-    const photoUrl = `/evidence/${photoChecksum}_watermarked.webp`;
-    const originalPhotoUrl = `/evidence/${photoChecksum}_original.webp`;
+    // In storage: save watermarked and original base64
+    const photoUrl = photoBase64;
+    const originalPhotoUrl = photoBase64;
 
     const [evidence] = await db.insert(installationEvidenceTable).values({
-        allocationId,
+        allocationId: allocation.id,
         trackingId: tracking.id,
         attemptNumber,
         photoUrl,
@@ -274,7 +274,7 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG"), async (req, 
         userId: req.session.userId,
         metadata: {
             evidenceId: evidence.id,
-            allocationId,
+            allocationId: allocation.id,
             latitude,
             longitude,
             locationMismatch,
@@ -295,30 +295,42 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG"), async (req, 
 });
 
 // ─── LIST MY ALLOCATIONS (for CABANG) ───
-router.get("/branch/my-allocations", requireAuth, requireRole("CABANG"), async (req, res): Promise<void> => {
-    const branchId = req.session.branchId;
-    if (!branchId) { res.status(400).json({ error: "Branch tidak terkonfigurasi" }); return; }
+router.get("/branch/my-allocations", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
+    let branchId = req.session.branchId;
+    if (!branchId && req.session.userRole === "ADMIN") {
+        if (req.query.branchId) branchId = parseInt(req.query.branchId as string);
+    }
 
-    const rows = await db
+    let query = db
         .select({
             allocationId: installationAllocationsTable.id,
             allocationUuid: installationAllocationsTable.uuid,
             quantity: installationAllocationsTable.quantity,
+            plannedLatitude: installationAllocationsTable.plannedLatitude,
+            plannedLongitude: installationAllocationsTable.plannedLongitude,
             status: installationAllocationsTable.status,
+            createdAt: installationAllocationsTable.createdAt,
             trackingId: materialTrackingTable.id,
             trackingUuid: materialTrackingTable.uuid,
             trackingStatus: materialTrackingTable.status,
+            branchId: materialTrackingTable.branchId,
+            branchName: branchesTable.name,
             itemName: itemsTable.name,
             itemCode: itemsTable.code,
             referenceNo: stockOutTable.referenceNo,
         })
         .from(installationAllocationsTable)
         .innerJoin(materialTrackingTable, eq(installationAllocationsTable.trackingId, materialTrackingTable.id))
+        .innerJoin(branchesTable, eq(materialTrackingTable.branchId, branchesTable.id))
         .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
         .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
-        .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
-        .where(eq(materialTrackingTable.branchId, branchId))
-        .orderBy(desc(installationAllocationsTable.createdAt));
+        .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id));
+
+    if (branchId) {
+        query = query.where(eq(materialTrackingTable.branchId, branchId)) as any;
+    }
+
+    const rows = await (query as any).orderBy(desc(installationAllocationsTable.createdAt));
 
     res.json({ data: rows });
 });

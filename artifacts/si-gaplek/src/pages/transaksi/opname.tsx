@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
@@ -31,9 +31,34 @@ export default function OpnamePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: opnames, isLoading } = useQuery({ queryKey: ["opnames"], queryFn: () => apiFetch<Opname[]>("/api/opname") });
-  const { data: items } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[]>("/api/items") });
-  const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => apiFetch<Warehouse[]>("/api/warehouses") });
+  const { data: opnamesData, isLoading } = useQuery({ queryKey: ["opnames"], queryFn: () => apiFetch<Opname[] | { data: Opname[] }>("/api/opname") });
+  const { data: itemsData } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[] | { data: Item[] }>("/api/items?limit=100") });
+  const { data: warehousesData } = useQuery({ queryKey: ["warehouses"], queryFn: () => apiFetch<Warehouse[] | { data: Warehouse[] }>("/api/warehouses") });
+
+  const opnames: Opname[] = useMemo(() => {
+    if (Array.isArray(opnamesData)) return opnamesData;
+    if (opnamesData && typeof opnamesData === "object" && Array.isArray((opnamesData as any).data)) {
+      return (opnamesData as any).data;
+    }
+    return [];
+  }, [opnamesData]);
+
+  const items: Item[] = useMemo(() => {
+    if (Array.isArray(itemsData)) return itemsData;
+    if (itemsData && typeof itemsData === "object" && Array.isArray((itemsData as any).data)) {
+      return (itemsData as any).data;
+    }
+    return [];
+  }, [itemsData]);
+
+  const warehouses: Warehouse[] = useMemo(() => {
+    if (Array.isArray(warehousesData)) return warehousesData;
+    if (warehousesData && typeof warehousesData === "object" && Array.isArray((warehousesData as any).data)) {
+      return (warehousesData as any).data;
+    }
+    return [];
+  }, [warehousesData]);
+
   const { data: viewData } = useQuery({ queryKey: ["opname", viewId], queryFn: () => apiFetch<any>(`/api/opname/${viewId}`), enabled: !!viewId });
 
   const saveMutation = useMutation({

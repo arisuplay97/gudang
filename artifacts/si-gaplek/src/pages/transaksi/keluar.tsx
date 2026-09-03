@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
@@ -34,10 +34,34 @@ export default function BarangKeluarPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: stockOuts, isLoading } = useQuery({ queryKey: ["stock-out"], queryFn: () => apiFetch<StockOut[]>("/api/stock-out") });
-  const { data: items } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[]>("/api/items") });
-  const { data: departments } = useQuery({ queryKey: ["departments"], queryFn: () => apiFetch<Department[]>("/api/departments") });
+  const { data: stockOutsData, isLoading } = useQuery({ queryKey: ["stock-out"], queryFn: () => apiFetch<StockOut[] | { data: StockOut[] }>("/api/stock-out") });
+  const { data: itemsData } = useQuery({ queryKey: ["items"], queryFn: () => apiFetch<Item[] | { data: Item[] }>("/api/items?limit=100") });
+  const { data: departmentsData } = useQuery({ queryKey: ["departments"], queryFn: () => apiFetch<Department[] | { data: Department[] }>("/api/departments") });
   const { data: viewData } = useQuery({ queryKey: ["stock-out", viewId], queryFn: () => apiFetch<{ stockOut: StockOut; details: DetailEntry[] }>(`/api/stock-out/${viewId}`), enabled: !!viewId });
+
+  const stockOuts: StockOut[] = useMemo(() => {
+    if (Array.isArray(stockOutsData)) return stockOutsData;
+    if (stockOutsData && typeof stockOutsData === "object" && Array.isArray((stockOutsData as any).data)) {
+      return (stockOutsData as any).data;
+    }
+    return [];
+  }, [stockOutsData]);
+
+  const items: Item[] = useMemo(() => {
+    if (Array.isArray(itemsData)) return itemsData;
+    if (itemsData && typeof itemsData === "object" && Array.isArray((itemsData as any).data)) {
+      return (itemsData as any).data;
+    }
+    return [];
+  }, [itemsData]);
+
+  const departments: Department[] = useMemo(() => {
+    if (Array.isArray(departmentsData)) return departmentsData;
+    if (departmentsData && typeof departmentsData === "object" && Array.isArray((departmentsData as any).data)) {
+      return (departmentsData as any).data;
+    }
+    return [];
+  }, [departmentsData]);
 
   const saveMutation = useMutation({
     mutationFn: () => apiFetch("/api/stock-out", {

@@ -1,229 +1,817 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { MapPin, Camera, AlertCircle, CheckCircle2, RotateCcw } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Camera,
+  MapPin,
+  CheckCircle2,
+  AlertTriangle,
+  RotateCcw,
+  Compass,
+  Plus,
+  Layers,
+  Clock,
+  ShieldCheck,
+  FolderOpen,
+  CameraOff,
+  Sparkles,
+} from "lucide-react";
+import { formatDate } from "@/lib/utils";
 
+interface TrackingItem {
+  id: number;
+  uuid: string;
+  itemName: string;
+  itemCode: string;
+  referenceNo: string;
+  status: string;
+  totalQuantity: number;
+  installedQuantity: number;
+  remainingQuantity: number;
+  branchName?: string;
+  isPartial: boolean;
+}
+
+interface AllocationItem {
+  allocationId: number;
+  allocationUuid: string;
+  quantity: number;
+  plannedLatitude: string | null;
+  plannedLongitude: string | null;
+  status: string;
+  createdAt: string;
+  trackingId: number;
+  trackingUuid: string;
+  trackingStatus: string;
+  itemName: string;
+  itemCode: string;
+  referenceNo: string;
+  branchName?: string;
+}
 
 export default function CabangPemasanganPage() {
-    const { toast } = useToast();
-    const queryClient = useQueryClient();
-    const [selectedAllocation, setSelectedAllocation] = useState<any>(null);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-    // Evidence state
-    const [photoBase64, setPhotoBase64] = useState<string>("");
-    const [latitude, setLatitude] = useState<number | null>(null);
-    const [longitude, setLongitude] = useState<number | null>(null);
-    const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("allocations");
+  const [allocationModalOpen, setAllocationModalOpen] = useState(false);
+  const [selectedTrackingForAlloc, setSelectedTrackingForAlloc] = useState<TrackingItem | null>(null);
 
-    // 1. Fetch ALLOCATIONS for CABANG
-    const { data: allocationsData, isLoading } = useQuery({
-        queryKey: ["cabang-allocations"],
-        queryFn: () => apiFetch<{ data: any[] }>("/api/branch/my-allocations"),
-    });
+  // Form allocation
+  const [allocQuantity, setAllocQuantity] = useState<string>("1");
+  const [plannedLat, setPlannedLat] = useState<string>("");
+  const [plannedLon, setPlannedLon] = useState<string>("");
+  const [isGettingGpsForAlloc, setIsGettingGpsForAlloc] = useState(false);
 
-    const allocations = allocationsData?.data || [];
+  // Camera Studio State
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [selectedAllocation, setSelectedAllocation] = useState<AllocationItem | null>(null);
+  const [capturedWatermarkedPhoto, setCapturedWatermarkedPhoto] = useState<string>("");
+  const [cameraStreaming, setCameraStreaming] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [currentGps, setCurrentGps] = useState<{ lat: number; lon: number; accuracy: number } | null>(null);
 
-    // 2. Submit Evidence
-    const submitMutation = useMutation({
-        mutationFn: async (payload: any) => {
-            return apiFetch("/api/branch/evidence", {
-                method: "POST",
-                body: JSON.stringify(payload),
-            });
-        },
-        onSuccess: (data: any) => {
-            toast({
-                title: "Bukti Pemasangan Terkirim",
-                description: data.locationMismatch
-                    ? "Terkirim, namun terdeteksi ketidakcocokan lokasi (mismatch)."
-                    : "Bukti sukses terkirim dan menunggu verifikasi SPI.",
-            });
-            queryClient.invalidateQueries({ queryKey: ["cabang-allocations"] });
-            setSelectedAllocation(null);
-            resetEvidenceState();
-        },
-        onError: (error: Error) => {
-            toast({
-                variant: "destructive",
-                title: "Gagal Kirim Bukti",
-                description: error.message,
-            });
-        },
-    });
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-    const resetEvidenceState = () => {
-        setPhotoBase64("");
-        setLatitude(null);
-        setLongitude(null);
-        setGpsAccuracy(null);
-    };
+  // 1. Fetch Active Trackings for Cabang (to create allocations)
+  const { data: trackingsData, isLoading: isTrackingsLoading } = useQuery({
+    queryKey: ["cabang-tracking"],
+    queryFn: () => apiFetch<{ data: TrackingItem[] }>("/api/tracking"),
+  });
 
-    const handleCaptureSimulation = () => {
-        // Simulate taking a photo (we'll just use a base64 encoded dummy string)
-        setPhotoBase64("data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQBQCQJV/IAgEA");
+  const readyForAllocTrackings = useMemo(() => {
+    const list = trackingsData?.data || [];
+    return list.filter(
+      (t) =>
+        (t.status === "DITERIMA_CABANG" || t.status === "MENUNGGU_PEMASANGAN") &&
+        t.remainingQuantity > 0
+    );
+  }, [trackingsData]);
 
-        // Simulate getting GPS coords (using Math.random for small variance around an assumed location)
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    setLatitude(pos.coords.latitude);
-                    setLongitude(pos.coords.longitude);
-                    setGpsAccuracy(pos.coords.accuracy);
-                },
-                (err) => {
-                    console.warn("Geolocation failed", err);
-                    // Fallback simulation
-                    setLatitude(-8.6705 + (Math.random() * 0.001));
-                    setLongitude(116.1155 + (Math.random() * 0.001));
-                    setGpsAccuracy(5.0);
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
-        } else {
-            // Fallback fallback
-            setLatitude(-8.6705);
-            setLongitude(116.1155);
-            setGpsAccuracy(10.0);
-        }
-    };
+  // 2. Fetch Allocations (to submit photo evidence)
+  const { data: allocationsData, isLoading: isAllocationsLoading } = useQuery({
+    queryKey: ["cabang-allocations"],
+    queryFn: () => apiFetch<{ data: AllocationItem[] }>("/api/branch/my-allocations"),
+  });
 
-    const handleSubmit = () => {
-        if (!selectedAllocation) return;
-        if (!photoBase64 || !latitude || !longitude) {
-            toast({
-                title: "Data Belum Lengkap",
-                description: "Pastikan foto dan koordinat GPS telah didapatkan.",
-            });
-            return;
-        }
+  const allocations = allocationsData?.data || [];
+  const pendingEvidenceAllocations = allocations.filter(
+    (a) => a.status === "PENDING" || !a.status || a.status === "REJECTED"
+  );
+  const completedAllocations = allocations.filter(
+    (a) => a.status === "VERIFIED" || a.status === "MENUNGGU_VERIFIKASI"
+  );
 
-        submitMutation.mutate({
-            allocationId: selectedAllocation.allocationId,
-            photoBase64,
-            latitude,
-            longitude,
-            gpsAccuracy,
-            clientCaptureTime: new Date().toISOString(),
-            idempotencyKey: crypto.randomUUID(),
-        });
-    };
+  // Mutation: Create Allocation
+  const createAllocationMutation = useMutation({
+    mutationFn: async (payload: { trackingUuid: string; quantity: number; plannedLatitude?: number; plannedLongitude?: number }) => {
+      return apiFetch("/api/branch/allocations", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Alokasi Berhasil Dibuat",
+        description: "Titik alokasi pemasangan baru telah ditambahkan.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["cabang-tracking"] });
+      queryClient.invalidateQueries({ queryKey: ["cabang-allocations"] });
+      setAllocationModalOpen(false);
+      setSelectedTrackingForAlloc(null);
+      setAllocQuantity("1");
+      setPlannedLat("");
+      setPlannedLon("");
+      setActiveTab("camera");
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Gagal Membuat Alokasi", description: err.message });
+    },
+  });
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground flex items-center justify-center"><Camera className="animate-pulse w-6 h-6 mr-2" /> Memuat data...</div>;
+  // Mutation: Submit Evidence
+  const submitEvidenceMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      return apiFetch("/api/branch/evidence", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Bukti Pemasangan Terkirim",
+        description: data.locationMismatch
+          ? "Terkirim. Terdeteksi deviasi lokasi pemasangan (mismatch)."
+          : "Bukti sukses terkirim dan menunggu verifikasi auditor SPI.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["cabang-allocations"] });
+      queryClient.invalidateQueries({ queryKey: ["cabang-tracking"] });
+      closeCameraModal();
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Gagal Kirim Bukti", description: err.message });
+    },
+  });
+
+  // Helper: Open Allocation Modal
+  const openAllocationDialog = (t: TrackingItem) => {
+    setSelectedTrackingForAlloc(t);
+    setAllocQuantity(String(Math.min(1, t.remainingQuantity)));
+    setPlannedLat("");
+    setPlannedLon("");
+    setAllocationModalOpen(true);
+  };
+
+  // Helper: Detect Current GPS for Allocation
+  const detectGpsForAllocation = () => {
+    if (!navigator.geolocation) {
+      toast({ variant: "destructive", title: "GPS Tidak Didukung", description: "Browser tidak mendukung geolocation." });
+      return;
+    }
+    setIsGettingGpsForAlloc(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setPlannedLat(pos.coords.latitude.toFixed(6));
+        setPlannedLon(pos.coords.longitude.toFixed(6));
+        setIsGettingGpsForAlloc(false);
+        toast({ title: "GPS Terkunci", description: `Akurasi: ±${pos.coords.accuracy.toFixed(1)}m` });
+      },
+      (err) => {
+        setIsGettingGpsForAlloc(false);
+        toast({ variant: "destructive", title: "Gagal Mengunci GPS", description: err.message });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // Helper: Handle Allocation Save
+  const handleSaveAllocation = () => {
+    if (!selectedTrackingForAlloc) return;
+    const qty = parseInt(allocQuantity);
+    if (!qty || qty <= 0) {
+      toast({ variant: "destructive", title: "Kuantitas Tidak Valid", description: "Jumlah harus lebih dari 0." });
+      return;
+    }
+    if (qty > selectedTrackingForAlloc.remainingQuantity) {
+      toast({
+        variant: "destructive",
+        title: "Melebihi Sisa",
+        description: `Maksimal kuantitas yang dapat dialokasikan adalah ${selectedTrackingForAlloc.remainingQuantity}.`,
+      });
+      return;
     }
 
-    return (
-        <div className="p-4 md:p-8 max-w-xl mx-auto space-y-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">Pemasangan</h1>
-                <p className="text-muted-foreground">Kirim bukti foto dan koordinat GPS setelah material terpasang.</p>
+    createAllocationMutation.mutate({
+      trackingUuid: selectedTrackingForAlloc.uuid,
+      quantity: qty,
+      plannedLatitude: plannedLat ? parseFloat(plannedLat) : undefined,
+      plannedLongitude: plannedLon ? parseFloat(plannedLon) : undefined,
+    });
+  };
+
+  // ─── Camera Studio Methods ───
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    setCameraStreaming(false);
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Perangkat atau browser ini tidak mendukung akses kamera langsung.");
+      }
+
+      // Try environment (back) camera first, fallback to user (front/webcam)
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play();
+          setCameraStreaming(true);
+        };
+      }
+    } catch (err: any) {
+      setCameraError(err.message || "Gagal mengaktifkan kamera.");
+    }
+
+    // Also get live GPS
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setCurrentGps({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
+        },
+        (err) => {
+          console.warn("GPS error during camera start:", err);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraStreaming(false);
+  }, []);
+
+  const openCameraModal = (alloc: AllocationItem) => {
+    setSelectedAllocation(alloc);
+    setCapturedWatermarkedPhoto("");
+    setCameraModalOpen(true);
+  };
+
+  const closeCameraModal = () => {
+    stopCamera();
+    setCameraModalOpen(false);
+    setSelectedAllocation(null);
+    setCapturedWatermarkedPhoto("");
+  };
+
+  useEffect(() => {
+    if (cameraModalOpen && !capturedWatermarkedPhoto) {
+      const t = setTimeout(() => startCamera(), 150);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [cameraModalOpen, capturedWatermarkedPhoto, startCamera]);
+
+  // Capture & Draw Official Watermark on Canvas
+  const captureAndWatermark = async () => {
+    if (!videoRef.current || !selectedAllocation) return;
+
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // 1. Draw camera video frame
+    ctx.drawImage(video, 0, 0, width, height);
+
+    // 2. Prepare Watermark Info
+    const dateStr = new Date().toLocaleString("id-ID", {
+      timeZoneName: "short",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const lat = currentGps ? currentGps.lat.toFixed(6) : "Tidak Tersedia";
+    const lon = currentGps ? currentGps.lon.toFixed(6) : "Tidak Tersedia";
+    const acc = currentGps ? `±${currentGps.accuracy.toFixed(1)}m` : "N/A";
+    const officer = user?.fullName || user?.username || "Petugas Lapangan";
+    const branch = selectedAllocation.branchName || "Cabang PDAM";
+
+    // 3. Draw Watermark Bottom Bar
+    const bannerHeight = Math.max(120, height * 0.2);
+    const bannerY = height - bannerHeight;
+
+    // Gradient background for legibility
+    const grad = ctx.createLinearGradient(0, bannerY, 0, height);
+    grad.addColorStop(0, "rgba(0, 0, 0, 0.75)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0.95)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, bannerY, width, bannerHeight);
+
+    // Accent line
+    ctx.fillStyle = "#10b981"; // Emerald
+    ctx.fillRect(0, bannerY, width, 4);
+
+    // Text configuration
+    ctx.fillStyle = "#ffffff";
+    const fontSizeTitle = Math.max(16, Math.round(width * 0.022));
+    const fontSizeBody = Math.max(13, Math.round(width * 0.016));
+
+    let yOffset = bannerY + fontSizeTitle + 14;
+
+    // Header line
+    ctx.font = `bold ${fontSizeTitle}px sans-serif`;
+    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SI GAPLEK", 24, yOffset);
+
+    // Badge text right aligned
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#34d399";
+    ctx.font = `bold ${fontSizeBody}px sans-serif`;
+    ctx.fillText("BUKTI DOKUMENTASI FISIK", width - 24, yOffset);
+    ctx.textAlign = "left";
+
+    // Metadata lines
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = `normal ${fontSizeBody}px sans-serif`;
+    yOffset += fontSizeBody + 8;
+    ctx.fillText(
+      `Material: ${selectedAllocation.itemName} (Qty: ${selectedAllocation.quantity}) | Ref: ${selectedAllocation.referenceNo}`,
+      24,
+      yOffset
+    );
+
+    yOffset += fontSizeBody + 6;
+    ctx.fillText(`Petugas: ${officer} | Cabang: ${branch} | Waktu: ${dateStr}`, 24, yOffset);
+
+    yOffset += fontSizeBody + 6;
+    ctx.fillStyle = "#67e8f9"; // Cyan accent for GPS
+    ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc})`, 24, yOffset);
+
+    // 4. Export as image data URL
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    setCapturedWatermarkedPhoto(dataUrl);
+    stopCamera();
+  };
+
+  // Submit Final Captured Photo
+  const handleSubmitEvidence = () => {
+    if (!selectedAllocation || !capturedWatermarkedPhoto) return;
+
+    // Fallback GPS if not available
+    const lat = currentGps?.lat ?? (selectedAllocation.plannedLatitude ? parseFloat(selectedAllocation.plannedLatitude) : -8.584);
+    const lon = currentGps?.lon ?? (selectedAllocation.plannedLongitude ? parseFloat(selectedAllocation.plannedLongitude) : 116.109);
+
+    submitEvidenceMutation.mutate({
+      allocationId: selectedAllocation.allocationId,
+      photoBase64: capturedWatermarkedPhoto,
+      latitude: lat,
+      longitude: lon,
+      gpsAccuracy: currentGps?.accuracy ?? 5.0,
+      clientCaptureTime: new Date().toISOString(),
+      idempotencyKey: crypto.randomUUID(),
+    });
+  };
+
+  return (
+    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Pemasangan & Dokumentasi</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Kelola alokasi titik pemasangan material dan unggah bukti fisik dengan watermark resmi.
+          </p>
+        </div>
+      </motion.div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid grid-cols-3 w-full max-w-md bg-muted/60 p-1">
+          <TabsTrigger value="allocations" className="text-xs font-medium">
+            1. Alokasi Titik
+          </TabsTrigger>
+          <TabsTrigger value="camera" className="text-xs font-medium">
+            2. Foto Pemasangan
+          </TabsTrigger>
+          <TabsTrigger value="history" className="text-xs font-medium">
+            3. Riwayat
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ─── TAB 1: ALOKASI TITIK ─── */}
+        <TabsContent value="allocations" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Material Diterima (Siap Dialokasikan)</h2>
+              <p className="text-xs text-muted-foreground">Pilih material untuk membagi pemasangan ke satu atau beberapa titik fisik.</p>
+            </div>
+          </div>
+
+          {isTrackingsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+            </div>
+          ) : readyForAllocTrackings.length === 0 ? (
+            <Card className="border-dashed p-8 text-center bg-muted/20">
+              <FolderOpen className="w-10 h-10 mx-auto text-muted-foreground/30 mb-2" />
+              <p className="font-medium text-sm text-foreground">Belum Ada Material yang Membutuhkan Alokasi</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                Pastikan transaksi pengeluaran gudang sudah berstatus diterima pada menu "Terima Barang".
+              </p>
+            </Card>
+          ) : (
+            <div className="grid gap-3">
+              {readyForAllocTrackings.map((track) => (
+                <Card key={track.id} className="p-4 shadow-sm border-border/80 hover:border-primary/40 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-base text-foreground">{track.itemName}</span>
+                        <Badge variant="outline" className="text-[11px] font-mono">
+                          {track.itemCode}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono">Ref Transaksi: {track.referenceNo}</p>
+                      <div className="flex items-center gap-3 text-xs pt-1">
+                        <span className="text-muted-foreground">
+                          Total: <strong className="text-foreground">{track.totalQuantity}</strong>
+                        </span>
+                        <span className="text-muted-foreground">
+                          Terpasang/Alokasi: <strong className="text-foreground">{track.installedQuantity}</strong>
+                        </span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                          Sisa: {track.remainingQuantity}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button onClick={() => openAllocationDialog(track)} className="gap-2 shrink-0 shadow-sm">
+                      <Plus className="w-4 h-4" />
+                      Buat Alokasi Titik
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── TAB 2: FOTO PEMASANGAN ─── */}
+        <TabsContent value="camera" className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Alokasi Siap Didokumentasikan</h2>
+            <p className="text-xs text-muted-foreground">
+              Pilih titik alokasi di bawah untuk mengaktifkan kamera dan mencetak watermark bukti fisik.
+            </p>
+          </div>
+
+          {isAllocationsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+            </div>
+          ) : pendingEvidenceAllocations.length === 0 ? (
+            <Card className="border-dashed p-8 text-center bg-muted/20">
+              <Camera className="w-10 h-10 mx-auto text-muted-foreground/30 mb-2" />
+              <p className="font-medium text-sm text-foreground">Tidak Ada Alokasi yang Menunggu Foto</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                Silakan buat alokasi terlebih dahulu pada tab "1. Alokasi Titik".
+              </p>
+            </Card>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {pendingEvidenceAllocations.map((alloc) => (
+                <Card
+                  key={alloc.allocationId}
+                  className="p-4 shadow-sm border-border/80 hover:border-primary/50 transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-sm text-foreground">{alloc.itemName}</h3>
+                      <Badge variant="secondary" className="text-[11px] font-mono">
+                        Qty: {alloc.quantity}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground font-mono">Ref: {alloc.referenceNo}</p>
+                    {alloc.plannedLatitude && alloc.plannedLongitude && (
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono pt-1">
+                        <MapPin className="w-3 h-3 text-primary shrink-0" />
+                        Target: {alloc.plannedLatitude}, {alloc.plannedLongitude}
+                      </div>
+                    )}
+                    {alloc.status === "REJECTED" && (
+                      <div className="p-2 rounded bg-rose-50 border border-rose-200 text-[11px] text-rose-700 mt-1">
+                        Bukti sebelumnya ditolak SPI. Harap foto ulang dengan sudut & GPS yang jelas.
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={() => openCameraModal(alloc)}
+                    className="mt-4 w-full gap-2 bg-primary hover:bg-primary/90 shadow-sm"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Buka Kamera Dokumentasi
+                  </Button>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── TAB 3: RIWAYAT ─── */}
+        <TabsContent value="history" className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Status Verifikasi Evidence</h2>
+            <p className="text-xs text-muted-foreground">Pantau status persetujuan auditor SPI terhadap bukti yang telah dikirim.</p>
+          </div>
+
+          {completedAllocations.length === 0 ? (
+            <Card className="border-dashed p-8 text-center bg-muted/20">
+              <ShieldCheck className="w-10 h-10 mx-auto text-muted-foreground/30 mb-2" />
+              <p className="font-medium text-sm text-foreground">Belum Ada Bukti yang Terkirim</p>
+            </Card>
+          ) : (
+            <div className="grid gap-2">
+              {completedAllocations.map((alloc) => {
+                const isVerified = alloc.status === "VERIFIED";
+                return (
+                  <Card key={alloc.allocationId} className="p-4 shadow-sm border-border/80">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="font-semibold text-sm text-foreground">{alloc.itemName}</div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          Ref: {alloc.referenceNo} | Qty: {alloc.quantity}
+                        </div>
+                      </div>
+                      <Badge
+                        variant={isVerified ? "default" : "secondary"}
+                        className={
+                          isVerified
+                            ? "bg-emerald-600 hover:bg-emerald-600 text-white gap-1"
+                            : "bg-amber-100 text-amber-800 border-amber-200 gap-1"
+                        }
+                      >
+                        {isVerified ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        {isVerified ? "TERVERIFIKASI (GIS)" : "MENUNGGU VERIFIKASI SPI"}
+                      </Badge>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* ─── MODAL BUAT ALOKASI ─── */}
+      <Dialog open={allocationModalOpen} onOpenChange={setAllocationModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Buat Alokasi Titik Pemasangan</DialogTitle>
+          </DialogHeader>
+
+          {selectedTrackingForAlloc && (
+            <div className="space-y-4 py-2">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border/60 space-y-1">
+                <p className="text-xs text-muted-foreground">Material Terpilih:</p>
+                <p className="font-semibold text-sm text-foreground">{selectedTrackingForAlloc.itemName}</p>
+                <div className="flex items-center justify-between text-xs pt-1 text-muted-foreground">
+                  <span>Ref: {selectedTrackingForAlloc.referenceNo}</span>
+                  <span className="text-emerald-600 font-semibold">
+                    Sisa Tersedia: {selectedTrackingForAlloc.remainingQuantity}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Jumlah yang Dipasang di Titik Ini *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max={selectedTrackingForAlloc.remainingQuantity}
+                  value={allocQuantity}
+                  onChange={(e) => setAllocQuantity(e.target.value)}
+                  className="font-mono text-sm"
+                />
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <Label>Titik Koordinat Rencana (Opsional)</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 text-primary"
+                    onClick={detectGpsForAllocation}
+                    disabled={isGettingGpsForAlloc}
+                  >
+                    <Compass className="w-3.5 h-3.5" />
+                    {isGettingGpsForAlloc ? "Mengunci GPS..." : "Kunci GPS Saat Ini"}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Latitude (Contoh: -8.584)"
+                    value={plannedLat}
+                    onChange={(e) => setPlannedLat(e.target.value)}
+                    className="font-mono text-xs"
+                  />
+                  <Input
+                    placeholder="Longitude (Contoh: 116.109)"
+                    value={plannedLon}
+                    onChange={(e) => setPlannedLon(e.target.value)}
+                    className="font-mono text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setAllocationModalOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              onClick={handleSaveAllocation}
+              disabled={createAllocationMutation.isPending || !allocQuantity || parseInt(allocQuantity) <= 0}
+            >
+              {createAllocationMutation.isPending ? "Menyimpan..." : "Simpan Alokasi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── LIVE CAMERA & WATERMARK STUDIO MODAL ─── */}
+      <Dialog open={cameraModalOpen} onOpenChange={(o) => !o && closeCameraModal()}>
+        <DialogContent className="max-w-xl p-0 overflow-hidden border-2 border-primary/20 bg-background">
+          <DialogHeader className="p-4 pb-2 border-b bg-muted/20">
+            <div className="flex items-center justify-between pr-4">
+              <div>
+                <DialogTitle className="text-base flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-primary" />
+                  Kamera Dokumentasi Fisik
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Target: {selectedAllocation?.itemName} (Qty: {selectedAllocation?.quantity})
+                </p>
+              </div>
+              {currentGps && (
+                <Badge variant="outline" className="text-[10px] font-mono gap-1 text-emerald-600 border-emerald-300">
+                  <Compass className="w-3 h-3" />
+                  GPS Terkunci (±{currentGps.accuracy.toFixed(0)}m)
+                </Badge>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="p-4 space-y-4">
+            {/* Viewport or Preview */}
+            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center shadow-inner">
+              {capturedWatermarkedPhoto ? (
+                // Captured Watermarked Preview
+                <img
+                  src={capturedWatermarkedPhoto}
+                  alt="Bukti Terpindai"
+                  className="w-full h-full object-contain"
+                />
+              ) : cameraError ? (
+                // Camera Error State
+                <div className="p-6 text-center text-white space-y-3">
+                  <CameraOff className="w-12 h-12 mx-auto text-rose-400" />
+                  <p className="text-sm font-medium text-rose-200">{cameraError}</p>
+                  <Button variant="secondary" size="sm" onClick={startCamera}>
+                    Coba Lagi
+                  </Button>
+                </div>
+              ) : (
+                // Live Viewfinder
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Viewfinder Frame Guides */}
+                  <div className="absolute inset-6 border border-white/30 rounded-lg pointer-events-none flex flex-col justify-between p-2">
+                    <div className="flex justify-between">
+                      <span className="w-3 h-3 border-t-2 border-l-2 border-emerald-400" />
+                      <span className="w-3 h-3 border-t-2 border-r-2 border-emerald-400" />
+                    </div>
+                    <div className="text-center text-[10px] text-white/70 font-mono tracking-wider uppercase drop-shadow">
+                      PERUMDAM TIRTA ARDHIA RINJANI
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="w-3 h-3 border-b-2 border-l-2 border-emerald-400" />
+                      <span className="w-3 h-3 border-b-2 border-r-2 border-emerald-400" />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            {!selectedAllocation ? (
-                <div className="space-y-4">
-                    <h2 className="font-semibold text-lg">Pilih Material Yang Akan Dipasang</h2>
-                    {allocations.length === 0 ? (
-                        <Card className="bg-muted shadow-none border-dashed text-center py-6">
-                            <p className="text-sm text-muted-foreground">Belum ada alokasi material yang siap dipasang.</p>
-                        </Card>
-                    ) : (
-                        <div className="grid gap-3">
-                            {allocations.map((alloc) => (
-                                <Card
-                                    key={alloc.allocationId}
-                                    className={`cursor-pointer transition-colors hover:border-primary/50 relative overflow-hidden ${alloc.status === 'VERIFIED' ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                    onClick={() => alloc.status !== 'VERIFIED' && setSelectedAllocation(alloc)}
-                                >
-                                    {alloc.status === "VERIFIED" && <div className="absolute inset-0 bg-green-500/5 backdrop-blur-[1px] flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"><CheckCircle2 className="text-green-600 w-12 h-12" /></div>}
-                                    <CardHeader className="py-3 px-4">
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <CardTitle className="text-sm">{alloc.itemName}</CardTitle>
-                                                <CardDescription className="text-xs mt-1">
-                                                    Ref: {alloc.referenceNo} | Qty: {alloc.quantity}
-                                                </CardDescription>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className={`text-xs font-semibold px-2 py-1 rounded-md ${alloc.status === "VERIFIED" ? "bg-green-100 text-green-800" :
-                                                    alloc.status === "REJECTED" ? "bg-red-100 text-red-800" :
-                                                        "bg-blue-100 text-blue-800"
-                                                    }`}>
-                                                    {alloc.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
-                </div>
+            {/* GPS & Status Summary */}
+            {currentGps ? (
+              <div className="p-2.5 rounded-lg bg-muted/40 border text-xs flex items-center justify-between text-muted-foreground font-mono">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-primary" />
+                  {currentGps.lat.toFixed(6)}, {currentGps.lon.toFixed(6)}
+                </span>
+                <span>Akurasi: ±{currentGps.accuracy.toFixed(1)}m</span>
+              </div>
             ) : (
-                <div className="space-y-6">
-                    <Button variant="ghost" size="sm" onClick={() => { setSelectedAllocation(null); resetEvidenceState(); }} className="-ml-3">
-                        <RotateCcw className="w-4 h-4 mr-2" /> Batal Pilih
-                    </Button>
-
-                    <Card className="border-2 border-primary/20">
-                        <CardHeader className="bg-primary/5 mb-4">
-                            <CardTitle className="text-base flex items-center gap-2">
-                                <CheckCircle2 className="w-4 h-4 text-primary" />
-                                Target: {selectedAllocation.itemName} (Qty: {selectedAllocation.quantity})
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-
-                            <div className="border border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-4 bg-muted/30">
-                                {photoBase64 ? (
-                                    <div className="relative w-full aspect-video bg-black rounded overflow-hidden flex items-center justify-center group">
-                                        <span className="text-white/50 text-xs uppercase tracking-widest absolute">Simulated Photo Captured</span>
-                                        <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded text-[10px] text-white space-y-1 font-mono flex flex-col">
-                                            <span className="text-green-400">SI_GAPLEK_VER_1.8</span>
-                                            <span>LAT: {latitude?.toFixed(6) ?? "N/A"}</span>
-                                            <span>LON: {longitude?.toFixed(6) ?? "N/A"}</span>
-                                            <span>TIME: {new Date().toISOString()}</span>
-                                        </div>
-                                        <Button variant="secondary" size="icon" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={resetEvidenceState}>
-                                            <RotateCcw className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                                            <Camera className="w-8 h-8" />
-                                        </div>
-                                        <p className="text-xs text-muted-foreground text-center">Buka kamera dan ambil foto pemasangan di titik lokasi (wajib menyalakan GPS device).</p>
-                                        <Button onClick={handleCaptureSimulation} variant="outline" className="mt-2">Simulasi Ambil Foto & GPS</Button>
-                                    </>
-                                )}
-                            </div>
-
-                            {latitude && (
-                                <div className="flex gap-2 items-start p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-blue-900">
-                                    <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                                    <div>
-                                        <span className="font-semibold block mb-1">Koordinat Terkunci</span>
-                                        <span className="font-mono text-xs opacity-80">{latitude}, {longitude} (Acc: {gpsAccuracy?.toFixed(1) || '?'}m)</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            <Button
-                                onClick={handleSubmit}
-                                disabled={submitMutation.isPending || !photoBase64 || !latitude}
-                                className="w-full"
-                                size="lg"
-                            >
-                                {submitMutation.isPending ? "Mengunggah..." : "Kirim Bukti ke SPI"}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
+              <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-xs flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>Menunggu sinyal GPS perangkat untuk penempelan watermark akurat...</span>
+              </div>
             )}
-        </div>
-    );
+          </div>
+
+          <DialogFooter className="p-4 pt-0 gap-2 sm:gap-0">
+            {capturedWatermarkedPhoto ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setCapturedWatermarkedPhoto("");
+                    startCamera();
+                  }}
+                  className="gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Foto Ulang
+                </Button>
+                <Button
+                  onClick={handleSubmitEvidence}
+                  disabled={submitEvidenceMutation.isPending}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  {submitEvidenceMutation.isPending ? "Mengunggah..." : "Kirim Bukti ke Auditor SPI"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={closeCameraModal}>
+                  Batal
+                </Button>
+                <Button
+                  onClick={captureAndWatermark}
+                  disabled={!cameraStreaming}
+                  className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+                >
+                  <Camera className="w-4 h-4" />
+                  Jepret Foto & Tempel Watermark
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }

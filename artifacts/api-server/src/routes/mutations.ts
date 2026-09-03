@@ -63,31 +63,37 @@ router.get("/mutations", requireAuth, async (req, res): Promise<void> => {
 
 // ─── CREATE ───
 router.post("/mutations", requireAuth, async (req, res): Promise<void> => {
-  const { fromWarehouseId, toWarehouseId, transactionDate, notes, items } = req.body;
+  const { fromWarehouseId, toWarehouseId, transactionDate, notes, items, details, referenceNumber } = req.body;
+  const resolvedItems = items || details;
 
-  if (!fromWarehouseId || !toWarehouseId) { res.status(400).json({ error: "Gudang asal dan tujuan wajib diisi" }); return; }
-  if (fromWarehouseId === toWarehouseId) { res.status(400).json({ error: "Gudang asal dan tujuan tidak boleh sama" }); return; }
-  if (!items || !Array.isArray(items) || items.length === 0) { res.status(400).json({ error: "Minimal 1 item harus diisi" }); return; }
-  if (!transactionDate) { res.status(400).json({ error: "Tanggal transaksi wajib diisi" }); return; }
+  const fWh = parseInt(String(fromWarehouseId));
+  const tWh = parseInt(String(toWarehouseId));
 
-  const refNo = generateRefNo("MT");
+  if (!fWh || !tWh) { res.status(400).json({ error: "Gudang asal dan tujuan wajib diisi" }); return; }
+  if (fWh === tWh) { res.status(400).json({ error: "Gudang asal dan tujuan tidak boleh sama" }); return; }
+  if (!resolvedItems || !Array.isArray(resolvedItems) || resolvedItems.length === 0) { res.status(400).json({ error: "Minimal 1 item harus diisi" }); return; }
+
+  const txDate = transactionDate ? new Date(transactionDate) : new Date();
+  const refNo = referenceNumber?.trim() || generateRefNo("MT");
 
   const [header] = await db.insert(mutationsTable).values({
     referenceNo: refNo,
-    fromWarehouseId,
-    toWarehouseId,
+    fromWarehouseId: fWh,
+    toWarehouseId: tWh,
     notes: notes ?? null,
     createdBy: req.session.userId ?? null,
-    transactionDate: new Date(transactionDate),
+    transactionDate: txDate,
     status: "draft",
   }).returning();
 
-  for (const item of items) {
-    if (!item.itemId || !item.quantity || item.quantity <= 0) continue;
+  for (const item of resolvedItems) {
+    const itId = parseInt(String(item.itemId));
+    const qty = parseInt(String(item.quantity));
+    if (!itId || !qty || qty <= 0) continue;
     await db.insert(mutationItemsTable).values({
       mutationId: header.id,
-      itemId: item.itemId,
-      quantity: item.quantity,
+      itemId: itId,
+      quantity: qty,
       notes: item.notes ?? null,
     });
   }
@@ -97,7 +103,7 @@ router.post("/mutations", requireAuth, async (req, res): Promise<void> => {
     description: `Mutasi ${refNo} dibuat`, userId: req.session.userId,
   });
 
-  res.status(201).json({ ...header, referenceNo: refNo });
+  res.status(201).json({ ...header, referenceNo: refNo, referenceNumber: refNo });
 });
 
 // ─── GET DETAIL ───
