@@ -222,7 +222,17 @@ router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI"), async 
 });
 
 // ─── GIS ENDPOINT — VERIFIED EVIDENCE ONLY (Section 16, 36) ───
-router.get("/gis/material-locations", requireAuth, async (req, res): Promise<void> => {
+router.get("/gis/material-locations", async (req, res, next): Promise<void> => {
+    // Allow interactive session OR direct QGIS desktop client token
+    const isQgisAccess =
+        req.query.token === "sigaplek-qgis" ||
+        Boolean(req.query.apiKey) ||
+        Boolean(req.headers["x-gis-token"]);
+
+    if (!req.session?.userId && !isQgisAccess) {
+        return requireAuth(req, res, next);
+    }
+
     // Only return verified evidence locations (Section 16)
     const locations = await db
         .select({

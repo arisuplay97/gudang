@@ -34,7 +34,25 @@ import {
   Maximize2,
   Minimize2,
   Sparkles,
+  Database,
+  Server,
+  Network,
+  Wifi,
+  WifiOff,
+  FileCode,
+  Check,
+  RefreshCw,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import {
   MapContainer,
   TileLayer,
@@ -211,11 +229,75 @@ function MapController({
 const DEFAULT_CENTER: [number, number] = [-8.7065, 116.2755];
 const DEFAULT_ZOOM = 11;
 
+export interface ExternalGisConfig {
+  enabled: boolean;
+  serverType: "postgis_api" | "geoserver_wfs" | "custom_geojson";
+  serverUrl: string;
+  apiKey?: string;
+}
+
 export default function SpiGisPage() {
   const mapWrapperRef = useRef<HTMLDivElement>(null);
-  const { data: gisData, isLoading } = useQuery({
-    queryKey: ["gis-materials"],
-    queryFn: () => apiFetch<GeoCollection>("/api/gis/material-locations"),
+
+  // External GIS Server & PostGIS Config
+  const [extConfig, setExtConfig] = useState<ExternalGisConfig>(() => {
+    try {
+      const saved = localStorage.getItem("sigaplek_ext_gis_config");
+      return saved
+        ? JSON.parse(saved)
+        : {
+            enabled: false,
+            serverType: "postgis_api",
+            serverUrl: "",
+            apiKey: "",
+          };
+    } catch {
+      return {
+        enabled: false,
+        serverType: "postgis_api",
+        serverUrl: "",
+        apiKey: "",
+      };
+    }
+  });
+
+  const [qgisDialogOpen, setQgisDialogOpen] = useState(false);
+  const [tempExtConfig, setTempExtConfig] = useState<ExternalGisConfig>(extConfig);
+  const [pingStatus, setPingStatus] = useState<{
+    testing: boolean;
+    success?: boolean;
+    message?: string;
+    featureCount?: number;
+    latencyMs?: number;
+  }>({ testing: false });
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedQgisUrl, setCopiedQgisUrl] = useState(false);
+
+  const { data: gisData, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["gis-materials", extConfig.enabled, extConfig.serverUrl],
+    queryFn: async () => {
+      if (extConfig.enabled && extConfig.serverUrl.trim()) {
+        try {
+          const headers: Record<string, string> = {};
+          if (extConfig.apiKey) {
+            headers["Authorization"] = `Bearer ${extConfig.apiKey}`;
+            headers["x-api-key"] = extConfig.apiKey;
+          }
+          const res = await fetch(extConfig.serverUrl.trim(), { headers });
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const data = await res.json();
+          if (data && Array.isArray(data.features)) {
+            return data as GeoCollection;
+          }
+          throw new Error("Format respon bukan FeatureCollection GeoJSON yang valid");
+        } catch (err: any) {
+          console.warn("External GIS fetch failed, falling back to local database:", err);
+          toast.error(`Koneksi Server GIS Gagal: ${err.message}. Menampilkan database lokal.`);
+          return apiFetch<GeoCollection>("/api/gis/material-locations");
+        }
+      }
+      return apiFetch<GeoCollection>("/api/gis/material-locations");
+    },
   });
 
   const rawFeatures = useMemo(() => gisData?.features || [], [gisData]);
@@ -348,6 +430,115 @@ export default function SpiGisPage() {
     );
   };
 
+  const handleTestPing = async () => {
+    if (!tempExtConfig.serverUrl.trim()) {
+      toast.error("Masukkan URL Endpoint Server GIS IT terlebih dahulu");
+      return;
+    }
+    setPingStatus({ testing: true });
+    const start = performance.now();
+    try {
+      const headers: Record<string, string> = {};
+      if (tempExtConfig.apiKey) {
+        headers["Authorization"] = `Bearer ${tempExtConfig.apiKey}`;
+        headers["x-api-key"] = tempExtConfig.apiKey;
+      }
+      const res = await fetch(tempExtConfig.serverUrl.trim(), { headers });
+      const latency = Math.round(performance.now() - start);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+      const count = Array.isArray(data?.features) ? data.features.length : 0;
+      setPingStatus({
+        testing: false,
+        success: true,
+        message: `Terhubung! Berhasil membaca ${count} titik spasial.`,
+        featureCount: count,
+        latencyMs: latency,
+      });
+      toast.success(`Server IT Terhubung (${latency}ms)`);
+    } catch (err: any) {
+      const latency = Math.round(performance.now() - start);
+      setPingStatus({
+        testing: false,
+        success: false,
+        message: `Gagal terhubung (${latency}ms): ${err.message}. Pastikan CORS diaktifkan di server IT.`,
+      });
+      toast.error(`Gagal menghubungkan ke server: ${err.message}`);
+    }
+  };
+
+  const handleSaveExtConfig = () => {
+    setExtConfig(tempExtConfig);
+    localStorage.setItem("sigaplek_ext_gis_config", JSON.stringify(tempExtConfig));
+    setQgisDialogOpen(false);
+    toast.success("Konfigurasi Server GIS IT berhasil disimpan");
+    refetch();
+  };
+
+  const qgisFeedUrl = `${window.location.origin}/api/gis/material-locations?token=sigaplek-qgis`;
+
+  const handleCopyQgisUrl = () => {
+    navigator.clipboard.writeText(qgisFeedUrl);
+    setCopiedQgisUrl(true);
+    setTimeout(() => setCopiedQgisUrl(false), 2000);
+    toast.success("URL Feed QGIS disalin ke clipboard!");
+  };
+
+  const POSTGIS_SQL_SCHEMA = `-- 1. Aktifkan Ekstensi PostGIS di PostgreSQL
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- 2. Buat Tabel Titik Material (Kompatibel 100% QGIS & SI GAPLEK)
+CREATE TABLE IF NOT EXISTS pdam_material_gis (
+    id SERIAL PRIMARY KEY,
+    item_code VARCHAR(50) NOT NULL,            -- e.g. MTR-001, AKS-004
+    item_name VARCHAR(150) NOT NULL,           -- e.g. Meter Air DN 15mm
+    quantity INTEGER DEFAULT 1,
+    branch_name VARCHAR(100) NOT NULL,         -- e.g. Cabang Praya
+    reference_no VARCHAR(100),                 -- No SPK / Surat Jalan
+    photo_url TEXT,                            -- Bukti foto lapangan
+    location_mismatch BOOLEAN DEFAULT FALSE,   -- Deviasi lokasi
+    deviation_meters NUMERIC(8,2) DEFAULT 0,   -- Jarak deviasi (meter)
+    geom GEOMETRY(Point, 4326),                -- Koordinat fisik riil GPS
+    geom_plan GEOMETRY(Point, 4326),           -- Koordinat rencana SPK kantor
+    verified_at TIMESTAMP WITH TIME ZONE,
+    installed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Buat Spasial Index (GIST) untuk Performa Tinggi
+CREATE INDEX IF NOT EXISTS idx_pdam_material_geom ON pdam_material_gis USING GIST (geom);
+
+-- 4. Query SQL Penghasil GeoJSON Bawaan PostGIS untuk REST API:
+SELECT jsonb_build_object(
+    'type', 'FeatureCollection',
+    'features', COALESCE(jsonb_agg(
+        jsonb_build_object(
+            'type', 'Feature',
+            'geometry', ST_AsGeoJSON(geom)::jsonb,
+            'properties', jsonb_build_object(
+                'evidenceId', id,
+                'itemCode', item_code,
+                'itemName', item_name,
+                'quantity', quantity,
+                'branchName', branch_name,
+                'referenceNo', reference_no,
+                'photoUrl', photo_url,
+                'locationMismatch', location_mismatch,
+                'deviationMeters', deviation_meters,
+                'installedAt', installed_at,
+                'verifiedAt', verified_at
+            )
+        )
+    ), '[]'::jsonb)
+) AS geojson
+FROM pdam_material_gis;`;
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(POSTGIS_SQL_SCHEMA);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2000);
+    toast.success("Skrip SQL PostGIS disalin ke clipboard!");
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-3 h-[calc(100vh-3.5rem)] flex flex-col animate-page-enter">
       <style>{RADAR_CSS}</style>
@@ -429,6 +620,28 @@ export default function SpiGisPage() {
                 <span className="hidden sm:inline">Layar Penuh</span>
               </>
             )}
+          </Button>
+
+          {/* Integrasi QGIS & Server PostGIS Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTempExtConfig(extConfig);
+              setPingStatus({ testing: false });
+              setQgisDialogOpen(true);
+            }}
+            className={`h-8 text-xs gap-1.5 shadow-2xs ${
+              extConfig.enabled
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-semibold"
+                : "border-border hover:bg-muted"
+            }`}
+            title="Integrasi QGIS Desktop & Database PostGIS Server IT"
+          >
+            <Database className="w-3.5 h-3.5 text-sky-600" />
+            <span className="hidden sm:inline">
+              {extConfig.enabled ? "Server PostGIS: Aktif" : "QGIS & PostGIS"}
+            </span>
           </Button>
         </div>
       </div>
@@ -1261,6 +1474,291 @@ export default function SpiGisPage() {
             </div>
           </div>
         )}
+
+        {/* ─── Dialog Integrasi QGIS & Server Database PostGIS ─── */}
+        <Dialog open={qgisDialogOpen} onOpenChange={setQgisDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-5 pb-3 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-gradient-to-tr from-sky-500/15 to-emerald-500/15 text-sky-600 border border-sky-500/20 shadow-2xs">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                    Integrasi Server PostGIS & QGIS Desktop
+                    <Badge variant="outline" className="text-[10px] py-0 border-sky-500/30 text-sky-600">
+                      Enterprise GIS
+                    </Badge>
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                    Sinkronisasi dua arah antara QGIS laptop kantor, database PostgreSQL/PostGIS server IT, dan peta tracking SI GAPLEK.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <Tabs defaultValue="server" className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-5 pt-3 border-b border-border bg-card">
+                <TabsList className="grid grid-cols-3 h-9 text-xs">
+                  <TabsTrigger value="server" className="gap-1.5 text-xs">
+                    <Server className="w-3.5 h-3.5" />
+                    Sumber Server IT
+                  </TabsTrigger>
+                  <TabsTrigger value="qgis" className="gap-1.5 text-xs">
+                    <Network className="w-3.5 h-3.5" />
+                    Koneksi QGIS
+                  </TabsTrigger>
+                  <TabsTrigger value="sql" className="gap-1.5 text-xs">
+                    <FileCode className="w-3.5 h-3.5" />
+                    Skema SQL PostGIS
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* TAB 1: Sumber Server IT */}
+              <TabsContent value="server" className="flex-1 overflow-y-auto p-5 space-y-4 m-0 text-xs">
+                <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-foreground text-xs">Gunakan Server GIS IT Mandiri</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Jika diaktifkan, peta akan membaca titik koordinat langsung dari endpoint server IT kantor Anda.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={tempExtConfig.enabled}
+                    onCheckedChange={(checked) =>
+                      setTempExtConfig({ ...tempExtConfig, enabled: checked })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-foreground">Protokol / Tipe Server</label>
+                    <Select
+                      value={tempExtConfig.serverType}
+                      onValueChange={(val: any) =>
+                        setTempExtConfig({ ...tempExtConfig, serverType: val })
+                      }
+                    >
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="postgis_api">REST API PostgreSQL / PostGIS (GeoJSON)</SelectItem>
+                        <SelectItem value="geoserver_wfs">GeoServer WFS Service (JSON)</SelectItem>
+                        <SelectItem value="custom_geojson">Endpoint Web Kustom (GeoJSON URL)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-foreground flex items-center justify-between">
+                      <span>URL Endpoint Server GIS IT</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">Mendukung IP Lokal / Domain</span>
+                    </label>
+                    <Input
+                      placeholder="Contoh: http://192.168.1.50:8000/api/gis/materials atau https://gis.pdam.co.id/api/pipes"
+                      value={tempExtConfig.serverUrl}
+                      onChange={(e) =>
+                        setTempExtConfig({ ...tempExtConfig, serverUrl: e.target.value })
+                      }
+                      className="h-9 text-xs font-mono"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Endpoint harus mengembalikan format standar <code>FeatureCollection</code> GeoJSON (WGS84 / EPSG:4326).
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-foreground">Token Otorisasi / API Key (Opsional)</label>
+                    <Input
+                      placeholder="Bearer token atau API Key jika server IT dilindungi otentikasi..."
+                      value={tempExtConfig.apiKey || ""}
+                      onChange={(e) =>
+                        setTempExtConfig({ ...tempExtConfig, apiKey: e.target.value })
+                      }
+                      className="h-9 text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* Test Ping Status Box */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="font-semibold text-foreground text-[11px]">Uji Komunikasi Server</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleTestPing}
+                        disabled={pingStatus.testing}
+                        className="h-8 text-xs gap-1.5"
+                      >
+                        {pingStatus.testing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                        )}
+                        <span>{pingStatus.testing ? "Memeriksa..." : "Uji Koneksi (Test Ping)"}</span>
+                      </Button>
+                    </div>
+
+                    {pingStatus.message && (
+                      <div
+                        className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                          pingStatus.success
+                            ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                            : "bg-rose-50/50 dark:bg-rose-950/20 border-rose-500/30 text-rose-800 dark:text-rose-300"
+                        }`}
+                      >
+                        {pingStatus.success ? (
+                          <Wifi className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <WifiOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        )}
+                        <div className="space-y-0.5">
+                          <p className="font-semibold">
+                            {pingStatus.success ? "Koneksi Berhasil" : "Koneksi Bermasalah"}
+                          </p>
+                          <p className="text-[11px] leading-relaxed">{pingStatus.message}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* TAB 2: Koneksi QGIS Desktop */}
+              <TabsContent value="qgis" className="flex-1 overflow-y-auto p-5 space-y-4 m-0 text-xs">
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-xl border border-sky-500/20 bg-sky-50/50 dark:bg-sky-950/20 space-y-2">
+                    <p className="font-bold text-sky-900 dark:text-sky-200 text-xs flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                      Cara 1: Sambung Live Feed SI GAPLEK Langsung ke QGIS (Instan)
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      QGIS di laptop kantor dapat memuat layer titik material langsung via protokol HTTP GeoJSON tanpa perlu mengekspor shapefile:
+                    </p>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Input
+                        readOnly
+                        value={qgisFeedUrl}
+                        className="h-8 text-[11px] font-mono bg-background"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleCopyQgisUrl}
+                        className="h-8 text-xs shrink-0 gap-1.5"
+                      >
+                        {copiedQgisUrl ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Disalin
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" /> Salin URL
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <ol className="list-decimal list-inside text-[11px] space-y-1 text-muted-foreground pt-1">
+                      <li>Buka <strong>QGIS Desktop</strong> di laptop kantor.</li>
+                      <li>Pilih menu <strong>Layer &rarr; Add Layer &rarr; Add Vector Layer...</strong></li>
+                      <li>Pilih <strong>Source Type: Protocol (HTTP(S), cloud, etc.)</strong>.</li>
+                      <li>Tempelkan URL di atas ke kolom <strong>URI</strong> &rarr; klik <strong>Add</strong>.</li>
+                    </ol>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl border border-border bg-card space-y-2">
+                    <p className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                      <Database className="w-3.5 h-3.5 text-emerald-600" />
+                      Cara 2: Koneksi Native QGIS ke Database PostgreSQL Server IT
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Jika server IT sudah menjalankan PostgreSQL + PostGIS, Anda bisa mengedit data langsung dari QGIS:
+                    </p>
+                    <ul className="list-disc list-inside text-[11px] space-y-1 text-muted-foreground">
+                      <li>Di panel <strong>Browser</strong> sebelah kiri QGIS, klik kanan pada ikon <strong>PostGIS</strong> &rarr; pilih <strong>New Connection</strong>.</li>
+                      <li>Isi <strong>Host</strong> (IP server kantor), <strong>Port: 5432</strong>, <strong>Database</strong>, dan Akun PostgreSQL Anda.</li>
+                      <li>Klik <strong>Test Connection</strong>, lalu seret tabel <code>pdam_material_gis</code> ke kanvas peta.</li>
+                      <li>Gunakan <strong>Rule-based Symbology</strong>: Beri warna <strong>Hijau</strong> untuk <code>location_mismatch = false</code> dan <strong>Merah</strong> untuk <code>location_mismatch = true</code>.</li>
+                    </ul>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* TAB 3: Skema SQL PostGIS */}
+              <TabsContent value="sql" className="flex-1 overflow-y-auto p-5 space-y-3 m-0 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-foreground text-xs">Skrip DDL SQL PostgreSQL + PostGIS</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Jalankan skrip ini di pgAdmin / DBeaver pada server IT kantor Anda.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopySql}
+                    className="h-8 text-xs gap-1.5 shrink-0"
+                  >
+                    {copiedSql ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Disalin
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" /> Salin Skrip SQL
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="relative rounded-xl border border-border bg-zinc-950 p-3.5 text-zinc-100 font-mono text-[11px] overflow-x-auto leading-relaxed max-h-72">
+                  <pre>{POSTGIS_SQL_SCHEMA}</pre>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Tabel di atas memiliki kolom geometri <code>geom</code> bertipe Point EPSG:4326 yang otomatis dikenali oleh QGIS sebagai layer spasial dan mendukung pengeluaran format GeoJSON standar untuk web SI GAPLEK.
+                </p>
+              </TabsContent>
+            </Tabs>
+
+            <DialogFooter className="p-3.5 border-t border-border bg-muted/20 flex items-center justify-between sm:justify-between gap-2">
+              <p className="text-[11px] text-muted-foreground">
+                Status:{" "}
+                <strong>
+                  {tempExtConfig.enabled
+                    ? "Server IT Mandiri Aktif"
+                    : "Database Lokal SI GAPLEK Aktif"}
+                </strong>
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQgisDialogOpen(false)}
+                  className="text-xs h-8"
+                >
+                  Tutup
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSaveExtConfig}
+                  className="text-xs h-8 bg-primary text-primary-foreground"
+                >
+                  Simpan & Terapkan
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
