@@ -31,6 +31,9 @@ import {
   Check,
   ArrowRight,
   Image as ImageIcon,
+  RotateCw,
+  SwitchCamera,
+  Grid,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -90,6 +93,9 @@ export default function CabangPemasanganPage() {
   const [cameraStreaming, setCameraStreaming] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [currentGps, setCurrentGps] = useState<{ lat: number; lon: number; accuracy: number } | null>(null);
+  const [rotationAngle, setRotationAngle] = useState<number>(0); // 0, 90, 180, 270
+  const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">("environment");
+  const [showGridLines, setShowGridLines] = useState<boolean>(true);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -231,24 +237,41 @@ export default function CabangPemasanganPage() {
   };
 
   // ─── Camera Studio Methods ───
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (facing: "environment" | "user" = cameraFacingMode) => {
     setCameraError(null);
     setCameraStreaming(false);
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Perangkat atau browser ini tidak mendukung akses kamera langsung.");
       }
 
-      // Try environment (back) camera first, fallback to user (front/webcam)
+      // Prioritize horizontal 16:9 landscape resolution
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 360 },
+            aspectRatio: { ideal: 1.7777777778 },
+          },
           audio: false,
         });
       } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facing },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
       }
 
       streamRef.current = stream;
@@ -279,7 +302,13 @@ export default function CabangPemasanganPage() {
         { enableHighAccuracy: true, timeout: 8000 }
       );
     }
-  }, []);
+  }, [cameraFacingMode]);
+
+  const toggleFacingMode = () => {
+    const nextMode = cameraFacingMode === "environment" ? "user" : "environment";
+    setCameraFacingMode(nextMode);
+    startCamera(nextMode);
+  };
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -294,6 +323,7 @@ export default function CabangPemasanganPage() {
     setPhotoStage("BEFORE");
     setCapturedPhotoBefore("");
     setCapturedPhotoAfter("");
+    setRotationAngle(0);
     setCameraModalOpen(true);
   };
 
@@ -321,29 +351,64 @@ export default function CabangPemasanganPage() {
     return `${Math.round(sizeInBytes / 1024)} KB (.webp)`;
   };
 
-  // Capture & Draw Official Watermark on Canvas with WebP Compression (0.78 quality, max 1280px)
+  // Capture & Draw Official Watermark on Canvas with WebP Compression (Landscape/Horizontal 16:9, max 1280px)
   const captureAndWatermark = (stage: "BEFORE" | "AFTER") => {
     if (!videoRef.current || !selectedAllocation) return;
 
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
 
-    // Scale down dimensions if greater than 1280px to optimize storage (70GB HDD server safety)
-    const MAX_WIDTH = 1280;
-    let width = video.videoWidth || 1280;
-    let height = video.videoHeight || 720;
-    if (width > MAX_WIDTH) {
-      height = Math.round((height * MAX_WIDTH) / width);
-      width = MAX_WIDTH;
-    }
-    canvas.width = width;
-    canvas.height = height;
+    const rawWidth = video.videoWidth || 1280;
+    const rawHeight = video.videoHeight || 720;
+    const isRotated90or270 = rotationAngle === 90 || rotationAngle === 270;
+
+    // Output target is always crisp Landscape/Horizontal (1280 x 720, 16:9 standard)
+    const targetWidth = 1280;
+    const targetHeight = 720;
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // 1. Draw camera video frame
-    ctx.drawImage(video, 0, 0, width, height);
+    // 1. Draw camera video frame in Landscape/Horizontal orientation
+    if (isRotated90or270) {
+      ctx.save();
+      ctx.translate(targetWidth / 2, targetHeight / 2);
+      ctx.rotate((rotationAngle * Math.PI) / 180);
+      // When rotated 90 or 270 deg, video width maps to targetHeight, video height maps to targetWidth
+      ctx.drawImage(video, -targetHeight / 2, -targetWidth / 2, targetHeight, targetWidth);
+      ctx.restore();
+    } else {
+      if (rawHeight > rawWidth) {
+        // Phone held upright (portrait), crop center 16:9 horizontal slice
+        const cropHeight = Math.round(rawWidth * (9 / 16));
+        const cropY = Math.max(0, Math.round((rawHeight - cropHeight) / 2));
+        if (rotationAngle === 180) {
+          ctx.save();
+          ctx.translate(targetWidth / 2, targetHeight / 2);
+          ctx.rotate(Math.PI);
+          ctx.drawImage(video, 0, cropY, rawWidth, cropHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+          ctx.restore();
+        } else {
+          ctx.drawImage(video, 0, cropY, rawWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+        }
+      } else {
+        // Naturally horizontal/landscape stream
+        if (rotationAngle === 180) {
+          ctx.save();
+          ctx.translate(targetWidth / 2, targetHeight / 2);
+          ctx.rotate(Math.PI);
+          ctx.drawImage(video, 0, 0, rawWidth, rawHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+          ctx.restore();
+        } else {
+          ctx.drawImage(video, 0, 0, rawWidth, rawHeight, 0, 0, targetWidth, targetHeight);
+        }
+      }
+    }
+
+    const width = canvas.width;
+    const height = canvas.height;
 
     // 2. Prepare Watermark Info
     const dateStr = new Date().toLocaleString("id-ID", {
@@ -362,14 +427,14 @@ export default function CabangPemasanganPage() {
     const officer = user?.fullName || user?.username || "Petugas Lapangan";
     const branch = selectedAllocation.branchName || "Cabang PDAM";
 
-    // 3. Draw Watermark Bottom Bar
-    const bannerHeight = Math.max(130, height * 0.22);
+    // 3. Draw Watermark Bottom Bar (optimized for horizontal 16:9 format)
+    const bannerHeight = 115;
     const bannerY = height - bannerHeight;
 
     // Gradient background
     const grad = ctx.createLinearGradient(0, bannerY, 0, height);
-    grad.addColorStop(0, "rgba(0, 0, 0, 0.82)");
-    grad.addColorStop(1, "rgba(0, 0, 0, 0.97)");
+    grad.addColorStop(0, "rgba(0, 0, 0, 0.85)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0.98)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, bannerY, width, bannerHeight);
 
@@ -377,18 +442,18 @@ export default function CabangPemasanganPage() {
     const isBefore = stage === "BEFORE";
     const accentColor = isBefore ? "#f59e0b" : "#10b981"; // Amber for Before, Emerald for After
     ctx.fillStyle = accentColor;
-    ctx.fillRect(0, bannerY, width, 4);
+    ctx.fillRect(0, bannerY, width, 3);
 
     // Text configuration
     ctx.fillStyle = "#ffffff";
-    const fontSizeTitle = Math.max(15, Math.round(width * 0.021));
-    const fontSizeBody = Math.max(12, Math.round(width * 0.015));
+    const fontSizeTitle = 14;
+    const fontSizeBody = 11;
 
-    let yOffset = bannerY + fontSizeTitle + 14;
+    let yOffset = bannerY + fontSizeTitle + 10;
 
     // Header line
     ctx.font = `bold ${fontSizeTitle}px sans-serif`;
-    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SI GAPLEK", 24, yOffset);
+    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SI GAPLEK", 20, yOffset);
 
     // Stage Badge right aligned
     ctx.textAlign = "right";
@@ -397,25 +462,25 @@ export default function CabangPemasanganPage() {
     const stageBadge = isBefore
       ? "[ 1. SEBELUM PEMASANGAN / KONDISI AWAL ]"
       : "[ 2. SESUDAH PEMASANGAN / HASIL AKHIR ]";
-    ctx.fillText(stageBadge, width - 24, yOffset);
+    ctx.fillText(stageBadge, width - 20, yOffset);
     ctx.textAlign = "left";
 
     // Metadata lines
     ctx.fillStyle = "#e2e8f0";
     ctx.font = `normal ${fontSizeBody}px sans-serif`;
-    yOffset += fontSizeBody + 8;
+    yOffset += fontSizeBody + 6;
     ctx.fillText(
       `Material: ${selectedAllocation.itemName} (Qty: ${selectedAllocation.quantity}) | Ref: ${selectedAllocation.referenceNo}`,
-      24,
+      20,
       yOffset
     );
 
-    yOffset += fontSizeBody + 6;
-    ctx.fillText(`Petugas: ${officer} | Cabang: ${branch} | Waktu: ${dateStr}`, 24, yOffset);
+    yOffset += fontSizeBody + 5;
+    ctx.fillText(`Petugas: ${officer} | Cabang: ${branch} | Waktu: ${dateStr}`, 20, yOffset);
 
-    yOffset += fontSizeBody + 6;
+    yOffset += fontSizeBody + 5;
     ctx.fillStyle = "#67e8f9"; // Cyan accent for GPS
-    ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc})`, 24, yOffset);
+    ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc}) • Format: Horizontal (16:9)`, 20, yOffset);
 
     // 4. Export as WebP format with quality 0.78 (target size ~80-140 KB)
     const dataUrl = canvas.toDataURL("image/webp", 0.78);
@@ -425,7 +490,7 @@ export default function CabangPemasanganPage() {
       setPhotoStage("AFTER");
       toast({
         title: "Foto 1 (Sebelum) Berhasil",
-        description: "Lanjutkan jepret Foto 2 (Sesudah Pemasangan).",
+        description: "Format horizontal 16:9 tersimpan. Lanjutkan Foto 2 (Sesudah).",
       });
     } else {
       setCapturedPhotoAfter(dataUrl);
@@ -433,7 +498,7 @@ export default function CabangPemasanganPage() {
       stopCamera();
       toast({
         title: "Foto 2 (Sesudah) Berhasil",
-        description: "Kedua foto telah siap. Silakan periksa kembali sebelum kirim verifikasi.",
+        description: "Kedua foto horizontal siap diperiksa dan dikirim.",
       });
     }
   };
@@ -748,14 +813,14 @@ export default function CabangPemasanganPage() {
 
       {/* ─── LIVE CAMERA & DUAL PHOTO STUDIO MODAL ─── */}
       <Dialog open={cameraModalOpen} onOpenChange={(o) => !o && closeCameraModal()}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden border border-border/80 shadow-2xl bg-card max-h-[92vh] flex flex-col">
+        <DialogContent className="max-w-3xl p-0 overflow-hidden border border-border/80 shadow-2xl bg-card max-h-[94vh] flex flex-col w-[96vw]">
           {/* Header */}
           <DialogHeader className="p-4 pb-3 border-b bg-muted/20 shrink-0">
             <div className="flex items-center justify-between pr-4">
               <div>
                 <DialogTitle className="text-base flex items-center gap-2 text-foreground">
                   <Camera className="w-4 h-4 text-primary" />
-                  Kamera Dokumentasi Fisik (Wajib 2x Foto)
+                  Kamera Dokumentasi Fisik (Format Horizontal 16:9)
                 </DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Target: <strong className="text-foreground">{selectedAllocation?.itemName}</strong> (Qty: {selectedAllocation?.quantity} unit)
@@ -860,13 +925,66 @@ export default function CabangPemasanganPage() {
                   </div>
                 )}
 
-                {/* Viewfinder Camera */}
+                {/* Toolbar Kendali Kamera Horizontal */}
+                <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border text-xs flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px] font-semibold gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Format Horizontal (16:9)
+                    </Badge>
+                    {rotationAngle !== 0 && (
+                      <Badge variant="secondary" className="text-[10px] font-mono">
+                        Rotasi: {rotationAngle}°
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRotationAngle((prev) => (prev + 90) % 360)}
+                      className="h-7 text-[11px] gap-1 px-2.5 font-medium border-primary/30 text-primary hover:bg-primary/10"
+                      title="Putar Orientasi Kamera 90 Derajat"
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      <span>Putar 90° {rotationAngle !== 0 ? `(${rotationAngle}°)` : ""}</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleFacingMode}
+                      className="h-7 text-[11px] gap-1 px-2.5"
+                      title="Ganti Kamera Belakang / Depan"
+                    >
+                      <SwitchCamera className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{cameraFacingMode === "environment" ? "Kamera Belakang" : "Kamera Depan"}</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant={showGridLines ? "secondary" : "ghost"}
+                      size="sm"
+                      onClick={() => setShowGridLines(!showGridLines)}
+                      className="h-7 text-[11px] gap-1 px-2"
+                      title="Garis Level Pipa / Water Meter"
+                    >
+                      <Grid className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Level Pipa</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Viewfinder Camera (16:9 Landscape Ratio) */}
                 <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center shadow-inner">
                   {cameraError ? (
                     <div className="p-6 text-center text-white space-y-3">
                       <CameraOff className="w-12 h-12 mx-auto text-rose-400" />
                       <p className="text-sm font-medium text-rose-200">{cameraError}</p>
-                      <Button variant="secondary" size="sm" onClick={startCamera}>
+                      <Button variant="secondary" size="sm" onClick={() => startCamera()}>
                         Coba Lagi
                       </Button>
                     </div>
@@ -877,22 +995,60 @@ export default function CabangPemasanganPage() {
                         autoPlay
                         playsInline
                         muted
-                        className="w-full h-full object-cover"
+                        style={
+                          rotationAngle !== 0
+                            ? {
+                                transform: `rotate(${rotationAngle}deg)`,
+                                transformOrigin: "center center",
+                                width: rotationAngle === 90 || rotationAngle === 270 ? "56.25%" : "100%",
+                                height: rotationAngle === 90 || rotationAngle === 270 ? "177.78%" : "100%",
+                                objectFit: "cover",
+                              }
+                            : { width: "100%", height: "100%", objectFit: "cover" }
+                        }
+                        className="transition-transform duration-200"
                       />
 
+                      {/* Grid Lines & Water Meter Horizontal Level Guide */}
+                      {showGridLines && (
+                        <div className="absolute inset-0 pointer-events-none">
+                          {/* Center Horizontal Level Line */}
+                          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-emerald-400/80 flex items-center justify-between px-4">
+                            <span className="text-[9px] font-mono bg-black/70 text-emerald-300 px-1.5 py-0.5 rounded shadow">
+                              LEVEL PIPA
+                            </span>
+                            <span className="text-[9px] font-mono bg-black/70 text-emerald-300 px-1.5 py-0.5 rounded shadow">
+                              HORIZONTAL 16:9
+                            </span>
+                          </div>
+
+                          {/* Rule of Thirds Vertical Lines */}
+                          <div className="absolute inset-y-0 left-1/3 border-l border-white/20" />
+                          <div className="absolute inset-y-0 right-1/3 border-r border-white/20" />
+                          <div className="absolute inset-x-0 top-1/3 border-t border-white/20" />
+                          <div className="absolute inset-x-0 bottom-1/3 border-b border-white/20" />
+                        </div>
+                      )}
+
                       {/* Viewfinder Frame Guides */}
-                      <div className="absolute inset-5 border border-white/30 rounded-lg pointer-events-none flex flex-col justify-between p-2">
+                      <div className="absolute inset-4 border border-white/30 rounded-lg pointer-events-none flex flex-col justify-between p-2">
                         <div className="flex justify-between">
-                          <span className="w-3 h-3 border-t-2 border-l-2 border-emerald-400" />
-                          <span className="w-3 h-3 border-t-2 border-r-2 border-emerald-400" />
+                          <span className="w-3.5 h-3.5 border-t-2 border-l-2 border-emerald-400" />
+                          <span className="w-3.5 h-3.5 border-t-2 border-r-2 border-emerald-400" />
                         </div>
-                        <div className="text-center text-[10px] text-white/80 font-mono tracking-wider uppercase drop-shadow bg-black/40 py-0.5 px-2 rounded self-center">
-                          PERUMDAM TIRTA ARDHIA RINJANI — {photoStage === "BEFORE" ? "SEBELUM PASANG" : "SESUDAH PASANG"}
+                        <div className="text-center text-[10px] text-white/90 font-mono tracking-wider uppercase drop-shadow bg-black/50 backdrop-blur-xs py-0.5 px-3 rounded-full self-center border border-white/20">
+                          PERUMDAM TIRTA ARDHIA RINJANI — {photoStage === "BEFORE" ? "1. SEBELUM PASANG" : "2. SESUDAH PASANG"}
                         </div>
                         <div className="flex justify-between">
-                          <span className="w-3 h-3 border-b-2 border-l-2 border-emerald-400" />
-                          <span className="w-3 h-3 border-b-2 border-r-2 border-emerald-400" />
+                          <span className="w-3.5 h-3.5 border-b-2 border-l-2 border-emerald-400" />
+                          <span className="w-3.5 h-3.5 border-b-2 border-r-2 border-emerald-400" />
                         </div>
+                      </div>
+
+                      {/* Format Badge Bottom Left */}
+                      <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs rounded-md px-2 py-0.5 text-[10px] text-white/90 font-mono flex items-center gap-1.5 pointer-events-none">
+                        <span>📐 Mode: Landscape Horizontal (16:9)</span>
+                        {rotationAngle !== 0 && <span>• {rotationAngle}°</span>}
                       </div>
                     </>
                   )}
