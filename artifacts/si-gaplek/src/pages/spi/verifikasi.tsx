@@ -76,7 +76,7 @@ export default function SpiVerifikasiPage() {
                                             <div className="flex flex-col gap-1 items-end shrink-0">
                                                 {item.isCrossDistrict && (
                                                     <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 bg-rose-500/10 font-medium">
-                                                        LINTAS RAYON
+                                                        LINTAS WILAYAH
                                                     </Badge>
                                                 )}
                                                 {item.locationMismatch && !item.isCrossDistrict && (
@@ -88,7 +88,7 @@ export default function SpiVerifikasiPage() {
                                             <span>Cabang: {item.branchName || "—"}</span>
                                             {item.detectedDistrict && (
                                                 <span className={`text-[10px] ${item.isCrossDistrict ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
-                                                    📍 {item.detectedDistrict}
+                                                    {item.detectedDistrict}
                                                 </span>
                                             )}
                                         </CardDescription>
@@ -229,14 +229,14 @@ export default function SpiVerifikasiPage() {
                                     <div className="flex items-center gap-2">
                                         <Badge variant="outline" className="text-[10px] font-bold tracking-wider uppercase border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 bg-rose-500/10 gap-1 px-2 py-0.5">
                                             <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                                            Temuan Audit: Anomali Lintas Rayon
+                                            Temuan Audit: Anomali Lintas Wilayah
                                         </Badge>
                                         <span className="text-xs font-semibold text-rose-900 dark:text-rose-200">
                                             Material Terpasang di Luar Wilayah Cabang
                                         </span>
                                     </div>
                                     <span className="text-[11px] font-mono font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-900/50">
-                                        Deviasi: ~9.5 km ke Rayon Asal
+                                        Deviasi: ~9.5 km ke Wilayah Asal
                                     </span>
                                 </div>
 
@@ -250,7 +250,7 @@ export default function SpiVerifikasiPage() {
                                             {selectedPending.branchName || "—"}
                                         </p>
                                         <span className="text-[11px] text-muted-foreground font-mono block">
-                                            Rayon: {selectedPending.targetDistrict || "—"}
+                                            Wilayah: {selectedPending.targetDistrict || "—"}
                                         </span>
                                     </div>
 
@@ -269,11 +269,11 @@ export default function SpiVerifikasiPage() {
 
                                     <div className="p-2.5 rounded-lg border border-border/70 bg-card/80 space-y-1 flex flex-col justify-between">
                                         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground block">
-                                            Status Verifikasi Rayon
+                                            Status Verifikasi Wilayah
                                         </span>
                                         <div className="flex items-center gap-1.5">
                                             <Badge variant="outline" className="text-[10px] font-semibold border-rose-300 text-rose-700 dark:text-rose-400 bg-rose-500/10">
-                                                🚨 Di Luar Rayon Kerja
+                                                Di Luar Wilayah Kerja
                                             </Badge>
                                         </div>
                                         <span className="text-[10px] text-muted-foreground font-mono block">
@@ -287,11 +287,11 @@ export default function SpiVerifikasiPage() {
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                     <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                                     <span className="text-foreground">
-                                        Zonasi Rayon Sesuai: <strong className="font-semibold text-foreground">{selectedPending.detectedDistrict}</strong> (Wilayah Kerja {selectedPending.branchName})
+                                        Zonasi Wilayah Sesuai: <strong className="font-semibold text-foreground">{selectedPending.detectedDistrict}</strong> (Wilayah Kerja {selectedPending.branchName})
                                     </span>
                                 </div>
                                 <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-500/5 font-mono">
-                                    ✓ Rayon Valid
+                                    Wilayah Valid
                                 </Badge>
                             </div>
                         ) : null}
@@ -307,7 +307,7 @@ export default function SpiVerifikasiPage() {
                                     </h3>
                                     {selectedPending.isCrossDistrict ? (
                                         <Badge variant="outline" className="text-[10px] font-mono border-rose-300 text-rose-700 dark:text-rose-300 bg-rose-500/10">
-                                            ANOMALI RAYON
+                                            ANOMALI WILAYAH
                                         </Badge>
                                     ) : selectedPending.locationMismatch ? (
                                         <Badge variant="outline" className="text-[10px] font-mono border-amber-300 text-amber-700 dark:text-amber-300 bg-amber-500/10">
@@ -323,7 +323,7 @@ export default function SpiVerifikasiPage() {
                                 <div className="space-y-1.5 text-xs">
                                     <p className="font-medium text-foreground">
                                         {selectedPending.isCrossDistrict
-                                            ? "Lokasi fisik berada di luar batas rayon administratif cabang."
+                                            ? "Lokasi fisik berada di luar batas wilayah administratif cabang."
                                             : selectedPending.locationMismatch
                                             ? `Deviasi titik terukur ${(parseFloat(selectedPending.locationDeviationMeters) || 0).toFixed(1)}m dari titik rencana.`
                                             : "Koordinat GPS konsisten dalam radius toleransi kerja."}

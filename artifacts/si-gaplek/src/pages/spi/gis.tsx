@@ -920,7 +920,7 @@ FROM pdam_material_gis;`;
                       </p>
                       {props.isCrossDistrict ? (
                         <p className="text-[10px] text-rose-600 font-bold">
-                          🚨 Lintas Kec: {props.detectedDistrict}
+                          Lintas Wilayah: {props.detectedDistrict}
                         </p>
                       ) : isMismatch ? (
                         <p className="text-[10px] text-rose-600 font-semibold">
