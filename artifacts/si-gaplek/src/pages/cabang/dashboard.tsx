@@ -1,15 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/barcode-scanner";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Truck,
   ScanBarcode,
@@ -21,10 +17,9 @@ import {
   MapPin,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Building2,
   Activity,
-  FolderOpen
+  FolderOpen,
 } from "lucide-react";
 
 interface ShipmentItem {
@@ -63,6 +58,14 @@ interface DashboardStats {
   verifiedUnitsCount: number;
 }
 
+function DashCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl p-5 bg-white dark:bg-card border border-[#eae8e0] dark:border-border transition-colors duration-200 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
 export default function CabangDashboardPage() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -83,296 +86,432 @@ export default function CabangDashboardPage() {
 
   const handleScannerDetected = (code: string) => {
     setScannerOpen(false);
-    // Navigate to receive page with token parameter
     setLocation(`/cabang/receive?scan=${encodeURIComponent(code)}`);
   };
 
+  // Siklus progress calculation
+  const totalMaterial =
+    (statsData?.pendingUnitsCount ?? 0) +
+    (statsData?.receivedUnitsCount ?? 0) +
+    (statsData?.installedUnitsCount ?? 0);
+  const completedMaterial =
+    (statsData?.installedUnitsCount ?? 0) + (statsData?.verifiedUnitsCount ?? 0);
+  const completionRate = totalMaterial > 0 ? Math.min(100, Math.round((completedMaterial / totalMaterial) * 100)) : 0;
+
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* ── Header Cabang ── */}
-      <motion.div
-        className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-sky-900 via-sky-800 to-indigo-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-white/5 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative z-10 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/30 text-sky-200 border border-sky-400/30 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5" /> Portal Operasional Cabang
-            </span>
-            <span className="text-xs text-sky-200/80 font-mono">
-              Lombok Tengah
-            </span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-            {branchName}
-          </h1>
-          <p className="text-sky-100/80 text-sm max-w-xl">
-            Sistem penerimaan material digital per unit dengan pemindaian QR Code resmi Perumdam Tirta Ardhia Rinjani.
-          </p>
-        </div>
-
-        <div className="relative z-10 flex flex-wrap items-center gap-2.5">
-          <Button
-            onClick={() => setScannerOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-md h-11 px-5"
-          >
-            <Camera className="w-4 h-4" />
-            Scan QR Terima Barang
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setLocation("/cabang/pemasangan")}
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20 gap-2 h-11"
-          >
-            <Wrench className="w-4 h-4" />
-            Alokasi Pemasangan
-          </Button>
-        </div>
-      </motion.div>
-
-      {/* ── KPI Metrik Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-amber-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Pengiriman Menuju Cabang
-            </CardTitle>
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-              <Truck className="w-5 h-5" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="text-2xl font-black text-foreground">
-              {statsData?.activeShipmentsCount ?? 0}
-              <span className="text-xs font-normal text-muted-foreground ml-1.5">Surat Jalan</span>
-            </div>
-            <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1 flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Dalam perjalanan logistik
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-sky-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Material Perlu Di-Scan
-            </CardTitle>
-            <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center">
-              <ScanBarcode className="w-5 h-5" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="text-2xl font-black text-foreground">
-              {statsData?.pendingUnitsCount ?? 0}
-              <span className="text-xs font-normal text-muted-foreground ml-1.5">unit fisik</span>
-            </div>
-            <p className="text-xs text-sky-600 dark:text-sky-400 font-medium mt-1 flex items-center gap-1">
-              <AlertCircle className="w-3 h-3" /> Menunggu scan terima fisik
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Material Telah Diterima
-            </CardTitle>
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <PackageCheck className="w-5 h-5" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="text-2xl font-black text-foreground">
-              {statsData?.receivedUnitsCount ?? 0}
-              <span className="text-xs font-normal text-muted-foreground ml-1.5">unit</span>
-            </div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Siap dialokasikan ke pelanggan
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-indigo-500 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Terpasang & Terverifikasi
-            </CardTitle>
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="text-2xl font-black text-foreground">
-              {statsData?.installedUnitsCount ?? 0}
-              <span className="text-xs font-normal text-muted-foreground ml-1.5">unit</span>
-            </div>
-            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1 flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> Dilengkapi foto & titik GPS
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Main Section: Pengiriman Masuk Sedang Menuju Cabang ── */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-[#f7f6f3] dark:bg-background transition-colors duration-200">
+      <div className="p-5 md:p-8 max-w-[1600px] mx-auto space-y-5">
+        {/* ── Header ── */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
-              <Truck className="w-5 h-5 text-sky-600 dark:text-sky-400" />
-              Daftar Pengiriman Material Masuk
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Setiap unit material wajib dipindai (scan) satu per satu saat diterima secara fisik di kantor cabang.
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#e8f5e3] dark:bg-green-950/50 text-[#5b7553] dark:text-green-400 border border-[#a3b899]/40">
+                <Building2 className="w-3.5 h-3.5" /> Unit Cabang
+              </span>
+              <span className="text-xs text-[#8a8a7a] dark:text-muted-foreground font-mono">
+                Lombok Tengah
+              </span>
+            </div>
+            <h1 className="text-2xl font-semibold text-[#2d2d2a] dark:text-foreground tracking-tight">
+              Dashboard Cabang {branchName}
+            </h1>
+            <p className="text-sm text-[#8a8a7a] dark:text-muted-foreground">
+              Penerimaan material digital per unit dengan pemindaian QR Code resmi Perumdam Tirta Ardhia Rinjani
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/cabang/receive")}
-            className="text-xs gap-1.5"
-          >
-            Buka Halaman Penerimaan <ArrowRight className="w-3.5 h-3.5" />
-          </Button>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setScannerOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-[#5b7553] hover:bg-[#4d6346] text-white transition-colors shadow-xs"
+            >
+              <Camera className="w-4 h-4" />
+              Scan QR Terima Barang
+            </button>
+            <button
+              onClick={() => setLocation("/cabang/pemasangan")}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-white dark:bg-card hover:bg-[#f0efe9] dark:hover:bg-muted text-[#2d2d2a] dark:text-foreground border border-[#eae8e0] dark:border-border transition-colors shadow-xs"
+            >
+              <Wrench className="w-4 h-4 text-[#8b6b4a]" />
+              Alokasi Pemasangan
+            </button>
+          </div>
         </div>
 
-        {loadingShipments ? (
-          <div className="p-8 text-center text-muted-foreground">Memuat data pengiriman cabang...</div>
-        ) : shipments.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <FolderOpen className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="font-semibold text-sm">Tidak Ada Pengiriman Aktif</p>
-              <p className="text-xs mt-1">Saat ini belum ada material keluar dari gudang pusat yang ditujukan ke {branchName}.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {shipments.map((s) => {
-              const pct = s.totalUnits > 0 ? Math.round((s.receivedUnits / s.totalUnits) * 100) : 0;
-              return (
-                <Card
-                  key={s.id}
-                  className={`border shadow-xs hover:border-sky-500/50 transition-all ${
-                    s.isFullyReceived ? "bg-emerald-50/20 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-800" : ""
-                  }`}
-                >
-                  <CardHeader className="pb-3 pt-4 px-5">
-                    <div className="flex items-start justify-between gap-2">
+        {/* ── Row 1: KPI Cards (5 Columns matching SPI) ── */}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          {/* Card 1: Pengiriman Masuk (Highlighted Solid Olive) */}
+          <div className="rounded-2xl p-5 bg-[#5b7553] text-white">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium opacity-80">Pengiriman Masuk</p>
+              <Truck className="w-4 h-4 opacity-60" />
+            </div>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16 bg-white/20" />
+            ) : (
+              <>
+                <p className="text-3xl font-bold">{statsData?.activeShipmentsCount ?? 0}</p>
+                <p className="text-xs opacity-60 mt-1">Surat jalan menuju cabang</p>
+              </>
+            )}
+          </div>
+
+          {/* Card 2: Perlu Di-Scan */}
+          <DashCard>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Perlu Di-Scan</p>
+              <ScanBarcode className="w-4 h-4 text-[#c27c5a] dark:text-orange-400" />
+            </div>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <p className={`text-2xl font-bold ${(statsData?.pendingUnitsCount ?? 0) > 0 ? "text-[#c27c5a] dark:text-orange-400" : "text-[#2d2d2a] dark:text-foreground"}`}>
+                  {statsData?.pendingUnitsCount ?? 0}
+                </p>
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">Unit belum di-scan fisik</p>
+              </>
+            )}
+          </DashCard>
+
+          {/* Card 3: Telah Diterima */}
+          <DashCard>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Telah Diterima</p>
+              <PackageCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-[#2d2d2a] dark:text-foreground">{statsData?.receivedUnitsCount ?? 0}</p>
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">Tersimpan di gudang cabang</p>
+              </>
+            )}
+          </DashCard>
+
+          {/* Card 4: Terpasang Lapangan */}
+          <DashCard>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Terpasang</p>
+              <Activity className="w-4 h-4 text-[#8b6b4a] dark:text-yellow-500" />
+            </div>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-[#2d2d2a] dark:text-foreground">{statsData?.installedUnitsCount ?? 0}</p>
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">Foto & koordinat terdata</p>
+              </>
+            )}
+          </DashCard>
+
+          {/* Card 5: Terverifikasi SPI */}
+          <DashCard>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Terverifikasi</p>
+              <ShieldCheck className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
+            </div>
+            {loadingStats ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-[#5b7553] dark:text-green-500">{statsData?.verifiedUnitsCount ?? 0}</p>
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">Lolos audit pengawasan SPI</p>
+              </>
+            )}
+          </DashCard>
+        </div>
+
+        {/* ── Row 2: Siklus Material, Aksi Cepat Cabang, & SOP Operasional ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Column 1: Siklus Material Cabang */}
+          <DashCard>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground">Siklus Material Cabang</p>
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Status siklus unit di cabang</p>
+              </div>
+              <Clock className="w-4 h-4 text-[#8b6b4a] dark:text-yellow-500" />
+            </div>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between hover:bg-muted/50 rounded-lg px-2 py-1.5 transition-colors">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#c27c5a]" />
+                  <span className="text-sm text-[#6b6b5e] dark:text-muted-foreground">Menunggu Scan Fisik</span>
+                </div>
+                <span className="text-sm font-bold text-[#c27c5a] dark:text-orange-400">
+                  {statsData?.pendingUnitsCount ?? 0}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between hover:bg-muted/50 rounded-lg px-2 py-1.5 transition-colors">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-600" />
+                  <span className="text-sm text-[#6b6b5e] dark:text-muted-foreground">Diterima di Cabang</span>
+                </div>
+                <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                  {statsData?.receivedUnitsCount ?? 0}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between hover:bg-muted/50 rounded-lg px-2 py-1.5 transition-colors">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#e8c468]" />
+                  <span className="text-sm text-[#6b6b5e] dark:text-muted-foreground">Terpasang Lapangan</span>
+                </div>
+                <span className="text-sm font-bold text-[#d4a55a] dark:text-yellow-400">
+                  {statsData?.installedUnitsCount ?? 0}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between hover:bg-muted/50 rounded-lg px-2 py-1.5 transition-colors">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#5b7553]" />
+                  <span className="text-sm text-[#6b6b5e] dark:text-muted-foreground">Terverifikasi SPI</span>
+                </div>
+                <span className="text-sm font-bold text-[#5b7553] dark:text-green-400">
+                  {statsData?.verifiedUnitsCount ?? 0}
+                </span>
+              </div>
+            </div>
+
+            {/* Completion rate bar */}
+            <div className="mt-4 pt-3 border-t border-[#eae8e0] dark:border-border">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Realisasi Terpasang</p>
+                <p className={`text-sm font-bold ${completionRate >= 80 ? "text-[#5b7553]" : completionRate >= 50 ? "text-[#d4a55a]" : "text-[#c27c5a]"}`}>
+                  {completionRate}%
+                </p>
+              </div>
+              <div className="w-full h-2 rounded-full bg-[#f0efe9] dark:bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${completionRate}%`,
+                    background: completionRate >= 80 ? "#5b7553" : completionRate >= 50 ? "#e8c468" : "#c27c5a",
+                  }}
+                />
+              </div>
+            </div>
+          </DashCard>
+
+          {/* Column 2: Aksi Cepat Cabang */}
+          <DashCard>
+            <p className="text-sm font-semibold mb-4 text-[#2d2d2a] dark:text-foreground">Aksi Cepat Operasional</p>
+            <div className="space-y-2">
+              <button
+                onClick={() => setScannerOpen(true)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#f0efe9] dark:hover:bg-muted transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#e8f5e3] dark:bg-green-950/50">
+                  <Camera className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Scan QR Terima Barang</p>
+                  <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Pindai QR fisik material yang tiba</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setLocation("/cabang/pemasangan")}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#f0efe9] dark:hover:bg-muted transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#f5f0e0] dark:bg-yellow-950/50">
+                  <Wrench className="w-4 h-4 text-[#8b6b4a] dark:text-yellow-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Alokasi Pemasangan</p>
+                  <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Catat foto & koordinat GPS lapangan</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setLocation("/cabang/tracking")}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#f0efe9] dark:hover:bg-muted transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 dark:bg-blue-950/50">
+                  <FolderOpen className="w-4 h-4 text-blue-600 dark:text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#2d2d2a] dark:text-foreground">Pelacakan Material Unit</p>
+                  <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Riwayat status per nomor seri unit</p>
+                </div>
+              </button>
+            </div>
+          </DashCard>
+
+          {/* Column 3: SOP Pengendalian Material (Warm DashCard matching SPI style) */}
+          <DashCard className="bg-[#fffdf5] dark:bg-card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-[#e8f5e3] dark:bg-green-950/50 flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground">SOP Material Cabang</p>
+                <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">Pengendalian Fisik & Audit SPI</p>
+              </div>
+            </div>
+            <div className="space-y-2.5 text-xs text-[#6b6b5e] dark:text-muted-foreground leading-relaxed">
+              <div className="flex items-start gap-2.5 p-2 rounded-lg bg-white/60 dark:bg-muted/20 border border-[#eae8e0]/60 dark:border-border/40">
+                <span className="w-4 h-4 rounded-full bg-[#5b7553] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                <span><strong>Scan QR Surat Jalan / BPB:</strong> Cukup pindai kode QR pada lembar Surat Jalan / BPB resmi dari gudang pusat. Rincian dan kuantitas seluruh barang otomatis terverifikasi.</span>
+              </div>
+              <div className="flex items-start gap-2.5 p-2 rounded-lg bg-white/60 dark:bg-muted/20 border border-[#eae8e0]/60 dark:border-border/40">
+                <span className="w-4 h-4 rounded-full bg-[#5b7553] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                <span><strong>Anti-Rescan Terkunci:</strong> Unit yang telah tercatat diterima terkunci secara sistemik dari potensi rescan atau duplikasi.</span>
+              </div>
+              <div className="flex items-start gap-2.5 p-2 rounded-lg bg-white/60 dark:bg-muted/20 border border-[#eae8e0]/60 dark:border-border/40">
+                <span className="w-4 h-4 rounded-full bg-[#5b7553] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                <span><strong>Geotagging & SPI:</strong> Pemasangan di pelanggan wajib melampirkan koordinat GPS dan foto fisik untuk audit verifikasi tim SPI.</span>
+              </div>
+            </div>
+          </DashCard>
+        </div>
+
+        {/* ── Row 3: Daftar Pengiriman Material Masuk ── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-base font-semibold text-[#2d2d2a] dark:text-foreground flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#5b7553]" />
+                Daftar Pengiriman Material Masuk
+              </p>
+              <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">
+                Surat jalan logistik menuju kantor cabang {branchName} yang memerlukan penerimaan fisik
+              </p>
+            </div>
+            <button
+              onClick={() => setLocation("/cabang/receive")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-card hover:bg-[#f0efe9] dark:hover:bg-muted text-[#2d2d2a] dark:text-foreground border border-[#eae8e0] dark:border-border transition-colors shadow-xs"
+            >
+              Buka Halaman Penerimaan <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {loadingShipments ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <DashCard className="h-44 flex items-center justify-center">
+                <Skeleton className="h-28 w-full rounded-xl" />
+              </DashCard>
+              <DashCard className="h-44 flex items-center justify-center">
+                <Skeleton className="h-28 w-full rounded-xl" />
+              </DashCard>
+            </div>
+          ) : shipments.length === 0 ? (
+            <DashCard className="py-12 text-center text-[#8a8a7a] dark:text-muted-foreground">
+              <FolderOpen className="w-10 h-10 mx-auto mb-2 opacity-30 text-[#8a8a7a]" />
+              <p className="font-semibold text-sm text-[#2d2d2a] dark:text-foreground">Tidak Ada Pengiriman Aktif</p>
+              <p className="text-xs mt-1">Saat ini belum ada pengiriman material keluar dari gudang pusat yang ditujukan ke {branchName}.</p>
+            </DashCard>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {shipments.map((s) => {
+                const pct = s.totalUnits > 0 ? Math.round((s.receivedUnits / s.totalUnits) * 100) : 0;
+                return (
+                  <DashCard
+                    key={s.id}
+                    className={`transition-all hover:border-[#a3b899] ${
+                      s.isFullyReceived ? "bg-[#fcfdfa] dark:bg-card border-[#c8d6c0] dark:border-green-950/40" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-foreground">
+                          <span className="font-mono font-bold text-sm text-[#2d2d2a] dark:text-foreground">
                             {s.referenceNo}
                           </span>
-                          <Badge
-                            variant={s.isFullyReceived ? "default" : s.receivedUnits > 0 ? "secondary" : "outline"}
-                            className={`text-[10px] font-semibold ${
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${
                               s.isFullyReceived
-                                ? "bg-emerald-600 text-white"
+                                ? "bg-[#e8f5e3] text-[#5b7553] border border-[#a3b899]/50"
                                 : s.receivedUnits > 0
-                                ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300 border-sky-300"
-                                : "bg-amber-50 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300"
+                                ? "bg-[#f5f0e0] text-[#8b6b4a] border border-[#e8c468]/50"
+                                : "bg-[#fff0e6] text-[#c27c5a] border border-[#c27c5a]/30"
                             }`}
                           >
                             {s.isFullyReceived
-                              ? "LENGKAP DITERIMA"
+                              ? "Lengkap Diterima"
                               : s.receivedUnits > 0
-                              ? `SEBAGIAN (${s.receivedUnits}/${s.totalUnits})`
-                              : `BELUM DI-SCAN (0/${s.totalUnits})`}
-                          </Badge>
+                              ? `Sebagian (${s.receivedUnits}/${s.totalUnits})`
+                              : `Belum Di-Scan (0/${s.totalUnits})`}
+                          </span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Dari: <span className="font-medium text-foreground">{s.warehouseName || "Gudang Pusat"}</span> | Tanggal: {formatDate(s.transactionDate)}
+                        <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">
+                          Dari: <span className="font-medium text-[#2d2d2a] dark:text-foreground">{s.warehouseName || "Gudang Pusat"}</span> • Tanggal: {formatDate(s.transactionDate)}
                         </p>
                       </div>
 
-                      <Button
-                        size="sm"
+                      <button
                         onClick={() => setLocation(`/cabang/receive?shipment=${encodeURIComponent(s.referenceNo)}`)}
-                        className={`gap-1 text-xs h-8 ${
+                        className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shadow-xs ${
                           s.isFullyReceived
-                            ? "bg-muted text-muted-foreground hover:bg-muted/80"
-                            : "bg-sky-700 hover:bg-sky-800 text-white"
+                            ? "bg-[#f0efe9] dark:bg-muted text-[#6b6b5e] dark:text-muted-foreground hover:bg-[#e4e2d8]"
+                            : "bg-[#5b7553] hover:bg-[#4d6346] text-white"
                         }`}
                       >
                         <ScanBarcode className="w-3.5 h-3.5" />
                         {s.isFullyReceived ? "Lihat Rincian" : "Scan Terima"}
-                      </Button>
+                      </button>
                     </div>
-                  </CardHeader>
 
-                  <CardContent className="px-5 pb-4 space-y-3">
                     {/* Progress bar */}
-                    <div className="space-y-1">
+                    <div className="space-y-1.5 my-3">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground font-medium">Progress Scan Fisik:</span>
-                        <span className="font-bold text-foreground font-mono">
+                        <span className="text-[#8a8a7a] dark:text-muted-foreground font-medium">Progress Scan Fisik:</span>
+                        <span className="font-semibold text-[#2d2d2a] dark:text-foreground font-mono">
                           {s.receivedUnits} / {s.totalUnits} unit ({pct}%)
                         </span>
                       </div>
-                      <Progress value={pct} className="h-2" />
+                      <div className="w-full h-2 rounded-full bg-[#f0efe9] dark:bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${pct}%`,
+                            background: s.isFullyReceived ? "#5b7553" : pct > 0 ? "#e8c468" : "#c27c5a",
+                          }}
+                        />
+                      </div>
                     </div>
 
-                    {/* Items preview preview */}
-                    <div className="bg-muted/40 rounded-lg p-2.5 space-y-1 text-xs">
+                    {/* Items preview */}
+                    <div className="bg-[#f7f6f3] dark:bg-muted/30 rounded-xl p-3 space-y-1.5 text-xs border border-[#eae8e0]/60 dark:border-border/40">
                       {s.units.slice(0, 3).map((u, i) => (
                         <div key={u.trackingId} className="flex items-center justify-between py-0.5">
-                          <span className="font-medium truncate max-w-[200px]">
+                          <span className="font-medium text-[#2d2d2a] dark:text-foreground truncate max-w-[200px] sm:max-w-[260px]">
                             {i + 1}. {u.itemName}
                           </span>
                           {u.receivedAt ? (
-                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <span className="text-[11px] font-medium text-[#5b7553] dark:text-green-400 flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3" /> Diterima
                             </span>
                           ) : (
-                            <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <span className="text-[11px] font-medium text-[#c27c5a] dark:text-orange-400 flex items-center gap-1">
                               <Clock className="w-3 h-3" /> Belum Scan
                             </span>
                           )}
                         </div>
                       ))}
                       {s.units.length > 3 && (
-                        <div className="text-[11px] text-muted-foreground text-center pt-1 border-t">
-                          +{s.units.length - 3} unit lainnya
+                        <div className="text-[11px] text-[#8a8a7a] dark:text-muted-foreground text-center pt-1 border-t border-[#eae8e0] dark:border-border">
+                          +{s.units.length - 3} unit lainnya dalam surat jalan ini
                         </div>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                  </DashCard>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Barcode Scanner Modal */}
+        <BarcodeScanner
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onDetected={handleScannerDetected}
+        />
       </div>
-
-      {/* ── Guidance / Workflow Guide ── */}
-      <Card className="border-sky-200 dark:border-sky-900 bg-sky-50/40 dark:bg-sky-950/20">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center shrink-0 mt-0.5">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-sky-950 dark:text-sky-200">
-                SOP Pengendalian Material Cabang (Anti-Rescan & Audit SPI)
-              </h3>
-              <p className="text-xs text-sky-900/80 dark:text-sky-300/80 leading-relaxed">
-                1. Setiap fisik material yang tiba di cabang wajib di-scan satu per satu. Sistem akan otomatis menghitung sisa barang yang belum di-scan.<br />
-                2. Unit yang sudah di-scan tidak dapat di-scan ulang untuk mencegah duplikasi penerimaan.<br />
-                3. Setelah barang lengkap diterima, lanjutkan ke menu <strong>Alokasi Pemasangan</strong> untuk mencatat titik koordinat GPS dan foto bukti pemasangan di lapangan.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Barcode Scanner Modal */}
-      <BarcodeScanner
-        open={scannerOpen}
-        onClose={() => setScannerOpen(false)}
-        onDetected={handleScannerDetected}
-      />
     </div>
   );
 }

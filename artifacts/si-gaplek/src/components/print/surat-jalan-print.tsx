@@ -277,8 +277,8 @@ export function SuratJalanPrintModal({ open, onClose, data }: SuratJalanPrintPro
 
               <div>
                 <p className="text-zinc-600 font-medium mb-16">
-                  Dibawa Oleh,<br />
-                  <span className="font-semibold text-zinc-800">Pengemudi / Ekspedisi</span>
+                  Mengetahui,<br />
+                  <span className="font-semibold text-zinc-800">Kepala Bidang SPI</span>
                 </p>
                 <div className="border-t border-zinc-800 mx-4 pt-1 font-bold text-zinc-900">
                   ( ............................... )

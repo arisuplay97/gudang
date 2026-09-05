@@ -20,10 +20,13 @@ export const installationEvidenceTable = pgTable("installation_evidence", {
     allocationId: integer("allocation_id").notNull().references(() => installationAllocationsTable.id),
     trackingId: integer("tracking_id").notNull().references(() => materialTrackingTable.id), // denormalized for quick lookup
     attemptNumber: integer("attempt_number").notNull().default(1),
-    // Photo (Section 25)
+    // Photo (Section 25) - Supports Before & After documentation
     photoUrl: text("photo_url").notNull(),
     originalPhotoUrl: text("original_photo_url").notNull(),
     photoChecksum: text("photo_checksum").notNull(), // SHA-256
+    photoBeforeUrl: text("photo_before_url"),
+    photoAfterUrl: text("photo_after_url"),
+    photoBeforeChecksum: text("photo_before_checksum"),
     // GPS (Section 9.3)
     latitude: numeric("latitude", { precision: 10, scale: 7 }).notNull(),
     longitude: numeric("longitude", { precision: 10, scale: 7 }).notNull(),
@@ -37,10 +40,14 @@ export const installationEvidenceTable = pgTable("installation_evidence", {
     // Verification status
     status: text("status").notNull().default("PENDING"), // PENDING | TERVERIFIKASI | DITOLAK
     rejectionReason: text("rejection_reason"),
-    // Location mismatch (Section 15)
+    // Location mismatch (Section 15) & Cross-District Anti-Fraud
     locationMismatch: boolean("location_mismatch").default(false),
     locationDeviationMeters: numeric("location_deviation_meters", { precision: 10, scale: 2 }),
     mismatchThresholdMeters: numeric("mismatch_threshold_meters", { precision: 10, scale: 2 }),
+    detectedDistrict: text("detected_district"),
+    targetDistrict: text("target_district"),
+    isCrossDistrict: boolean("is_cross_district").default(false),
+    crossDistrictNotes: text("cross_district_notes"),
     // Idempotency
     idempotencyKey: text("idempotency_key").unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -28,6 +28,9 @@ import {
   CameraOff,
   Sparkles,
   FileSpreadsheet,
+  Check,
+  ArrowRight,
+  Image as ImageIcon,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -78,10 +81,12 @@ export default function CabangPemasanganPage() {
   const [plannedLon, setPlannedLon] = useState<string>("");
   const [isGettingGpsForAlloc, setIsGettingGpsForAlloc] = useState(false);
 
-  // Camera Studio State
+  // Camera Studio State (Dual Photos: Before & After with WebP Compression)
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState<AllocationItem | null>(null);
-  const [capturedWatermarkedPhoto, setCapturedWatermarkedPhoto] = useState<string>("");
+  const [photoStage, setPhotoStage] = useState<"BEFORE" | "AFTER" | "REVIEW">("BEFORE");
+  const [capturedPhotoBefore, setCapturedPhotoBefore] = useState<string>("");
+  const [capturedPhotoAfter, setCapturedPhotoAfter] = useState<string>("");
   const [cameraStreaming, setCameraStreaming] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [currentGps, setCurrentGps] = useState<{ lat: number; lon: number; accuracy: number } | null>(null);
@@ -286,7 +291,9 @@ export default function CabangPemasanganPage() {
 
   const openCameraModal = (alloc: AllocationItem) => {
     setSelectedAllocation(alloc);
-    setCapturedWatermarkedPhoto("");
+    setPhotoStage("BEFORE");
+    setCapturedPhotoBefore("");
+    setCapturedPhotoAfter("");
     setCameraModalOpen(true);
   };
 
@@ -294,25 +301,41 @@ export default function CabangPemasanganPage() {
     stopCamera();
     setCameraModalOpen(false);
     setSelectedAllocation(null);
-    setCapturedWatermarkedPhoto("");
+    setCapturedPhotoBefore("");
+    setCapturedPhotoAfter("");
+    setPhotoStage("BEFORE");
   };
 
   useEffect(() => {
-    if (cameraModalOpen && !capturedWatermarkedPhoto) {
+    if (cameraModalOpen && photoStage !== "REVIEW") {
       const t = setTimeout(() => startCamera(), 150);
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [cameraModalOpen, capturedWatermarkedPhoto, startCamera]);
+  }, [cameraModalOpen, photoStage, startCamera]);
 
-  // Capture & Draw Official Watermark on Canvas
-  const captureAndWatermark = async () => {
+  // Helper: Get human-readable KB size of Base64 WebP
+  const getApproxKb = (b64: string) => {
+    if (!b64) return "0 KB";
+    const sizeInBytes = (b64.length * 3) / 4;
+    return `${Math.round(sizeInBytes / 1024)} KB (.webp)`;
+  };
+
+  // Capture & Draw Official Watermark on Canvas with WebP Compression (0.78 quality, max 1280px)
+  const captureAndWatermark = (stage: "BEFORE" | "AFTER") => {
     if (!videoRef.current || !selectedAllocation) return;
 
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
-    const width = video.videoWidth || 1280;
-    const height = video.videoHeight || 720;
+
+    // Scale down dimensions if greater than 1280px to optimize storage (70GB HDD server safety)
+    const MAX_WIDTH = 1280;
+    let width = video.videoWidth || 1280;
+    let height = video.videoHeight || 720;
+    if (width > MAX_WIDTH) {
+      height = Math.round((height * MAX_WIDTH) / width);
+      width = MAX_WIDTH;
+    }
     canvas.width = width;
     canvas.height = height;
 
@@ -340,24 +363,26 @@ export default function CabangPemasanganPage() {
     const branch = selectedAllocation.branchName || "Cabang PDAM";
 
     // 3. Draw Watermark Bottom Bar
-    const bannerHeight = Math.max(120, height * 0.2);
+    const bannerHeight = Math.max(130, height * 0.22);
     const bannerY = height - bannerHeight;
 
-    // Gradient background for legibility
+    // Gradient background
     const grad = ctx.createLinearGradient(0, bannerY, 0, height);
-    grad.addColorStop(0, "rgba(0, 0, 0, 0.75)");
-    grad.addColorStop(1, "rgba(0, 0, 0, 0.95)");
+    grad.addColorStop(0, "rgba(0, 0, 0, 0.82)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0.97)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, bannerY, width, bannerHeight);
 
-    // Accent line
-    ctx.fillStyle = "#10b981"; // Emerald
+    // Stage-specific accent bar
+    const isBefore = stage === "BEFORE";
+    const accentColor = isBefore ? "#f59e0b" : "#10b981"; // Amber for Before, Emerald for After
+    ctx.fillStyle = accentColor;
     ctx.fillRect(0, bannerY, width, 4);
 
     // Text configuration
     ctx.fillStyle = "#ffffff";
-    const fontSizeTitle = Math.max(16, Math.round(width * 0.022));
-    const fontSizeBody = Math.max(13, Math.round(width * 0.016));
+    const fontSizeTitle = Math.max(15, Math.round(width * 0.021));
+    const fontSizeBody = Math.max(12, Math.round(width * 0.015));
 
     let yOffset = bannerY + fontSizeTitle + 14;
 
@@ -365,11 +390,14 @@ export default function CabangPemasanganPage() {
     ctx.font = `bold ${fontSizeTitle}px sans-serif`;
     ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SI GAPLEK", 24, yOffset);
 
-    // Badge text right aligned
+    // Stage Badge right aligned
     ctx.textAlign = "right";
-    ctx.fillStyle = "#34d399";
-    ctx.font = `bold ${fontSizeBody}px sans-serif`;
-    ctx.fillText("BUKTI DOKUMENTASI FISIK", width - 24, yOffset);
+    ctx.fillStyle = accentColor;
+    ctx.font = `bold ${fontSizeBody + 2}px sans-serif`;
+    const stageBadge = isBefore
+      ? "[ 1. SEBELUM PEMASANGAN / KONDISI AWAL ]"
+      : "[ 2. SESUDAH PEMASANGAN / HASIL AKHIR ]";
+    ctx.fillText(stageBadge, width - 24, yOffset);
     ctx.textAlign = "left";
 
     // Metadata lines
@@ -389,15 +417,37 @@ export default function CabangPemasanganPage() {
     ctx.fillStyle = "#67e8f9"; // Cyan accent for GPS
     ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc})`, 24, yOffset);
 
-    // 4. Export as image data URL
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    setCapturedWatermarkedPhoto(dataUrl);
-    stopCamera();
+    // 4. Export as WebP format with quality 0.78 (target size ~80-140 KB)
+    const dataUrl = canvas.toDataURL("image/webp", 0.78);
+
+    if (isBefore) {
+      setCapturedPhotoBefore(dataUrl);
+      setPhotoStage("AFTER");
+      toast({
+        title: "Foto 1 (Sebelum) Berhasil",
+        description: "Lanjutkan jepret Foto 2 (Sesudah Pemasangan).",
+      });
+    } else {
+      setCapturedPhotoAfter(dataUrl);
+      setPhotoStage("REVIEW");
+      stopCamera();
+      toast({
+        title: "Foto 2 (Sesudah) Berhasil",
+        description: "Kedua foto telah siap. Silakan periksa kembali sebelum kirim verifikasi.",
+      });
+    }
   };
 
-  // Submit Final Captured Photo
+  // Submit Dual Evidence Photos (Before & After WebP)
   const handleSubmitEvidence = () => {
-    if (!selectedAllocation || !capturedWatermarkedPhoto) return;
+    if (!selectedAllocation || !capturedPhotoBefore || !capturedPhotoAfter) {
+      toast({
+        variant: "destructive",
+        title: "Foto Belum Lengkap",
+        description: "Wajib mengambil kedua foto (Sebelum & Sesudah pemasangan).",
+      });
+      return;
+    }
 
     // Fallback GPS if not available
     const lat = currentGps?.lat ?? (selectedAllocation.plannedLatitude ? parseFloat(selectedAllocation.plannedLatitude) : -8.584);
@@ -405,7 +455,8 @@ export default function CabangPemasanganPage() {
 
     submitEvidenceMutation.mutate({
       allocationId: selectedAllocation.allocationId,
-      photoBase64: capturedWatermarkedPhoto,
+      photoBeforeBase64: capturedPhotoBefore,
+      photoBase64: capturedPhotoAfter,
       latitude: lat,
       longitude: lon,
       gpsAccuracy: currentGps?.accuracy ?? 5.0,
@@ -695,107 +746,305 @@ export default function CabangPemasanganPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── LIVE CAMERA & WATERMARK STUDIO MODAL ─── */}
+      {/* ─── LIVE CAMERA & DUAL PHOTO STUDIO MODAL ─── */}
       <Dialog open={cameraModalOpen} onOpenChange={(o) => !o && closeCameraModal()}>
-        <DialogContent className="max-w-xl p-0 overflow-hidden border-2 border-primary/20 bg-background">
-          <DialogHeader className="p-4 pb-2 border-b bg-muted/20">
+        <DialogContent className="max-w-2xl p-0 overflow-hidden border border-border/80 shadow-2xl bg-card max-h-[92vh] flex flex-col">
+          {/* Header */}
+          <DialogHeader className="p-4 pb-3 border-b bg-muted/20 shrink-0">
             <div className="flex items-center justify-between pr-4">
               <div>
-                <DialogTitle className="text-base flex items-center gap-2">
+                <DialogTitle className="text-base flex items-center gap-2 text-foreground">
                   <Camera className="w-4 h-4 text-primary" />
-                  Kamera Dokumentasi Fisik
+                  Kamera Dokumentasi Fisik (Wajib 2x Foto)
                 </DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Target: {selectedAllocation?.itemName} (Qty: {selectedAllocation?.quantity})
+                  Target: <strong className="text-foreground">{selectedAllocation?.itemName}</strong> (Qty: {selectedAllocation?.quantity} unit)
                 </p>
               </div>
-              {currentGps && (
+              {currentGps ? (
                 <Badge variant="outline" className="text-[10px] font-mono gap-1 text-emerald-600 border-emerald-300">
                   <Compass className="w-3 h-3" />
-                  GPS Terkunci (±{currentGps.accuracy.toFixed(0)}m)
+                  GPS ±{currentGps.accuracy.toFixed(0)}m
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] font-mono gap-1 text-amber-600 border-amber-300">
+                  <Compass className="w-3 h-3 animate-spin" />
+                  Mencari GPS...
                 </Badge>
               )}
             </div>
+
+            {/* Stepper Wizard */}
+            <div className="grid grid-cols-3 gap-2 pt-3">
+              <div
+                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition-colors ${
+                  photoStage === "BEFORE"
+                    ? "bg-amber-500/10 border-amber-500/50 text-amber-700 dark:text-amber-400"
+                    : capturedPhotoBefore
+                    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                    : "bg-muted/40 border-border text-muted-foreground"
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                  capturedPhotoBefore ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"
+                }`}>
+                  {capturedPhotoBefore ? <Check className="w-3 h-3" /> : "1"}
+                </span>
+                <span className="truncate">Foto Sebelum</span>
+              </div>
+
+              <div
+                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition-colors ${
+                  photoStage === "AFTER"
+                    ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
+                    : capturedPhotoAfter
+                    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                    : "bg-muted/40 border-border text-muted-foreground"
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                  capturedPhotoAfter ? "bg-emerald-600 text-white" : "bg-muted-foreground/30 text-foreground"
+                }`}>
+                  {capturedPhotoAfter ? <Check className="w-3 h-3" /> : "2"}
+                </span>
+                <span className="truncate">Foto Sesudah</span>
+              </div>
+
+              <div
+                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition-colors ${
+                  photoStage === "REVIEW"
+                    ? "bg-primary/10 border-primary/40 text-primary"
+                    : "bg-muted/40 border-border text-muted-foreground"
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                  photoStage === "REVIEW" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/30 text-foreground"
+                }`}>
+                  3
+                </span>
+                <span className="truncate">Review & Kirim</span>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="p-4 space-y-4">
-            {/* Viewport or Preview */}
-            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center shadow-inner">
-              {capturedWatermarkedPhoto ? (
-                // Captured Watermarked Preview
-                <img
-                  src={capturedWatermarkedPhoto}
-                  alt="Bukti Terpindai"
-                  className="w-full h-full object-contain"
-                />
-              ) : cameraError ? (
-                // Camera Error State
-                <div className="p-6 text-center text-white space-y-3">
-                  <CameraOff className="w-12 h-12 mx-auto text-rose-400" />
-                  <p className="text-sm font-medium text-rose-200">{cameraError}</p>
-                  <Button variant="secondary" size="sm" onClick={startCamera}>
-                    Coba Lagi
-                  </Button>
-                </div>
-              ) : (
-                // Live Viewfinder
-                <>
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-
-                  {/* Viewfinder Frame Guides */}
-                  <div className="absolute inset-6 border border-white/30 rounded-lg pointer-events-none flex flex-col justify-between p-2">
-                    <div className="flex justify-between">
-                      <span className="w-3 h-3 border-t-2 border-l-2 border-emerald-400" />
-                      <span className="w-3 h-3 border-t-2 border-r-2 border-emerald-400" />
+          {/* Dialog Scrollable Body */}
+          <div className="p-4 space-y-4 overflow-y-auto flex-1">
+            {photoStage !== "REVIEW" ? (
+              <>
+                {/* Stage Banner */}
+                {photoStage === "BEFORE" ? (
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs flex items-center justify-between text-amber-800 dark:text-amber-300">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                      <div>
+                        <strong>Tahap 1: Foto Sebelum Pemasangan (Kondisi Awal)</strong>
+                        <p className="text-[11px] opacity-90">Arahkan kamera ke titik/pipa sebelum meteran & aksesoris dipasang.</p>
+                      </div>
                     </div>
-                    <div className="text-center text-[10px] text-white/70 font-mono tracking-wider uppercase drop-shadow">
-                      PERUMDAM TIRTA ARDHIA RINJANI
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="w-3 h-3 border-b-2 border-l-2 border-emerald-400" />
-                      <span className="w-3 h-3 border-b-2 border-r-2 border-emerald-400" />
-                    </div>
+                    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300 text-[10px]">
+                      WebP ~100KB
+                    </Badge>
                   </div>
-                </>
-              )}
-            </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between text-emerald-800 dark:text-emerald-300">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      <div>
+                        <strong>Tahap 2: Foto Sesudah Pemasangan (Hasil Akhir)</strong>
+                        <p className="text-[11px] opacity-90">Arahkan ke meteran yang sudah terpasang rapi. Pastikan nomor seri & angka register terbaca tajam.</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="border-emerald-400 text-emerald-700 dark:text-emerald-300 text-[10px]">
+                      WebP ~100KB
+                    </Badge>
+                  </div>
+                )}
 
-            {/* GPS & Status Summary */}
-            {currentGps ? (
-              <div className="p-2.5 rounded-lg bg-muted/40 border text-xs flex items-center justify-between text-muted-foreground font-mono">
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-primary" />
-                  {currentGps.lat.toFixed(6)}, {currentGps.lon.toFixed(6)}
-                </span>
-                <span>Akurasi: ±{currentGps.accuracy.toFixed(1)}m</span>
-              </div>
+                {/* Viewfinder Camera */}
+                <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center shadow-inner">
+                  {cameraError ? (
+                    <div className="p-6 text-center text-white space-y-3">
+                      <CameraOff className="w-12 h-12 mx-auto text-rose-400" />
+                      <p className="text-sm font-medium text-rose-200">{cameraError}</p>
+                      <Button variant="secondary" size="sm" onClick={startCamera}>
+                        Coba Lagi
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                      />
+
+                      {/* Viewfinder Frame Guides */}
+                      <div className="absolute inset-5 border border-white/30 rounded-lg pointer-events-none flex flex-col justify-between p-2">
+                        <div className="flex justify-between">
+                          <span className="w-3 h-3 border-t-2 border-l-2 border-emerald-400" />
+                          <span className="w-3 h-3 border-t-2 border-r-2 border-emerald-400" />
+                        </div>
+                        <div className="text-center text-[10px] text-white/80 font-mono tracking-wider uppercase drop-shadow bg-black/40 py-0.5 px-2 rounded self-center">
+                          PERUMDAM TIRTA ARDHIA RINJANI — {photoStage === "BEFORE" ? "SEBELUM PASANG" : "SESUDAH PASANG"}
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="w-3 h-3 border-b-2 border-l-2 border-emerald-400" />
+                          <span className="w-3 h-3 border-b-2 border-r-2 border-emerald-400" />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* GPS Status Pill */}
+                {currentGps ? (
+                  <div className="p-2.5 rounded-lg bg-muted/40 border text-xs flex items-center justify-between text-muted-foreground font-mono">
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-primary" />
+                      {currentGps.lat.toFixed(6)}, {currentGps.lon.toFixed(6)}
+                    </span>
+                    <span>Akurasi: ±{currentGps.accuracy.toFixed(1)}m</span>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-xs flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>Mengunci koordinat GPS perangkat untuk watermark...</span>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-xs flex items-center gap-2 text-amber-800 dark:text-amber-300">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>Menunggu sinyal GPS perangkat untuk penempelan watermark akurat...</span>
+              /* ─── REVIEW SCREEN: DUAL PHOTOS & CUSTOMER FORM ─── */
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 text-xs flex items-center justify-between text-emerald-800 dark:text-emerald-300">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Kedua foto berhasil dikompresi ke <strong>.webp</strong> dan siap dikirim ke SPI.</span>
+                  </div>
+                  <Badge variant="outline" className="border-emerald-400 text-emerald-700 dark:text-emerald-300 text-[10px]">
+                    Siap Dikirim
+                  </Badge>
+                </div>
+
+                {/* Side-by-Side Dual Photo Comparison */}
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {/* Photo Before Card */}
+                  <div className="p-3 rounded-xl border bg-muted/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        1. Sebelum Pemasangan
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                        {getApproxKb(capturedPhotoBefore)}
+                      </Badge>
+                    </div>
+                    <div className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center">
+                      <img
+                        src={capturedPhotoBefore}
+                        alt="Foto Sebelum Pemasangan"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs gap-1.5 h-8"
+                      onClick={() => {
+                        setPhotoStage("BEFORE");
+                        startCamera();
+                      }}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Foto Ulang Sebelum
+                    </Button>
+                  </div>
+
+                  {/* Photo After Card */}
+                  <div className="p-3 rounded-xl border bg-muted/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        2. Sesudah Pemasangan
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                        {getApproxKb(capturedPhotoAfter)}
+                      </Badge>
+                    </div>
+                    <div className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center">
+                      <img
+                        src={capturedPhotoAfter}
+                        alt="Foto Sesudah Pemasangan"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs gap-1.5 h-8"
+                      onClick={() => {
+                        setPhotoStage("AFTER");
+                        startCamera();
+                      }}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Foto Ulang Sesudah
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          <DialogFooter className="p-4 pt-0 gap-2 sm:gap-0">
-            {capturedWatermarkedPhoto ? (
+          {/* Footer Controls */}
+          <DialogFooter className="p-4 border-t bg-muted/20 gap-2 sm:gap-0 shrink-0">
+            {photoStage === "BEFORE" && (
+              <>
+                <Button variant="outline" size="sm" onClick={closeCameraModal}>
+                  Batal
+                </Button>
+                <Button
+                  onClick={() => captureAndWatermark("BEFORE")}
+                  disabled={!cameraStreaming}
+                  className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                >
+                  <Camera className="w-4 h-4" />
+                  Jepret Foto 1 (Sebelum Pasang)
+                </Button>
+              </>
+            )}
+
+            {photoStage === "AFTER" && (
               <>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
-                    setCapturedWatermarkedPhoto("");
-                    startCamera();
+                    setPhotoStage("BEFORE");
                   }}
-                  className="gap-2"
+                  className="gap-1.5"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  Foto Ulang
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Ulangi Foto Sebelum
+                </Button>
+                <Button
+                  onClick={() => captureAndWatermark("AFTER")}
+                  disabled={!cameraStreaming}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                >
+                  <Camera className="w-4 h-4" />
+                  Jepret Foto 2 (Sesudah Pasang)
+                </Button>
+              </>
+            )}
+
+            {photoStage === "REVIEW" && (
+              <>
+                <Button variant="outline" size="sm" onClick={closeCameraModal}>
+                  Batal
                 </Button>
                 <Button
                   onClick={handleSubmitEvidence}
@@ -803,21 +1052,7 @@ export default function CabangPemasanganPage() {
                   className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  {submitEvidenceMutation.isPending ? "Mengunggah..." : "Kirim Bukti ke Auditor SPI"}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={closeCameraModal}>
-                  Batal
-                </Button>
-                <Button
-                  onClick={captureAndWatermark}
-                  disabled={!cameraStreaming}
-                  className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
-                >
-                  <Camera className="w-4 h-4" />
-                  Jepret Foto & Tempel Watermark
+                  {submitEvidenceMutation.isPending ? "Mengunggah WebP..." : "Kirim 2 Bukti Foto ke Auditor SPI"}
                 </Button>
               </>
             )}

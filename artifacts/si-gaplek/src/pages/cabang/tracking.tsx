@@ -38,6 +38,7 @@ import {
   Eye,
   Camera,
   RotateCcw,
+  Maximize2,
 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -193,6 +194,7 @@ export default function CabangTrackingPage() {
   const [branchFilter, setBranchFilter] = useState("all");
   const [selectedTrackingUuid, setSelectedTrackingUuid] = useState<string | null>(null);
   const [detailModalTab, setDetailModalTab] = useState<"timeline" | "allocations" | "events">("timeline");
+  const [zoomTrackingPhoto, setZoomTrackingPhoto] = useState<{ url: string; title: string } | null>(null);
 
   // Fetch Tracking Data
   const { data: trackingResponse, isLoading } = useQuery({
@@ -1052,7 +1054,7 @@ export default function CabangTrackingPage() {
                         </TabsContent>
 
                         {/* ─── TAB 2: TITIK ALOKASI & EVIDENCE ─── */}
-                        <TabsContent value="allocations" className="pt-3 space-y-2.5">
+                        <TabsContent value="allocations" className="pt-3 space-y-3">
                           {!detailData.allocations || detailData.allocations.length === 0 ? (
                             <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-lg">
                               Belum ada alokasi titik fisik yang dibuat untuk material ini.
@@ -1060,53 +1062,160 @@ export default function CabangTrackingPage() {
                           ) : (
                             detailData.allocations.map((alloc: any, i: number) => {
                               const evidence = alloc.evidence?.[0];
-                              const isVerified = alloc.status === "VERIFIED";
+                              const verification = alloc.verifications?.[0];
+                              const isVerified = alloc.status === "VERIFIED" || detailData.tracking?.status === "TERVERIFIKASI";
+                              const photoBefore = evidence?.photoBeforeUrl || evidence?.photoUrl;
+                              const photoAfter = evidence?.photoAfterUrl || evidence?.photoUrl;
 
                               return (
                                 <div
                                   key={alloc.id}
-                                  className="p-3 rounded-xl border bg-muted/20 space-y-2"
+                                  className="p-3.5 rounded-xl border bg-card/60 space-y-3"
                                 >
+                                  {/* Allocation Header */}
                                   <div className="flex items-center justify-between">
-                                    <h4 className="font-medium text-sm text-foreground">
+                                    <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
+                                      <MapPin className="w-4 h-4 text-primary" />
                                       Titik #{i + 1} ({alloc.quantity} unit)
                                     </h4>
                                     <Badge
                                       variant={isVerified ? "default" : "secondary"}
-                                      className={isVerified ? "bg-emerald-600 text-white text-[10px]" : "text-[10px]"}
+                                      className={
+                                        isVerified
+                                          ? "bg-emerald-600 text-white text-[10px] gap-1"
+                                          : alloc.status === "MENUNGGU_VERIFIKASI" || evidence
+                                          ? "bg-amber-100 text-amber-800 border-amber-200 text-[10px] gap-1"
+                                          : "text-[10px]"
+                                      }
                                     >
-                                      {isVerified ? "Terverifikasi" : alloc.status || "Menunggu Foto"}
+                                      {isVerified ? (
+                                        <>
+                                          <ShieldCheck className="w-3 h-3" /> DISETUJUI SPI (ACC)
+                                        </>
+                                      ) : alloc.status === "MENUNGGU_VERIFIKASI" || evidence ? (
+                                        <>
+                                          <Clock className="w-3 h-3" /> MENUNGGU ACC SPI
+                                        </>
+                                      ) : (
+                                        "Belum Dipasang"
+                                      )}
                                     </Badge>
                                   </div>
 
-                                  {/* Coordinates */}
-                                  <div className="grid grid-cols-2 gap-2 text-xs font-mono p-2 rounded-lg bg-background border">
+                                  {/* Coordinates Card */}
+                                  <div className="grid grid-cols-2 gap-2 text-xs font-mono p-2 rounded-lg bg-muted/20 border">
                                     <div>
-                                      <span className="text-[10px] text-muted-foreground block">Rencana:</span>
+                                      <span className="text-[10px] text-muted-foreground block">Titik Rencana:</span>
                                       {alloc.plannedLatitude
                                         ? `${alloc.plannedLatitude}, ${alloc.plannedLongitude}`
                                         : "—"}
                                     </div>
                                     <div>
-                                      <span className="text-[10px] text-muted-foreground block">Realisasi (GPS):</span>
+                                      <span className="text-[10px] text-muted-foreground block">Realisasi (GPS Terkunci):</span>
                                       {evidence?.latitude
                                         ? `${evidence.latitude}, ${evidence.longitude}`
                                         : "Belum Ada"}
                                     </div>
                                   </div>
 
-                                  {/* Photo Evidence Preview if available */}
-                                  {evidence?.photoUrl && (
-                                    <div className="pt-1">
-                                      <p className="text-[11px] text-muted-foreground font-medium mb-1 flex items-center gap-1">
-                                        <Camera className="w-3.5 h-3.5 text-muted-foreground" /> Foto Bukti Watermark:
+                                  {/* SPI Verification Note Banner if verified */}
+                                  {isVerified && (
+                                    <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between text-emerald-800 dark:text-emerald-300">
+                                      <div className="flex items-center gap-1.5">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                        <span>
+                                          Telah diverifikasi & disetujui oleh Auditor SPI
+                                          {verification?.verifiedAt ? ` pada ${new Date(verification.verifiedAt).toLocaleDateString("id-ID")}` : ""}.
+                                        </span>
+                                      </div>
+                                      {verification?.notes && (
+                                        <span className="italic text-[11px] opacity-90">"{verification.notes}"</span>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* DUAL PHOTOS: Sebelum & Sesudah Pemasangan */}
+                                  {(photoBefore || photoAfter) && (
+                                    <div className="pt-1 space-y-2">
+                                      <p className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+                                        <Camera className="w-3.5 h-3.5 text-muted-foreground" />
+                                        Dokumentasi Fisik (Sebelum & Sesudah Pemasangan):
                                       </p>
-                                      <div className="relative aspect-video max-h-36 rounded-lg overflow-hidden border bg-black flex items-center justify-center">
-                                        <img
-                                          src={evidence.photoUrl}
-                                          alt="Bukti Pemasangan"
-                                          className="w-full h-full object-contain"
-                                        />
+
+                                      <div className="grid grid-cols-2 gap-3">
+                                        {/* Foto 1: Sebelum */}
+                                        <div className="space-y-1">
+                                          <div className="flex items-center justify-between text-[11px]">
+                                            <span className="font-semibold text-foreground flex items-center gap-1">
+                                              <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                              Sebelum Pasang
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground">Kondisi Awal</span>
+                                          </div>
+                                          <div
+                                            className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center group cursor-pointer"
+                                            onClick={() => {
+                                              if (photoBefore) {
+                                                setZoomTrackingPhoto({
+                                                  url: photoBefore,
+                                                  title: `Foto Sebelum Pemasangan — Titik #${i + 1}`,
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            {photoBefore ? (
+                                              <>
+                                                <img
+                                                  src={photoBefore}
+                                                  alt="Foto Sebelum Pemasangan"
+                                                  className="w-full h-full object-contain transition-transform group-hover:scale-102"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] gap-1 font-medium">
+                                                  <Maximize2 className="w-3.5 h-3.5" /> Perbesar
+                                                </div>
+                                              </>
+                                            ) : (
+                                              <span className="text-white/40 text-[11px]">Tidak Ada Foto</span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Foto 2: Sesudah */}
+                                        <div className="space-y-1">
+                                          <div className="flex items-center justify-between text-[11px]">
+                                            <span className="font-semibold text-foreground flex items-center gap-1">
+                                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                              Sesudah Pasang
+                                            </span>
+                                            <span className="text-[10px] text-emerald-600 font-medium">Hasil Akhir</span>
+                                          </div>
+                                          <div
+                                            className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center group cursor-pointer"
+                                            onClick={() => {
+                                              if (photoAfter) {
+                                                setZoomTrackingPhoto({
+                                                  url: photoAfter,
+                                                  title: `Foto Sesudah Pemasangan — Titik #${i + 1}`,
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            {photoAfter ? (
+                                              <>
+                                                <img
+                                                  src={photoAfter}
+                                                  alt="Foto Sesudah Pemasangan"
+                                                  className="w-full h-full object-contain transition-transform group-hover:scale-102"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] gap-1 font-medium">
+                                                  <Maximize2 className="w-3.5 h-3.5" /> Perbesar
+                                                </div>
+                                              </>
+                                            ) : (
+                                              <span className="text-white/40 text-[11px]">Tidak Ada Foto</span>
+                                            )}
+                                          </div>
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -1164,6 +1273,26 @@ export default function CabangTrackingPage() {
               </motion.div>
             )}
           </AnimatePresence>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox / Zoom Dialog for Tracking Evidence Photos */}
+      <Dialog open={zoomTrackingPhoto !== null} onOpenChange={(o) => !o && setZoomTrackingPhoto(null)}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black/95 border border-white/20">
+          <DialogHeader className="p-4 border-b border-white/10 bg-black/80">
+            <DialogTitle className="text-sm font-semibold text-white">
+              {zoomTrackingPhoto?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-4 flex items-center justify-center max-h-[80vh] overflow-auto">
+            {zoomTrackingPhoto && (
+              <img
+                src={zoomTrackingPhoto.url}
+                alt={zoomTrackingPhoto.title}
+                className="max-w-full max-h-[75vh] object-contain rounded"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

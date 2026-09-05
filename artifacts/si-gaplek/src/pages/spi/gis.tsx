@@ -97,6 +97,10 @@ interface GeoFeature {
     locationMismatch: boolean;
     deviationMeters: number | null;
     plannedCoordinates?: [number, number] | null; // [lon, lat]
+    detectedDistrict?: string | null;
+    targetDistrict?: string | null;
+    isCrossDistrict?: boolean | null;
+    crossDistrictNotes?: string | null;
   };
 }
 
@@ -914,7 +918,11 @@ FROM pdam_material_gis;`;
                       <p className="text-[11px] text-muted-foreground">
                         {props.branchName} • {props.quantity} Unit
                       </p>
-                      {isMismatch ? (
+                      {props.isCrossDistrict ? (
+                        <p className="text-[10px] text-rose-600 font-bold">
+                          🚨 Lintas Kec: {props.detectedDistrict}
+                        </p>
+                      ) : isMismatch ? (
                         <p className="text-[10px] text-rose-600 font-semibold">
                           ⚠ Deviasi{" "}
                           {props.deviationMeters
@@ -923,7 +931,7 @@ FROM pdam_material_gis;`;
                         </p>
                       ) : (
                         <p className="text-[10px] text-emerald-600 font-medium">
-                          ✓ Terverifikasi Presisi
+                          ✓ Terverifikasi ({props.detectedDistrict || "Presisi"})
                         </p>
                       )}
                     </div>
@@ -1055,15 +1063,24 @@ FROM pdam_material_gis;`;
             {/* Inspector Header */}
             <div className="p-3.5 bg-muted/40 border-b border-border/80 flex items-start justify-between gap-2">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  {selectedFeature.properties.locationMismatch ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {selectedFeature.properties.isCrossDistrict && (
+                    <Badge
+                      variant="destructive"
+                      className="text-[10px] px-1.5 py-0 gap-1 font-medium bg-red-600 hover:bg-red-700 animate-pulse shadow-2xs"
+                    >
+                      <AlertTriangle className="w-3 h-3" /> Lintas Kecamatan
+                    </Badge>
+                  )}
+                  {selectedFeature.properties.locationMismatch && !selectedFeature.properties.isCrossDistrict && (
                     <Badge
                       variant="destructive"
                       className="text-[10px] px-1.5 py-0 gap-1 font-medium shadow-2xs"
                     >
                       <AlertTriangle className="w-3 h-3" /> Location Mismatch
                     </Badge>
-                  ) : (
+                  )}
+                  {!selectedFeature.properties.locationMismatch && !selectedFeature.properties.isCrossDistrict && (
                     <Badge className="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-300 text-[10px] px-1.5 py-0 gap-1 font-medium">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />{" "}
                       Terverifikasi Resmi
@@ -1113,6 +1130,24 @@ FROM pdam_material_gis;`;
                   Buka
                 </Button>
               </div>
+
+              {/* Anomali Lintas Kecamatan Banner */}
+              {selectedFeature.properties.isCrossDistrict && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs space-y-1 text-red-700 dark:text-red-300">
+                  <div className="flex items-center gap-1.5 font-bold text-red-600 dark:text-red-400">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Temuan: Anomali Lintas Kecamatan</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    Material tercatat milik <strong>{selectedFeature.properties.branchName}</strong>, namun koordinat GPS terdeteksi berada di <strong>{selectedFeature.properties.detectedDistrict || "Kecamatan Lain"}</strong>.
+                  </p>
+                  {selectedFeature.properties.crossDistrictNotes && (
+                    <p className="text-[10px] font-mono text-muted-foreground pt-0.5">
+                      {selectedFeature.properties.crossDistrictNotes}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Evidence Installation Photo */}
               <div className="space-y-1.5">

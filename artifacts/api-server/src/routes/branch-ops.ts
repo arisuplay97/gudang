@@ -23,6 +23,7 @@ import {
     warehousesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
+import { auditCrossDistrictEvidence } from "../lib/geo-districts";
 
 const router: IRouter = Router();
 
@@ -64,6 +65,18 @@ router.get("/branch/shipments", requireAuth, requireRole("CABANG", "ADMIN"), asy
         .orderBy(desc(stockOutTable.createdAt));
 
     const result = await Promise.all(shipments.map(async (s) => {
+        const itemsSummary = await db
+            .select({
+                id: stockOutItemsTable.id,
+                itemId: stockOutItemsTable.itemId,
+                itemName: itemsTable.name,
+                itemCode: itemsTable.code,
+                quantity: stockOutItemsTable.quantity,
+            })
+            .from(stockOutItemsTable)
+            .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+            .where(eq(stockOutItemsTable.stockOutId, s.id));
+
         const trackingUnits = await db
             .select({
                 trackingId: materialTrackingTable.id,
@@ -99,6 +112,7 @@ router.get("/branch/shipments", requireAuth, requireRole("CABANG", "ADMIN"), asy
 
         return {
             ...s,
+            items: itemsSummary,
             totalUnits,
             receivedUnits,
             pendingUnits,
@@ -168,6 +182,18 @@ router.get("/branch/shipment/:tokenOrId", requireAuth, requireRole("CABANG", "AD
         .where(eq(stockOutItemsTable.stockOutId, shipment.id))
         .orderBy(materialTrackingTable.id);
 
+    const itemsSummary = await db
+        .select({
+            id: stockOutItemsTable.id,
+            itemId: stockOutItemsTable.itemId,
+            itemName: itemsTable.name,
+            itemCode: itemsTable.code,
+            quantity: stockOutItemsTable.quantity,
+        })
+        .from(stockOutItemsTable)
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .where(eq(stockOutItemsTable.stockOutId, shipment.id));
+
     const totalUnits = trackingUnits.length;
     const receivedUnits = trackingUnits.filter(u => u.status !== "MENUNGGU_DITERIMA" || !!u.receivedAt).length;
     const pendingUnits = totalUnits - receivedUnits;
@@ -181,6 +207,7 @@ router.get("/branch/shipment/:tokenOrId", requireAuth, requireRole("CABANG", "AD
 
     res.json({
         shipment,
+        items: itemsSummary,
         totalUnits,
         receivedUnits,
         pendingUnits,
@@ -352,32 +379,33 @@ router.get("/branch/dashboard-stats", requireAuth, requireRole("CABANG", "ADMIN"
     });
 });
 
-// ─── SCAN QR / RECEIVE MATERIALS (Section 9.1) ───
+// ─── SCAN QR / RECEIVE MATERIALS PER SURAT JALAN / BPB (Section 9.1) ───
 router.post("/branch/receive", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
     const { qrToken, idempotencyKey } = req.body;
-    if (!qrToken) { res.status(400).json({ error: "QR token wajib" }); return; }
+    if (!qrToken) { res.status(400).json({ error: "QR token atau nomor Surat Jalan wajib diisi" }); return; }
 
-    // Idempotency check (Section 26)
-    if (idempotencyKey) {
-        const [existing] = await db.select().from(materialReceiptsTable)
-            .where(eq(materialReceiptsTable.idempotencyKey, idempotencyKey));
-        if (existing) {
-            res.json({ message: "Penerimaan sudah tercatat (idempotent)", receipt: existing });
-            return;
-        }
-    }
+    const cleanToken = String(qrToken).trim();
+    const isNum = !isNaN(parseInt(cleanToken));
 
-    // Find transaction by QR token
+    // Find transaction by QR token, referenceNo, QR-referenceNo, or ID
     const [transaction] = await db.select().from(stockOutTable)
-        .where(eq(stockOutTable.qrToken, qrToken));
+        .where(or(
+            eq(stockOutTable.qrToken, cleanToken),
+            eq(stockOutTable.referenceNo, cleanToken),
+            eq(stockOutTable.referenceNo, cleanToken.replace(/^QR-/, "")),
+            ...(isNum ? [eq(stockOutTable.id, parseInt(cleanToken))] : [])
+        ));
 
-    if (!transaction) { res.status(404).json({ error: "QR token tidak valid" }); return; }
-    if (transaction.status !== "DIKIRIM") { res.status(400).json({ error: "Transaksi tidak dalam status DIKIRIM" }); return; }
+    if (!transaction) {
+        res.status(404).json({ error: `Surat Jalan / BPB dengan kode "${cleanToken}" tidak ditemukan` });
+        return;
+    }
 
     // Validate branch matches (ADMIN can act for destination branch)
     const userBranchId = req.session.branchId ?? (req.session.userRole === "ADMIN" ? transaction.destinationBranchId : null);
     if (!userBranchId || (req.session.userRole !== "ADMIN" && transaction.destinationBranchId !== userBranchId)) {
-        res.status(403).json({ error: "Cabang tidak sesuai dengan tujuan transaksi" }); return;
+        res.status(403).json({ error: "Cabang Anda tidak sesuai dengan tujuan pengiriman Surat Jalan ini" });
+        return;
     }
 
     // Check if already received
@@ -386,46 +414,87 @@ router.post("/branch/receive", requireAuth, requireRole("CABANG", "ADMIN"), asyn
             eq(materialReceiptsTable.transactionId, transaction.id),
             eq(materialReceiptsTable.branchId, userBranchId)
         ));
-    if (existingReceipt) { res.status(400).json({ error: "Transaksi sudah diterima" }); return; }
+    if (existingReceipt) {
+        res.status(400).json({
+            error: `Surat Jalan ${transaction.referenceNo} sudah pernah diterima sebelumnya!`,
+            alreadyReceived: true,
+            receipt: existingReceipt,
+        });
+        return;
+    }
+
+    const now = new Date();
 
     // Process receipt in transaction
     await db.transaction(async (tx) => {
-        // Create receipt
+        // Create receipt record
         const [receipt] = await tx.insert(materialReceiptsTable).values({
             transactionId: transaction.id,
-            qrToken,
+            qrToken: transaction.qrToken || cleanToken,
             receivedBy: req.session.userId!,
             branchId: userBranchId,
             idempotencyKey: idempotencyKey ?? null,
         }).returning();
 
-        // Update all TRACKED material tracking records for this transaction
+        // Update items table receivedAt & receivedBy
+        await tx.update(stockOutItemsTable).set({
+            receivedAt: now,
+            receivedBy: req.session.userId,
+        }).where(eq(stockOutItemsTable.stockOutId, transaction.id));
+
+        // Update all material tracking records for this transaction to DITERIMA_CABANG
         const trackedItems = await tx.select({
             trackingId: materialTrackingTable.id,
+            trackingUuid: materialTrackingTable.uuid,
+            status: materialTrackingTable.status,
+            itemId: stockOutItemsTable.itemId,
+            itemName: itemsTable.name,
         }).from(materialTrackingTable)
             .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+            .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
             .where(and(
                 eq(stockOutItemsTable.stockOutId, transaction.id),
                 eq(materialTrackingTable.status, "MENUNGGU_DITERIMA")
             ));
 
-        for (const { trackingId } of trackedItems) {
+        for (const item of trackedItems) {
             await tx.update(materialTrackingTable).set({
                 status: "DITERIMA_CABANG",
-                receivedAt: new Date(),
+                receivedAt: now,
                 receivedBy: req.session.userId,
-            }).where(eq(materialTrackingTable.id, trackingId));
+            }).where(eq(materialTrackingTable.id, item.trackingId));
 
             // Record event
             await tx.insert(materialTrackingEventsTable).values({
-                trackingId,
+                trackingId: item.trackingId,
                 eventType: "BRANCH_RECEIVED",
                 userId: req.session.userId,
-                metadata: { receiptId: receipt.id, qrToken },
+                metadata: { receiptId: receipt.id, qrToken: cleanToken, itemName: item.itemName },
             });
         }
 
-        res.status(201).json({ message: "Barang berhasil diterima", receipt });
+        // Fetch items breakdown with quantities
+        const items = await tx.select({
+            id: stockOutItemsTable.id,
+            itemId: stockOutItemsTable.itemId,
+            itemName: itemsTable.name,
+            itemCode: itemsTable.code,
+            quantity: stockOutItemsTable.quantity,
+        })
+        .from(stockOutItemsTable)
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .where(eq(stockOutItemsTable.stockOutId, transaction.id));
+
+        const totalQty = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+
+        res.status(200).json({
+            message: `Seluruh material pada Surat Jalan ${transaction.referenceNo} (${totalQty} unit) berhasil diterima di cabang!`,
+            receipt,
+            referenceNo: transaction.referenceNo,
+            totalItems: items.length,
+            totalQuantity: totalQty,
+            items,
+        });
     });
 });
 
@@ -495,7 +564,12 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG", "ADMIN"), 
                 trackingId: tracking.id,
                 eventType: "ALLOCATION_CREATED",
                 userId: req.session.userId,
-                metadata: { allocationId: allocation.id, quantity: resolvedQty, plannedLatitude, plannedLongitude },
+                metadata: {
+                    allocationId: allocation.id,
+                    quantity: resolvedQty,
+                    plannedLatitude,
+                    plannedLongitude,
+                },
             });
 
             return allocation;
@@ -511,14 +585,15 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG", "ADMIN"), 
 });
 
 // ─── SUBMIT INSTALLATION EVIDENCE (Section 9.2, 9.3, 10, 13) ───
+// Supports DUAL PHOTOS: Before & After installation
 router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
     const {
-        allocationId, photoBase64, latitude, longitude, gpsAccuracy,
+        allocationId, photoBase64, photoBeforeBase64, latitude, longitude, gpsAccuracy,
         clientCaptureTime, idempotencyKey
     } = req.body;
 
     if (!allocationId || !photoBase64 || latitude == null || longitude == null) {
-        res.status(400).json({ error: "allocationId, photo, latitude, longitude wajib diisi" }); return;
+        res.status(400).json({ error: "allocationId, foto bukti, latitude, longitude wajib diisi" }); return;
     }
 
     // Idempotency check
@@ -546,8 +621,11 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
         res.status(403).json({ error: "Forbidden" }); return;
     }
 
-    // Calculate checksum (Section 25)
+    // Calculate checksums (Section 25)
     const photoChecksum = crypto.createHash("sha256").update(photoBase64).digest("hex");
+    const photoBeforeChecksum = photoBeforeBase64
+        ? crypto.createHash("sha256").update(photoBeforeBase64).digest("hex")
+        : null;
 
     // Get attempt number
     const [attemptCount] = await db.select({
@@ -568,17 +646,29 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
         locationMismatch = locationDeviationMeters > MISMATCH_THRESHOLD_METERS;
     }
 
-    // In storage: save watermarked and original base64
-    const photoUrl = photoBase64;
-    const originalPhotoUrl = photoBase64;
+    // Get Branch Name for Cross-District Verification
+    const [branchRow] = await db.select({ name: branchesTable.name })
+        .from(branchesTable)
+        .where(eq(branchesTable.id, tracking.branchId));
+    const branchName = branchRow?.name || "Cabang";
+
+    // Anti-Fraud: Silent Cross-District Detection (Kecamatan)
+    const districtAudit = auditCrossDistrictEvidence(
+        branchName,
+        parseFloat(String(latitude)),
+        parseFloat(String(longitude))
+    );
 
     const [evidence] = await db.insert(installationEvidenceTable).values({
         allocationId: allocation.id,
         trackingId: tracking.id,
         attemptNumber,
-        photoUrl,
-        originalPhotoUrl,
+        photoUrl: photoBase64, // backward compatible
+        originalPhotoUrl: photoBase64,
         photoChecksum,
+        photoBeforeUrl: photoBeforeBase64 || null,
+        photoAfterUrl: photoBase64,
+        photoBeforeChecksum,
         latitude: String(latitude),
         longitude: String(longitude),
         gpsAccuracy: gpsAccuracy ? String(gpsAccuracy) : null,
@@ -588,6 +678,10 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
         locationMismatch,
         locationDeviationMeters: locationDeviationMeters !== null ? String(locationDeviationMeters) : null,
         mismatchThresholdMeters: String(MISMATCH_THRESHOLD_METERS),
+        detectedDistrict: districtAudit.detectedDistrict,
+        targetDistrict: districtAudit.targetDistrict,
+        isCrossDistrict: districtAudit.isCrossDistrict,
+        crossDistrictNotes: districtAudit.notes,
         idempotencyKey: idempotencyKey ?? null,
     }).returning();
 
@@ -610,6 +704,9 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
             longitude,
             locationMismatch,
             locationDeviationMeters,
+            isCrossDistrict: districtAudit.isCrossDistrict,
+            detectedDistrict: districtAudit.detectedDistrict,
+            targetDistrict: districtAudit.targetDistrict,
         },
     });
 
@@ -619,6 +716,20 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
             eventType: "LOCATION_MISMATCH_FLAGGED",
             userId: req.session.userId,
             metadata: { deviationMeters: locationDeviationMeters, threshold: MISMATCH_THRESHOLD_METERS },
+        });
+    }
+
+    if (districtAudit.isCrossDistrict) {
+        await db.insert(materialTrackingEventsTable).values({
+            trackingId: tracking.id,
+            eventType: "CROSS_DISTRICT_ANOMALY_DETECTED",
+            userId: req.session.userId,
+            metadata: {
+                detectedDistrict: districtAudit.detectedDistrict,
+                targetDistrict: districtAudit.targetDistrict,
+                distanceToTargetKm: districtAudit.distanceToTargetKm,
+                notes: districtAudit.notes,
+            },
         });
     }
 
