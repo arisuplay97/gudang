@@ -340,8 +340,6 @@ router.get("/reports/pemasangan-aksesoris", requireAuth, async (req, res): Promi
   }
 
   const dbGroups = Array.from(groupedMap.values());
-
-  const dbGroups = Array.from(groupedMap.values());
   
   // Hanya gunakan data dari sistem (database)
   const combined = [...dbGroups];

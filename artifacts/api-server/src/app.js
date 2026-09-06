@@ -8,6 +8,18 @@ import router from "./routes/index";
 import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 const PgSession = connectPgSimple(session);
+// Ensure DB columns exist for Before & After evidence, Cross-District Anti-Fraud, and Stock Out Items
+pool.query(`
+  ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS photo_before_url TEXT;
+  ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS photo_after_url TEXT;
+  ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS photo_before_checksum TEXT;
+  ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS detected_district TEXT;
+  ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS target_district TEXT;
+  ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS is_cross_district BOOLEAN DEFAULT FALSE;
+  ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS cross_district_notes TEXT;
+  ALTER TABLE stock_out_items ADD COLUMN IF NOT EXISTS received_at TIMESTAMP WITH TIME ZONE;
+  ALTER TABLE stock_out_items ADD COLUMN IF NOT EXISTS received_by INTEGER;
+`).catch(err => console.error("Auto migration warning:", err?.message || err));
 const app = express();
 app.set("trust proxy", 1);
 app.use(pinoHttp({
