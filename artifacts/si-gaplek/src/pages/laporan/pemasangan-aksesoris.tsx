@@ -143,7 +143,6 @@ export default function LaporanPemasanganAksesorisPage() {
       >
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Wrench className="w-6 h-6 text-foreground/80" />
             Laporan Pemasangan Aksesoris
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
