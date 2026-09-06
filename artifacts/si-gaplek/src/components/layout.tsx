@@ -147,6 +147,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Dashboard Audit", href: "/spi/dashboard", icon: BarChart3, roles: ["ADMIN", "SPI"] },
       { label: "Verifikasi", href: "/spi/verifikasi", icon: ScrollText, roles: ["ADMIN", "SPI"] },
       { label: "Peta Material", href: "/spi/gis", icon: MapPin, roles: ["ADMIN", "SPI"] },
+      { label: "Laporan Audit SPI", href: "/spi/laporan-audit", icon: ClipboardList, roles: ["ADMIN", "SPI"] },
     ],
   },
   {
@@ -200,6 +201,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/spi/dashboard": "Dashboard Audit",
   "/spi/verifikasi": "Verifikasi",
   "/spi/gis": "Peta Material",
+  "/spi/laporan-audit": "Laporan Audit SPI",
   "/laporan/stok": "Laporan Stok",
   "/laporan/transaksi": "Laporan Transaksi",
   "/laporan/pemasangan-aksesoris": "Laporan Pemasangan Aksesoris",

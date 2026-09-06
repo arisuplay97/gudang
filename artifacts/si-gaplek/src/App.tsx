@@ -33,6 +33,7 @@ import CabangTrackingPage from "@/pages/cabang/tracking";
 import SpiDashboardPage from "@/pages/spi/dashboard";
 import SpiVerifikasiPage from "@/pages/spi/verifikasi";
 import SpiGisPage from "@/pages/spi/gis";
+import LaporanAuditSpiPage from "@/pages/spi/laporan-audit";
 import AiAssistantPage from "@/pages/ai-assistant";
 import GlobalSearch from "@/components/global-search";
 import NotificationCenter from "@/components/notification-center";
@@ -105,6 +106,7 @@ function AppRouter() {
         <Route path="/spi/dashboard" component={SpiDashboardPage} />
         <Route path="/spi/verifikasi" component={SpiVerifikasiPage} />
         <Route path="/spi/gis" component={SpiGisPage} />
+        <Route path="/spi/laporan-audit" component={LaporanAuditSpiPage} />
 
         {/* AI Assistant */}
         <Route path="/ai-assistant" component={AiAssistantPage} />

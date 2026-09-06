@@ -15,6 +15,7 @@ import {
     stockOutItemsTable,
     itemsTable,
     branchesTable,
+    usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
 
@@ -94,6 +95,98 @@ router.get("/spi/dashboard", requireAuth, requireRole("SPI", "ADMIN"), async (re
         },
         branchPerformance,
     });
+});
+
+// ─── LAPORAN AUDIT & VERIFIKASI SPI ───
+router.get("/spi/reports/audit", requireAuth, requireRole("SPI", "ADMIN"), async (req, res): Promise<void> => {
+    const { branchId, month, year, search, anomalyStatus, auditStatus } = req.query;
+
+    const baseQuery = db
+        .select({
+            evidenceId: installationEvidenceTable.id,
+            evidenceUuid: installationEvidenceTable.uuid,
+            referenceNo: stockOutTable.referenceNo,
+            branchName: branchesTable.name,
+            branchId: branchesTable.id,
+            latitude: installationEvidenceTable.latitude,
+            longitude: installationEvidenceTable.longitude,
+            detectedDistrict: installationEvidenceTable.detectedDistrict,
+            targetDistrict: installationEvidenceTable.targetDistrict,
+            isCrossDistrict: installationEvidenceTable.isCrossDistrict,
+            locationDeviationMeters: installationEvidenceTable.locationDeviationMeters,
+            evidenceStatus: installationEvidenceTable.status, // PENDING | TERVERIFIKASI | DITOLAK
+            createdAt: installationEvidenceTable.createdAt,
+            
+            itemName: itemsTable.name,
+            quantity: installationAllocationsTable.quantity,
+            
+            // From verification table
+            verificationStatus: materialVerificationsTable.status,
+            verificationNotes: materialVerificationsTable.notes,
+            verifiedAt: materialVerificationsTable.verifiedAt,
+            auditorName: usersTable.fullName,
+        })
+        .from(installationEvidenceTable)
+        .innerJoin(materialTrackingTable, eq(installationEvidenceTable.trackingId, materialTrackingTable.id))
+        .innerJoin(branchesTable, eq(installationEvidenceTable.branchId, branchesTable.id))
+        .innerJoin(installationAllocationsTable, eq(installationEvidenceTable.allocationId, installationAllocationsTable.id))
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        // Left join verifications, because some might be PENDING
+        .leftJoin(materialVerificationsTable, eq(installationEvidenceTable.id, materialVerificationsTable.evidenceId))
+        .leftJoin(usersTable, eq(materialVerificationsTable.verifiedBy, usersTable.id))
+        .orderBy(desc(installationEvidenceTable.createdAt));
+
+    const rows = await baseQuery;
+
+    // Filter in-memory (cleaner for complex combined conditions)
+    const filteredRows = rows.filter((row) => {
+        // 1. Branch filter
+        if (branchId && branchId !== "all" && String(row.branchId) !== String(branchId)) return false;
+        
+        // 2. Month filter
+        if (month && month !== "all") {
+            const m = new Date(row.createdAt).getMonth() + 1;
+            if (m !== parseInt(String(month))) return false;
+        }
+
+        // 3. Year filter
+        if (year && year !== "all") {
+            const y = new Date(row.createdAt).getFullYear();
+            if (y !== parseInt(String(year))) return false;
+        }
+
+        // 4. Search filter (Item Name or Reference No)
+        if (search && String(search).trim() !== "") {
+            const s = String(search).toLowerCase();
+            const match = row.referenceNo.toLowerCase().includes(s) || row.itemName.toLowerCase().includes(s);
+            if (!match) return false;
+        }
+
+        // 5. Audit Status filter
+        if (auditStatus && auditStatus !== "all") {
+            if (auditStatus === "TERVERIFIKASI" && row.evidenceStatus !== "TERVERIFIKASI") return false;
+            if (auditStatus === "DITOLAK" && row.evidenceStatus !== "DITOLAK") return false;
+            if (auditStatus === "PENDING" && row.evidenceStatus !== "PENDING") return false;
+        }
+
+        // 6. Anomaly Status filter
+        if (anomalyStatus && anomalyStatus !== "all") {
+            const isCross = row.isCrossDistrict;
+            const isDeviation = row.locationDeviationMeters && parseFloat(row.locationDeviationMeters) > 50; // threshold > 50m
+            const isValid = !isCross && !isDeviation;
+
+            if (anomalyStatus === "ZONA_VALID" && !isValid) return false;
+            if (anomalyStatus === "LINTAS_WILAYAH" && !isCross) return false;
+            if (anomalyStatus === "DEVIASI_TINGGI" && !isDeviation) return false;
+            if (anomalyStatus === "ANOMALI" && isValid) return false; // Any anomaly
+        }
+
+        return true;
+    });
+
+    res.json({ data: filteredRows });
 });
 
 // ─── LIST PENDING VERIFICATIONS ───
