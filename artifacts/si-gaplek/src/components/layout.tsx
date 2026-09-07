@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/auth-context";
+import NotificationCenter from "@/components/notification-center";
 
 /* ── Navigation Types & Config ── */
 interface NavItem {
@@ -209,6 +210,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "/laporan/log": "Audit Log",
   "/ai-assistant": "TIARA AI",
   "/pengguna": "Pengguna",
+  "/pengaturan": "Pengaturan Sistem",
+  "/profil": "Profil Pengguna",
 };
 
 const ROUTE_GROUPS: Record<string, string> = {
@@ -563,21 +566,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Search className="w-5 h-5" />
           </Button>
 
-          {/* Notification bell */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative shrink-0"
-                id="notification-trigger"
-                onClick={() => window.dispatchEvent(new CustomEvent("open-notifications"))}
-              >
-                <Bell className="w-5 h-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Notifikasi</TooltipContent>
-          </Tooltip>
+          {/* Active Notification Center */}
+          <NotificationCenter />
 
           {/* Branch badge for Cabang users */}
           {user.branchName && (
@@ -633,15 +623,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => navigate("/pengaturan?tab=profil")}
+              >
                 <User className="w-4 h-4 mr-2" />
-                Profil
+                Profil Pengguna
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => navigate("/pengaturan?tab=instansi")}
+              >
                 <Settings className="w-4 h-4 mr-2" />
-                Pengaturan
+                Pengaturan Sistem
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+              >
                 <Keyboard className="w-4 h-4 mr-2" />
                 Keyboard Shortcuts
               </DropdownMenuItem>

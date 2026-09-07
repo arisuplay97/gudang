@@ -35,8 +35,8 @@ import SpiVerifikasiPage from "@/pages/spi/verifikasi";
 import SpiGisPage from "@/pages/spi/gis";
 import LaporanAuditSpiPage from "@/pages/spi/laporan-audit";
 import AiAssistantPage from "@/pages/ai-assistant";
+import PengaturanPage from "@/pages/pengaturan";
 import GlobalSearch from "@/components/global-search";
-import NotificationCenter from "@/components/notification-center";
 import ErrorBoundary from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
 
@@ -110,6 +110,10 @@ function AppRouter() {
 
         {/* AI Assistant */}
         <Route path="/ai-assistant" component={AiAssistantPage} />
+
+        {/* Pengaturan & Profil */}
+        <Route path="/pengaturan" component={PengaturanPage} />
+        <Route path="/profil" component={PengaturanPage} />
 
         <Route path="/pengguna" component={PenggunaPage} />
         <Route path="/login"><Redirect to="/" /></Route>
