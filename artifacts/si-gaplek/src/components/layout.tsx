@@ -426,10 +426,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   /* ── Sidebar content ── */
   const SidebarContent = ({ isCollapsed }: { isCollapsed: boolean }) => (
-    <div className="flex flex-col h-full">
-      <div className={cn("border-b", isCollapsed ? "p-3" : "p-4")}>
+    <div className="flex flex-col h-full bg-white dark:bg-card">
+      <div className={cn("border-b border-border/80", isCollapsed ? "p-3" : "p-4")}>
         <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
-          <div className="w-10 h-10 rounded-xl bg-white p-1 border border-border shadow-xs flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-white p-1 border border-border/80 shadow-xs flex items-center justify-center shrink-0">
             <img
               src="/logo-perumdam.png"
               alt="Logo SI GAPLEK"
@@ -476,7 +476,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden lg:flex border-r flex-col shrink-0 transition-all duration-300 ease-in-out",
+          "hidden lg:flex border-r border-border/80 bg-white dark:bg-card flex-col shrink-0 transition-all duration-300 ease-in-out",
           collapsed ? "w-[68px]" : "w-60"
         )}
       >
@@ -487,7 +487,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <aside className="relative z-10 w-64 bg-background border-r flex flex-col">
+          <aside className="relative z-10 w-64 bg-white dark:bg-card border-r border-border/80 flex flex-col">
             <SidebarContent isCollapsed={false} />
           </aside>
         </div>
@@ -496,7 +496,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* ── TOPBAR ── */}
-        <header className="flex items-center gap-3 h-14 px-4 border-b bg-background/95 backdrop-blur-sm z-30 shrink-0">
+        <header className="flex items-center gap-3 h-14 px-4 border-b border-border/80 bg-white dark:bg-card z-30 shrink-0">
           {/* Left: sidebar toggle + breadcrumb */}
           <Button
             variant="ghost"
