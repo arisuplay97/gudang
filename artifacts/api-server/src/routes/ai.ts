@@ -1,9 +1,58 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
+import crypto from "crypto";
 import { requireAuth, requireRole } from "../lib/auth";
 import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
+
+/* ── AES-256-GCM Encryption / Decryption Utilities ── */
+const ENCRYPTION_SECRET =
+  process.env.ENCRYPTION_KEY ||
+  process.env.SESSION_SECRET ||
+  "si-gaplek-ai-secret-salt-2026-key";
+const ENCRYPTION_KEY = crypto.createHash("sha256").update(ENCRYPTION_SECRET).digest();
+
+/**
+ * Encrypts sensitive text using AES-256-GCM.
+ * Output format: enc:v1:<iv_hex>:<auth_tag_hex>:<cipher_hex>
+ */
+export function encryptSecret(plainText: string): string {
+  if (!plainText || typeof plainText !== "string") return "";
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(plainText, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  const authTag = cipher.getAuthTag().toString("hex");
+  return `enc:v1:${iv.toString("hex")}:${authTag}:${encrypted}`;
+}
+
+/**
+ * Decrypts AES-256-GCM ciphertext.
+ * Gracefully handles legacy plain text for backward compatibility.
+ */
+export function decryptSecret(cipherText: string): string {
+  if (!cipherText || typeof cipherText !== "string") return "";
+  if (!cipherText.startsWith("enc:v1:")) {
+    // Legacy plain text fallback
+    return cipherText;
+  }
+  try {
+    const parts = cipherText.split(":");
+    if (parts.length !== 5) return "";
+    const [, , ivHex, authTagHex, encryptedHex] = parts;
+    const iv = Buffer.from(ivHex, "hex");
+    const authTag = Buffer.from(authTagHex, "hex");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encryptedHex, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch (err) {
+    console.error("Gagal mendekripsi secret AI:", err?.message || err);
+    return "";
+  }
+}
 
 // Ensure system_settings table exists
 async function ensureSettingsTable() {
@@ -44,7 +93,7 @@ function resolveEndpoint(baseUrl?: string, provider?: string): string {
 /**
  * GET /ai/config & /api/ai/config
  * Retrieves system-wide AI configuration from PostgreSQL system_settings.
- * Sensitive API keys are masked for non-admins to ensure security.
+ * Sensitive API keys are decrypted in memory for ADMIN, and masked for non-admins.
  */
 router.get(["/ai/config", "/api/ai/config"], requireAuth, async (req, res): Promise<void> => {
   try {
@@ -61,12 +110,25 @@ router.get(["/ai/config", "/api/ai/config"], requireAuth, async (req, res): Prom
     const isAdmin = (req.session.userRole || "").toUpperCase() === "ADMIN";
     const config = { ...rawConfig };
 
-    if (!isAdmin && config.apiKey) {
-      const k = config.apiKey.trim();
-      config.apiKey = k.length > 8 ? `${k.slice(0, 4)}••••••••${k.slice(-4)}` : "••••••••";
-      config.hasApiKey = true;
-    } else if (config.apiKey) {
-      config.hasApiKey = true;
+    // Decrypt the stored API key in memory
+    const plainApiKey = decryptSecret(config.apiKey);
+
+    if (isAdmin) {
+      // Admin gets the plain decrypted API key to view/edit in the settings modal
+      config.apiKey = plainApiKey;
+      config.hasApiKey = !!plainApiKey;
+    } else {
+      // Non-admin receives strictly masked API key for security
+      if (plainApiKey) {
+        config.apiKey =
+          plainApiKey.length > 8
+            ? `${plainApiKey.slice(0, 4)}••••••••${plainApiKey.slice(-4)}`
+            : "••••••••";
+        config.hasApiKey = true;
+      } else {
+        config.apiKey = "";
+        config.hasApiKey = false;
+      }
     }
 
     res.json({
@@ -82,7 +144,7 @@ router.get(["/ai/config", "/api/ai/config"], requireAuth, async (req, res): Prom
 
 /**
  * POST /ai/config & /api/ai/config
- * Saves system-wide AI configuration into database.
+ * Saves system-wide AI configuration into database with AES-256-GCM encryption at-rest.
  * RESTRICTED: Admin only.
  */
 router.post(["/ai/config", "/api/ai/config"], requireAuth, requireRole("ADMIN"), async (req, res): Promise<void> => {
@@ -94,19 +156,26 @@ router.post(["/ai/config", "/api/ai/config"], requireAuth, requireRole("ADMIN"),
       return;
     }
 
-    // Check existing config to preserve key if masked
+    // Check existing config to preserve key if masked or unchanged
     const existingRes = await pool.query("SELECT value FROM system_settings WHERE key = 'ai_config'");
     const existing = existingRes.rows[0]?.value || {};
 
-    let finalApiKey = typeof apiKey === "string" ? apiKey.trim() : "";
-    if (!finalApiKey || finalApiKey.includes("••••")) {
-      finalApiKey = existing.apiKey || "";
+    let finalEncryptedKey = existing.apiKey || "";
+
+    if (typeof apiKey === "string" && apiKey.trim().length > 0) {
+      if (!apiKey.includes("••••")) {
+        // New API key provided -> encrypt with AES-256-GCM before saving to database
+        finalEncryptedKey = encryptSecret(apiKey.trim());
+      }
+      // If contains ••••, keep existing encrypted key untouched
+    } else if (apiKey === "") {
+      finalEncryptedKey = "";
     }
 
     const newConfig = {
       provider: String(provider).trim(),
       model: String(model).trim(),
-      apiKey: finalApiKey,
+      apiKey: finalEncryptedKey, // Stored as AES-256-GCM ciphertext in PostgreSQL
       customBaseUrl: customBaseUrl ? String(customBaseUrl).trim() : "",
       customProviderName: customProviderName ? String(customProviderName).trim() : "",
       temperature: typeof temperature === "number" ? temperature : 0.3,
@@ -124,18 +193,22 @@ router.post(["/ai/config", "/api/ai/config"], requireAuth, requireRole("ADMIN"),
 
     res.json({
       success: true,
-      message: "Konfigurasi AI berhasil disimpan di database server dan tersinkron ke semua perangkat.",
-      config: newConfig,
+      message: "Konfigurasi AI berhasil disimpan di database server dan terenkripsi AES-256-GCM.",
+      config: {
+        ...newConfig,
+        apiKey: apiKey?.trim() || "",
+        hasApiKey: !!finalEncryptedKey,
+      },
     });
   } catch (err: any) {
-    console.error("Failed to save AI config:", err);
+    console.error("Failed to save encrypted AI config:", err);
     res.status(500).json({ error: "Gagal menyimpan konfigurasi AI ke database." });
   }
 });
 
 /**
  * POST /ai/chat & /api/ai/chat
- * Server-side AI completion using the centrally configured AI key.
+ * Server-side AI completion using centrally configured, encrypted AI key.
  * Available to authenticated users without requiring client to hold raw API keys.
  */
 router.post(["/ai/chat", "/api/ai/chat"], requireAuth, async (req, res): Promise<void> => {
@@ -151,12 +224,20 @@ router.post(["/ai/chat", "/api/ai/chat"], requireAuth, async (req, res): Promise
     const configRes = await pool.query("SELECT value FROM system_settings WHERE key = 'ai_config'");
     const config = configRes.rows[0]?.value;
 
-    if (!config || (!config.apiKey && config.provider !== "ollama" && !(config.provider === "custom" && config.customBaseUrl))) {
+    if (!config) {
       res.status(400).json({ error: "Konfigurasi AI belum disetel oleh Administrator pada sistem." });
       return;
     }
 
-    const { provider, model, apiKey, customBaseUrl, temperature } = config;
+    // Decrypt the API key in memory
+    const apiKey = decryptSecret(config.apiKey);
+
+    if (!apiKey && config.provider !== "ollama" && !(config.provider === "custom" && config.customBaseUrl)) {
+      res.status(400).json({ error: "Kunci API belum diisi atau gagal didekripsi." });
+      return;
+    }
+
+    const { provider, model, customBaseUrl, temperature } = config;
     const actionLinks = [
       { label: "Inspeksi Peta GIS", href: "/spi/gis", icon: "map" },
       { label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" },
@@ -269,10 +350,19 @@ router.post(["/ai/chat", "/api/ai/chat"], requireAuth, async (req, res): Promise
  */
 router.post(["/ai/proxy-chat", "/api/ai/proxy-chat"], requireAuth, async (req, res): Promise<void> => {
   try {
-    const { endpoint, apiKey, model, messages, temperature } = req.body;
+    let { endpoint, apiKey, model, messages, temperature } = req.body;
     if (!endpoint || !model || !messages) {
       res.status(400).json({ error: "Parameter wajib tidak lengkap (endpoint, model, messages)" });
       return;
+    }
+
+    // If apiKey not sent or masked, decrypt from server config
+    if (!apiKey || apiKey.includes("••••")) {
+      const configRes = await pool.query("SELECT value FROM system_settings WHERE key = 'ai_config'");
+      const config = configRes.rows[0]?.value;
+      if (config?.apiKey) {
+        apiKey = decryptSecret(config.apiKey);
+      }
     }
 
     const headers: Record<string, string> = {
