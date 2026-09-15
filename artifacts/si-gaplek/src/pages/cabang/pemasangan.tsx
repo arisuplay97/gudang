@@ -427,60 +427,85 @@ export default function CabangPemasanganPage() {
     const officer = user?.fullName || user?.username || "Petugas Lapangan";
     const branch = selectedAllocation.branchName || "Cabang PDAM";
 
-    // 3. Draw Watermark Bottom Bar (optimized for horizontal 16:9 format)
-    const bannerHeight = 115;
-    const bannerY = height - bannerHeight;
-
-    // Gradient background
-    const grad = ctx.createLinearGradient(0, bannerY, 0, height);
-    grad.addColorStop(0, "rgba(0, 0, 0, 0.85)");
-    grad.addColorStop(1, "rgba(0, 0, 0, 0.98)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, bannerY, width, bannerHeight);
-
-    // Stage-specific accent bar
+    // 3. Draw Watermark Card (Persegi di Pojok Kiri Bawah, Semi-Transparan)
     const isBefore = stage === "BEFORE";
-    const accentColor = isBefore ? "#f59e0b" : "#10b981"; // Amber for Before, Emerald for After
+    const accentColor = isBefore ? "#f59e0b" : "#10b981"; // Amber untuk Sebelum, Emerald untuk Sesudah
+    const stageBadge = isBefore ? "SEBELUM PEMASANGAN" : "SESUDAH PEMASANGAN";
+
+    const padX = 18;
+    const padY = 18;
+    const boxWidth = Math.min(width - padX * 2, 540);
+    const boxHeight = 114;
+    const boxX = padX;
+    const boxY = height - boxHeight - padY;
+    const radius = 8;
+
+    // Card background: hitam sedikit transparan dengan border halus agar teks sangat terbaca
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.70)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+    ctx.lineWidth = 1.5;
+
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxWidth, boxHeight, radius);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+    }
+
+    // Border aksen di sisi kiri box
     ctx.fillStyle = accentColor;
-    ctx.fillRect(0, bannerY, width, 3);
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, 4.5, boxHeight, [radius, 0, 0, radius]);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, 4.5, boxHeight);
+    }
 
-    // Text configuration
-    ctx.fillStyle = "#ffffff";
-    const fontSizeTitle = 14;
-    const fontSizeBody = 11;
+    // Teks di dalam box
+    const textLeft = boxX + 16;
+    const fontSizeTitle = 12;
+    const fontSizeBody = 10.5;
 
-    let yOffset = bannerY + fontSizeTitle + 10;
+    let yOffset = boxY + 20;
 
-    // Header line
+    // Baris 1: Header Instansi & Status Stage
     ctx.font = `bold ${fontSizeTitle}px sans-serif`;
-    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SI GAPLEK", 20, yOffset);
-
-    // Stage Badge right aligned
-    ctx.textAlign = "right";
-    ctx.fillStyle = accentColor;
-    ctx.font = `bold ${fontSizeBody + 2}px sans-serif`;
-    const stageBadge = isBefore
-      ? "[ 1. SEBELUM PEMASANGAN / KONDISI AWAL ]"
-      : "[ 2. SESUDAH PEMASANGAN / HASIL AKHIR ]";
-    ctx.fillText(stageBadge, width - 20, yOffset);
+    ctx.fillStyle = "#ffffff";
     ctx.textAlign = "left";
+    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SI GAPLEK", textLeft, yOffset);
 
-    // Metadata lines
-    ctx.fillStyle = "#e2e8f0";
+    ctx.font = `bold 10px sans-serif`;
+    ctx.fillStyle = accentColor;
+    ctx.textAlign = "right";
+    ctx.fillText(`[ ${stageBadge} ]`, boxX + boxWidth - 14, yOffset);
+
+    // Baris 2: Material & jml & Ref
+    ctx.textAlign = "left";
     ctx.font = `normal ${fontSizeBody}px sans-serif`;
-    yOffset += fontSizeBody + 6;
+    ctx.fillStyle = "#f1f5f9";
+    yOffset += 22;
     ctx.fillText(
-      `Material: ${selectedAllocation.itemName} (Qty: ${selectedAllocation.quantity}) | Ref: ${selectedAllocation.referenceNo}`,
-      20,
+      `Material: ${selectedAllocation.itemName} (jml: ${selectedAllocation.quantity}) | Ref: ${selectedAllocation.referenceNo}`,
+      textLeft,
       yOffset
     );
 
-    yOffset += fontSizeBody + 5;
-    ctx.fillText(`Petugas: ${officer} | Cabang: ${branch} | Waktu: ${dateStr}`, 20, yOffset);
+    // Baris 3: Petugas & Cabang & Waktu
+    ctx.fillStyle = "#cbd5e1";
+    yOffset += 20;
+    ctx.fillText(`Petugas: ${officer} | Cabang: ${branch} | Waktu: ${dateStr}`, textLeft, yOffset);
 
-    yOffset += fontSizeBody + 5;
-    ctx.fillStyle = "#67e8f9"; // Cyan accent for GPS
-    ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc}) • Format: Horizontal (16:9)`, 20, yOffset);
+    // Baris 4: Telemetri GPS (tanpa format horizontal)
+    ctx.fillStyle = "#67e8f9"; // Cyan accent untuk GPS
+    yOffset += 20;
+    ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc})`, textLeft, yOffset);
+
+    ctx.restore();
 
     // 4. Export as WebP format with quality 0.78 (target size ~80-140 KB)
     const dataUrl = canvas.toDataURL("image/webp", 0.78);
@@ -490,7 +515,7 @@ export default function CabangPemasanganPage() {
       setPhotoStage("AFTER");
       toast({
         title: "Foto 1 (Sebelum) Berhasil",
-        description: "Format horizontal 16:9 tersimpan. Lanjutkan Foto 2 (Sesudah).",
+        description: "Foto bukti kondisi awal tersimpan. Lanjutkan Foto 2 (Sesudah).",
       });
     } else {
       setCapturedPhotoAfter(dataUrl);
@@ -498,7 +523,7 @@ export default function CabangPemasanganPage() {
       stopCamera();
       toast({
         title: "Foto 2 (Sesudah) Berhasil",
-        description: "Kedua foto horizontal siap diperiksa dan dikirim.",
+        description: "Kedua foto bukti fisik siap diperiksa dan dikirim.",
       });
     }
   };

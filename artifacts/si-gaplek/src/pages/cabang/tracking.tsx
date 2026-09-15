@@ -349,6 +349,24 @@ export default function CabangTrackingPage() {
     }
   };
 
+  // Format durasi keterlambatan SLA
+  const formatOverdueDuration = (deadline?: string | null) => {
+    if (!deadline) return "";
+    const diffMs = Date.now() - new Date(deadline).getTime();
+    if (diffMs <= 0) return "";
+    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+
+    if (days > 0 && hours > 0) {
+      return `${days} hari ${hours} Jam`;
+    } else if (days > 0) {
+      return `${days} hari`;
+    } else {
+      return `${hours} Jam`;
+    }
+  };
+
   // Restrained SLA badge
   const getSlaIndicator = (slaStatus: string, deadline?: string | null) => {
     switch (slaStatus) {
@@ -370,12 +388,14 @@ export default function CabangTrackingPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" /> &lt; 24 Jam
           </span>
         );
-      case "OVERDUE":
+      case "OVERDUE": {
+        const overdueText = formatOverdueDuration(deadline);
         return (
           <Badge variant="outline" className="border-rose-500/40 text-rose-600 dark:text-rose-400 bg-rose-50/40 dark:bg-rose-950/30 text-[10px] font-mono">
-            SLA Terlewat
+            {overdueText ? `SLA Terlewat ${overdueText}` : "SLA Terlewat"}
           </Badge>
         );
+      }
       default:
         return null;
     }
@@ -463,14 +483,6 @@ export default function CabangTrackingPage() {
             onClick={() => handleViewChange("board")}
           >
             <Kanban className="w-3.5 h-3.5" /> Board
-          </Button>
-          <Button
-            variant={viewMode === "map" ? "secondary" : "ghost"}
-            size="sm"
-            className="h-8 gap-1.5 text-xs font-medium rounded-md shadow-xs"
-            onClick={() => handleViewChange("map")}
-          >
-            <MapIcon className="w-3.5 h-3.5" /> Map GIS
           </Button>
         </div>
       </div>
@@ -695,7 +707,7 @@ export default function CabangTrackingPage() {
                           setSelectedTrackingUuid(track.uuid);
                         }}
                       >
-                        Detail Journey
+                        Detail Pelacakan
                         <ChevronRight className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -774,7 +786,7 @@ export default function CabangTrackingPage() {
                         {t.remainingQuantity}
                       </TableCell>
                       <TableCell className="text-center">{getStatusBadge(t.status)}</TableCell>
-                      <TableCell className="text-center">{getSlaIndicator(t.slaStatus)}</TableCell>
+                      <TableCell className="text-center">{getSlaIndicator(t.slaStatus, t.slaDeadlineAt)}</TableCell>
                       <TableCell className="text-muted-foreground">{formatDate(t.createdAt)}</TableCell>
                       <TableCell className="text-right">
                         <Button size="icon" variant="ghost" className="h-7 w-7">
@@ -855,7 +867,7 @@ export default function CabangTrackingPage() {
                             <h4 className="font-medium text-xs text-foreground leading-tight">
                               {track.itemName}
                             </h4>
-                            {getSlaIndicator(track.slaStatus)}
+                            {getSlaIndicator(track.slaStatus, track.slaDeadlineAt)}
                           </div>
 
                           <p className="font-mono text-[10px] text-muted-foreground">
@@ -930,9 +942,8 @@ export default function CabangTrackingPage() {
                 {/* Modal Header */}
                 <DialogHeader className="p-5 pb-3 border-b bg-muted/20">
                   <div className="space-y-0.5">
-                    <DialogTitle className="text-base font-semibold flex items-center gap-2 text-foreground">
-                      <Sparkles className="w-4 h-4 text-primary" />
-                      Perjalanan Material (Material Journey)
+                    <DialogTitle className="text-base font-semibold text-foreground">
+                      Progress Material (Pelacakan)
                     </DialogTitle>
                     <p className="text-xs text-muted-foreground">
                       Pelacakan siklus hidup material dari gudang pusat hingga titik pasang fisik.
