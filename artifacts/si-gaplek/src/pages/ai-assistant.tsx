@@ -779,55 +779,6 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
           ))}
         </div>
 
-        {/* Live Context Data Feeds Box */}
-        <div className="p-3 border-t border-border bg-card/60 space-y-2 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-emerald-500" />
-              Data Feeds Aktif
-            </span>
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-          </div>
-
-          <div className="space-y-1.5 text-[11px]">
-            <div
-              onClick={() => setIncludeStockContext(!includeStockContext)}
-              className={`flex items-center justify-between p-1.5 rounded-md border cursor-pointer transition-colors ${
-                includeStockContext
-                  ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-                  : "bg-muted/40 border-border text-muted-foreground"
-              }`}
-            >
-              <span className="flex items-center gap-1.5">
-                <Package className="w-3.5 h-3.5" />
-                Master Persediaan
-              </span>
-              <span className="font-mono text-[10px] font-semibold">
-                {liveItems.length} Item
-              </span>
-            </div>
-
-            <div
-              onClick={() => setIncludeGisContext(!includeGisContext)}
-              className={`flex items-center justify-between p-1.5 rounded-md border cursor-pointer transition-colors ${
-                includeGisContext
-                  ? "bg-sky-50/50 dark:bg-sky-950/20 border-sky-500/30 text-sky-700 dark:text-sky-300"
-                  : "bg-muted/40 border-border text-muted-foreground"
-              }`}
-            >
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5" />
-                Telemetri GIS Lapangan
-              </span>
-              <span className="font-mono text-[10px] font-semibold">
-                {liveGis.length} Titik
-              </span>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* ── Main Chat Area ── */}
@@ -835,19 +786,19 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
         {/* Terminal Header */}
         <header className="h-14 px-4 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between shrink-0 gap-3 z-10">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-2xs shrink-0">
-              <Bot className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
+              <Bot className="w-4 h-4 text-foreground" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold text-foreground truncate">
-                  TIARA AI - Asisten Logistik & Distribusi
+                <h1 className="text-sm font-semibold text-foreground truncate">
+                  Tiara Assistant
                 </h1>
                 <Badge
                   variant="outline"
                   className="text-[10px] py-0 border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/30 hidden sm:inline-flex"
                 >
-                  Tanya Seputar Gudang,Audit,dan GIS.
+                  Tanya Seputar Audit dan GIS
                 </Badge>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">
@@ -916,19 +867,12 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
           {activeSession.messages.length === 0 ? (
             <div className="max-w-3xl mx-auto py-8 space-y-8 animate-in fade-in duration-300">
               {/* Hero Banner */}
-              <div className="text-center space-y-3">
-                <div className="inline-flex p-3 rounded-2xl bg-gradient-to-tr from-sky-500/15 via-indigo-500/10 to-transparent border border-sky-500/20 shadow-xs">
-                  <img
-                    src="/logo-perumdam.png"
-                    alt="Logo Perumdam"
-                    className="h-16 w-auto object-contain mx-auto"
-                  />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                  Asisten Intelijen Logistik & Perpipaan
+              <div className="text-center space-y-2">
+                <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-foreground">
+                  Tiara Assistant
                 </h2>
-                <p className="text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
-                  Tanyakan kondisi stok material, deviasi lokasi pemasangan GIS, peramalan kebutuhan pipa cabang, atau draf surat dinas logistik secara instan.
+                <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                  Tanyakan seputar audit pemasangan, deviasi lokasi GIS, atau kondisi distribusi material.
                 </p>
               </div>
 
@@ -964,37 +908,37 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
               {activeSession.messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex gap-3 ${
+                  className={`flex gap-2.5 ${
                     msg.role === "user" ? "justify-end" : "justify-start"
                   }`}
                 >
-                  {/* AI Avatar */}
+                  {/* AI Icon */}
                   {msg.role === "assistant" && (
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-                      <Bot className="w-4 h-4" />
+                    <div className="w-7 h-7 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="w-3.5 h-3.5 text-foreground" />
                     </div>
                   )}
 
-                  {/* Message Bubble Container */}
+                  {/* Message Bubble */}
                   <div
-                    className={`max-w-[85%] rounded-2xl p-4 space-y-2.5 shadow-xs ${
+                    className={`max-w-[80%] rounded-xl px-3.5 py-3 space-y-2 ${
                       msg.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-tr-xs"
-                        : "bg-card border border-border/80 text-card-foreground rounded-tl-xs"
+                        ? "bg-foreground text-background"
+                        : "bg-muted/50 border border-border text-foreground"
                     }`}
                   >
-                    {/* Header info */}
-                    <div className="flex items-center justify-between text-[10px] opacity-70 gap-3 border-b border-current/10 pb-1.5">
-                      <span className="font-semibold">
-                        {msg.role === "user" ? "Anda" : "TIARA AI"}
+                    {/* Timestamp */}
+                    <div className="flex items-center justify-between text-[10px] opacity-50 gap-3">
+                      <span className="font-medium">
+                        {msg.role === "user" ? "Anda" : "Tiara Assistant"}
                       </span>
                       <span>{msg.timestamp}</span>
                     </div>
 
                     {/* Content */}
-                    <div className="text-xs leading-relaxed space-y-2 prose prose-zinc dark:prose-invert max-w-none break-words">
+                    <div className="text-[13px] leading-relaxed space-y-2 break-words">
                       {msg.content.split("\n\n").map((para, pIdx) => {
-                        // Check if paragraph is table
+                        // Table
                         if (para.includes("|") && para.includes("---")) {
                           const lines = para.trim().split("\n");
                           const header = lines[0]?.split("|").filter(Boolean);
@@ -1004,13 +948,13 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                           return (
                             <div
                               key={pIdx}
-                              className="overflow-x-auto my-2 rounded-lg border border-border bg-muted/20"
+                              className="overflow-x-auto my-2 rounded-md border border-border"
                             >
                               <table className="w-full text-[11px] text-left">
-                                <thead className="bg-muted/60 text-foreground font-semibold border-b border-border">
+                                <thead className="bg-muted/60 font-medium border-b border-border">
                                   <tr>
                                     {header?.map((h, hIdx) => (
-                                      <th key={hIdx} className="p-2 whitespace-nowrap font-semibold">
+                                      <th key={hIdx} className="p-2 whitespace-nowrap">
                                         {renderFormattedText(h.trim())}
                                       </th>
                                     ))}
@@ -1020,7 +964,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                                   {rows.map((row, rIdx) => (
                                     <tr
                                       key={rIdx}
-                                      className="border-b border-border/60 hover:bg-muted/40"
+                                      className="border-b border-border/50"
                                     >
                                       {row.map((col, cIdx) => (
                                         <td key={cIdx} className="p-2">
@@ -1035,27 +979,27 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                           );
                         }
 
-                        // Check if blockquote
+                        // Blockquote
                         if (para.startsWith(">")) {
                           return (
                             <div
                               key={pIdx}
-                              className="border-l-2 border-sky-500 bg-sky-500/10 p-2.5 rounded-r-md text-[11px] my-2 text-foreground"
+                              className="border-l-2 border-muted-foreground/40 pl-3 py-1 text-[12px] my-1.5 text-muted-foreground italic"
                             >
                               {renderFormattedText(para.replace(/^>\s*/, ""))}
                             </div>
                           );
                         }
 
-                        // Check if header
+                        // Header
                         if (para.startsWith("### ")) {
                           return (
-                            <h3
+                            <p
                               key={pIdx}
-                              className="text-sm font-bold text-foreground mt-2 mb-1"
+                              className="text-sm font-semibold mt-2 mb-0.5"
                             >
                               {renderFormattedText(para.replace("### ", ""))}
-                            </h3>
+                            </p>
                           );
                         }
 
@@ -1068,37 +1012,36 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                       })}
                     </div>
 
-                    {/* Action Links (if any) */}
+                    {/* Action Links */}
                     {msg.actionLinks && msg.actionLinks.length > 0 && (
-                      <div className="pt-2 border-t border-border/60 flex flex-wrap gap-2">
+                      <div className="pt-2 border-t border-border/40 flex flex-wrap gap-1.5">
                         {msg.actionLinks.map((act, aIdx) => (
                           <Button
                             key={aIdx}
-                            variant="secondary"
+                            variant="outline"
                             size="sm"
-                            className="h-7 text-[10px] gap-1 px-2.5 font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                            className="h-6 text-[10px] gap-1 px-2 font-medium"
                             onClick={() => navigate(act.href)}
                           >
                             {act.icon === "map" ? (
-                              <MapPin className="w-3 h-3 text-emerald-500" />
+                              <MapPin className="w-3 h-3" />
                             ) : act.icon === "box" ? (
-                              <Package className="w-3 h-3 text-sky-500" />
+                              <Package className="w-3 h-3" />
                             ) : (
-                              <ShieldCheck className="w-3 h-3 text-amber-500" />
+                              <ShieldCheck className="w-3 h-3" />
                             )}
                             {act.label}
-                            <ArrowRight className="w-2.5 h-2.5 ml-0.5" />
                           </Button>
                         ))}
                       </div>
                     )}
 
-                    {/* Copy Button */}
+                    {/* Copy */}
                     {msg.role === "assistant" && (
-                      <div className="flex justify-end pt-1">
+                      <div className="flex justify-end pt-0.5">
                         <button
                           onClick={() => handleCopyText(msg.content, msg.id)}
-                          className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
+                          className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity"
                         >
                           {copiedId === msg.id ? (
                             <>
@@ -1106,7 +1049,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                             </>
                           ) : (
                             <>
-                              <Copy className="w-3 h-3" /> Salin Respon
+                              <Copy className="w-3 h-3" /> Salin
                             </>
                           )}
                         </button>
@@ -1118,16 +1061,13 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
 
               {/* Generating Animation */}
               {isGenerating && (
-                <div className="flex gap-3 justify-start animate-in fade-in">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <Bot className="w-4 h-4 animate-pulse" />
+                <div className="flex gap-2.5 justify-start animate-in fade-in">
+                  <div className="w-7 h-7 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
+                    <Bot className="w-3.5 h-3.5 text-foreground animate-pulse" />
                   </div>
-                  <div className="bg-card border border-border rounded-2xl rounded-tl-xs p-3.5 shadow-xs flex items-center gap-2.5 text-xs text-muted-foreground">
-                    <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-                    </span>
-                    <span>Menganalisis data logistik & menyusun respon...</span>
+                  <div className="bg-muted/50 border border-border rounded-xl px-3.5 py-2.5 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-foreground/40 animate-pulse"></span>
+                    <span>Memproses...</span>
                   </div>
                 </div>
               )}
@@ -1158,13 +1098,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
             />
 
             <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/50 text-[11px]">
-              {/* Context status chips */}
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="flex items-center gap-1 font-mono text-[10px] bg-muted/60 px-2 py-0.5 rounded-md">
-                  <Database className="w-3 h-3 text-emerald-500" />
-                  Live Feeds: {liveItems.length} barang • {liveGis.length} GIS
-                </span>
-              </div>
+              <div />
 
               {/* Action buttons */}
               <div className="flex items-center gap-1.5">
@@ -1175,7 +1109,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                   type="submit"
                   disabled={!inputQuery.trim() || isGenerating}
                   size="sm"
-                  className="h-8 px-3 text-xs gap-1.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white shadow-xs"
+                  className="h-8 px-3 text-xs gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Kirim</span>
