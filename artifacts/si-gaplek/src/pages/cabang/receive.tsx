@@ -271,7 +271,11 @@ export default function CabangReceivePage() {
     setTokenInput("");
   };
 
-  const branchTitle = user?.branchName || "Cabang Lombok Tengah";
+  const branchTitle = user?.branchName
+    ? user.branchName
+    : user?.role === "ADMIN"
+    ? "Semua Cabang (Administrator)"
+    : "Unit Cabang";
 
   // Calculate items breakdown for active shipment
   const itemsList = activeShipment?.items || [];
@@ -379,6 +383,7 @@ export default function CabangReceivePage() {
                           </div>
                           <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">
                             {formatDate(s.transactionDate)} • {s.warehouseName || "Gudang Pusat"}
+                            {s.destinationBranchName ? ` → ${s.destinationBranchName}` : ""}
                           </p>
                         </div>
 

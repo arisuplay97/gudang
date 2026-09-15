@@ -158,7 +158,7 @@ export function SuratJalanPrintModal({ open, onClose, data }: SuratJalanPrintPro
                 <div className="flex">
                   <span className="w-32 text-zinc-500 font-medium">Tujuan Distribusi:</span>
                   <span className="font-bold text-sky-900">
-                    {data.destinationBranchName || data.departmentName || "Cabang Lombok Tengah"}
+                    {data.destinationBranchName || data.departmentName || "Unit Cabang"}
                   </span>
                 </div>
                 <div className="flex">
