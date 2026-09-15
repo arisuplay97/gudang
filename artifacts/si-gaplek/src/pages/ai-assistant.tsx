@@ -311,8 +311,8 @@ export default function AiAssistantPage() {
           body: JSON.stringify(newConfig),
         });
         toast({
-          title: "Tersinkron ke Server & Semua Perangkat",
-          description: `Konfigurasi model ${newConfig.model} berhasil disimpan ke database. Otomatis aktif di HP, laptop, dan semua device lain saat login.`,
+          title: "Konfigurasi AI Disimpan",
+          description: `Konfigurasi model ${newConfig.model} berhasil disimpan ke database.`,
         });
         setSettingsOpen(false);
       } catch (err: any) {
