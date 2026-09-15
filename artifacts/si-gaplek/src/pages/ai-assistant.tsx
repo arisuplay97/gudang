@@ -164,32 +164,32 @@ export function renderFormattedText(text: string) {
 
 const STARTER_PROMPTS = [
   {
-    category: "Stok & Kebutuhan",
-    title: "Material Kritis (Safety Stock)",
+    category: "Audit Lapangan",
+    title: "Kesesuaian Pemasangan Fisik",
     prompt:
-      "Periksa material perpipaan yang stoknya berada di bawah batas minimum (safety stock). Buatkan rincian prioritas pengadaan dan estimasi anggaran.",
-    icon: Package,
+      "Audit kesesuaian material yang telah terdistribusi ke cabang terhadap titik pemasangan fisik dan bukti foto di lapangan. Tampilkan deviasi atau anomali yang ditemukan.",
+    icon: ShieldCheck,
   },
   {
     category: "Audit Geospasial",
     title: "Analisis Deviasi Lapangan GIS",
     prompt:
-      "Berapa banyak aksesoris yang terpasang dengan deviasi lokasi signifikan dari SPK awal? Tampilkan cabang dan rekomendasi tindak lanjutnya.",
+      "Berapa banyak aksesoris perpipaan yang terpasang dengan deviasi lokasi signifikan dari SPK awal? Tampilkan cabang dan rekomendasi tindak lanjutnya.",
     icon: MapPin,
   },
   {
-    category: "Distribusi Cabang",
-    title: "Rekap Surat Jalan (BPB) Aktif",
+    category: "Pengawasan Distribusi",
+    title: "Rekap Surat Jalan (BPB) & SLA",
     prompt:
-      "Tampilkan ringkasan distribusi material keluar terbaru ke cabang-cabang Lombok Tengah beserta status verifikasi penerimaannya.",
+      "Tampilkan ringkasan pengawasan distribusi material ke cabang-cabang Lombok Tengah, kepatuhan batas waktu SLA, serta status verifikasi penerimaannya.",
     icon: Layers,
   },
   {
     category: "Laporan Eksekutif",
-    title: "Ringkasan Eksekutif Direksi",
+    title: "Ringkasan Audit & Pengawasan",
     prompt:
-      "Buatkan draf ringkasan eksekutif kondisi logistik dan keterlacakan pipa untuk Direktur PERUMDAM Tirta Ardhia Rinjani.",
-    icon: ShieldCheck,
+      "Buatkan draf ringkasan eksekutif audit ketertelusuran material, kepatuhan batas waktu SLA, dan pengawasan fisik lapangan untuk Direktur PERUMDAM Tirta Ardhia Rinjani.",
+    icon: AlertTriangle,
   },
 ];
 
@@ -229,7 +229,7 @@ export default function AiAssistantPage() {
     return [
       {
         id: "default-1",
-        title: "Analisis Logistik Umum",
+        title: "Audit & Pengawasan Lapangan",
         updatedAt: new Date().toISOString(),
         messages: [],
       },
@@ -245,7 +245,7 @@ export default function AiAssistantPage() {
       sessions.find((s) => s.id === activeSessionId) ||
       sessions[0] || {
         id: "default-1",
-        title: "Analisis Logistik",
+        title: "Audit & Pengawasan Lapangan",
         updatedAt: new Date().toISOString(),
         messages: [],
       }
@@ -338,26 +338,21 @@ export default function AiAssistantPage() {
 
   /* ── Smart Response Engine (Real AI or Local Contextual Fallback) ── */
   const generateResponse = async (userPrompt: string) => {
-    // 1. Build warehouse context summary
-    const criticalStockItems = liveItems.filter(
-      (it) => it.currentStock <= it.minimumStock
-    );
+    // 1. Build audit & field context summary
     const mismatchGis = liveGis.filter(
       (f) => f.properties?.locationMismatch === true
     );
     const verifiedGis = liveGis.filter(
       (f) => f.properties?.verifiedAt !== null && !f.properties?.locationMismatch
     );
+    const pendingGis = liveGis.filter(
+      (f) => !f.properties?.verifiedAt
+    );
 
-    const warehouseContext = `
-[DATA RIIL PERUMDAM TIRTA ARDHIA RINJANI KABUPATEN LOMBOK TENGAH]
-- Total Master Material: ${liveItems.length} jenis aksesoris & pipa.
-- Material Kritis (Stok <= Safety Stock): ${criticalStockItems.length} barang (${criticalStockItems
-      .slice(0, 5)
-      .map((it) => `${it.name} (Sisa: ${it.currentStock} ${it.unitName || "Buah"})`)
-      .join(", ")}).
-- Titik Pemasangan GIS: ${liveGis.length} titik fisik terdata.
-- Deviasi Geospasial (Mismatch): ${mismatchGis.length} titik (${mismatchGis
+    const auditContext = `
+[DATA AUDIT, DISTRIBUSI & PENGAWASAN LAPANGAN PERUMDAM TIRTA ARDHIA RINJANI]
+- Total Titik Pemasangan GIS Lapangan: ${liveGis.length} titik fisik terdata.
+- Deviasi Geospasial (Mismatch Lapangan vs SPK): ${mismatchGis.length} titik (${mismatchGis
       .slice(0, 3)
       .map(
         (g) =>
@@ -366,9 +361,10 @@ export default function AiAssistantPage() {
           )}m`
       )
       .join("; ")}).
-- Pemasangan Terverifikasi SPI: ${verifiedGis.length} titik.
-- Cabang Pelaksana: Cabang Praya, Cabang Pujut, Cabang Kopang, Cabang Jonggat.
-- Kantor Pusat: Jl. Jend. A Yani No 11, Telp: 0821-1400-5005, Praya, Lombok Tengah.
+- Pemasangan Terverifikasi SPI: ${verifiedGis.length} titik telah lolos audit fisik & berkas.
+- Menunggu Verifikasi / Investigasi Lapangan: ${pendingGis.length} titik.
+- Cabang Wilayah Distribusi & Pengawasan: Cabang Praya, Cabang Pujut, Cabang Kopang, Cabang Jonggat.
+- Kantor Pusat Pengawasan: Jl. Jend. A Yani No 11, Telp: 0821-1400-5005, Praya, Lombok Tengah.
 `;
 
     // If user has provided their real API Key (or for Ollama/Custom local endpoints without key):
@@ -389,7 +385,16 @@ export default function AiAssistantPage() {
                     role: "user",
                     parts: [
                       {
-                        text: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dengan gaya bahasa resmi Indonesia, ringkas, taktis, berbasis data riil, dan sertakan tabel analitik jika relevan.\n\nKonteks Data Gudang Terkini:\n${warehouseContext}\n\nPertanyaan Pengguna: ${userPrompt}`,
+                        text: `Anda adalah TIARA AI, Asisten Ahli Audit, Distribusi & Pengawasan Lapangan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dengan gaya bahasa resmi Indonesia, tegas, taktis, berbasis data audit & lapangan riil, dan sertakan tabel kepatuhan/deviasi jika relevan.
+
+PANDUAN EKSKLUSIF:
+- Fokus Anda HANYA pada: audit kepatuhan, pelacakan ketertelusuran material perpipaan dari Surat Jalan (BPB) hingga terpasang, verifikasi fisik lapangan, kepatuhan batas waktu SLA pengerjaan, dan deviasi koordinat geospasial GIS.
+- JANGAN membahas ketersediaan stok fisik gudang, sisa buffer/safety stock, atau pembelian/pengadaan gudang. Sistem kini murni difokuskan pada integritas distribusi, pengawasan lapangan, dan audit kepatuhan material. Jika pengguna bertanya tentang stok gudang, tegaskan secara santun bahwa sistem telah beralih ke fokus Audit, Distribusi & Pengawasan Lapangan.
+
+Konteks Data Pengawasan & Audit Terkini:
+${auditContext}
+
+Pertanyaan Pengguna: ${userPrompt}`,
                       },
                     ],
                   },
@@ -410,8 +415,8 @@ export default function AiAssistantPage() {
             data?.candidates?.[0]?.content?.parts?.[0]?.text ||
             "Maaf, tidak ada teks jawaban yang dihasilkan dari model.";
           const actionLinks: ActionLink[] = [
-            { label: "Buka Peta Material GIS", href: "/spi/gis", icon: "map" },
-            { label: "Lihat Master Material", href: "/master/barang", icon: "box" },
+            { label: "Inspeksi Peta GIS", href: "/spi/gis", icon: "map" },
+            { label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" },
           ];
           return {
             content: reply,
@@ -432,7 +437,12 @@ export default function AiAssistantPage() {
             body: JSON.stringify({
               model: config.model,
               max_tokens: 1500,
-              system: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data gudang berikut:\n${warehouseContext}`,
+              system: `Anda adalah TIARA AI, Asisten Ahli Audit, Distribusi & Pengawasan Lapangan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional berbasis data audit dan pengawasan lapangan berikut:
+${auditContext}
+
+PANDUAN EKSKLUSIF:
+- Fokus eksklusif pada: audit kepatuhan, pelacakan ketertelusuran material dari Surat Jalan/BPB hingga terpasang, verifikasi fisik lapangan, kepatuhan SLA, dan deviasi lokasi GIS.
+- Jangan membahas ketersediaan stok gudang, sisa buffer/safety stock, atau restock gudang karena sistem kini difokuskan pada integritas distribusi, pengawasan lapangan, dan audit kepatuhan.`,
               messages: [{ role: "user", content: userPrompt }],
             }),
           });
@@ -445,8 +455,8 @@ export default function AiAssistantPage() {
             data?.content?.[0]?.text ||
             "Maaf, tidak ada respon yang diterima dari model AI.";
           const actionLinks: ActionLink[] = [
-            { label: "Buka Peta Material GIS", href: "/spi/gis", icon: "map" },
-            { label: "Lihat Master Material", href: "/master/barang", icon: "box" },
+            { label: "Inspeksi Peta GIS", href: "/spi/gis", icon: "map" },
+            { label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" },
           ];
           return {
             content: reply,
@@ -470,7 +480,12 @@ export default function AiAssistantPage() {
           messages: [
             {
               role: "system",
-              content: `Anda adalah TIARA AI, Asisten Ahli Logistik & Distribusi Perpipaan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional, ramah, dan rapi berbasis data gudang berikut:\n${warehouseContext}\n\nPANDUAN FORMAT TEKS:
+              content: `Anda adalah TIARA AI, Asisten Ahli Audit, Distribusi & Pengawasan Lapangan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dalam bahasa Indonesia profesional, tegas, dan rapi berbasis data audit dan pengawasan distribusi lapangan berikut:
+${auditContext}
+
+PANDUAN KHUSUS:
+- Fokus eksklusif pada: audit kepatuhan, pelacakan ketertelusuran material perpipaan dari Surat Jalan (BPB) hingga pemasangan fisik, verifikasi foto lapangan, kepatuhan batas waktu SLA, dan deviasi lokasi GIS.
+- JANGAN membahas atau merekomendasikan hal terkait stok gudang, safety stock, atau pembelian/restock gudang. Jika ada pertanyaan mengenai stok gudang, tegaskan bahwa sistem kini difokuskan pada Audit, Distribusi & Pengawasan Lapangan.
 - HINDARI penggunaan tanda bintang ganda (**) berlebihan pada setiap kata atau nama cabang/material.
 - Gunakan teks biasa yang bersih, natural, dan mudah dibaca.
 - Gunakan penekanan tebal (bold) hanya sesekali untuk judul bagian atau angka kunci penting.`,
@@ -527,8 +542,8 @@ export default function AiAssistantPage() {
         }
 
         const actionLinks: ActionLink[] = [
-          { label: "Buka Peta Material GIS", href: "/spi/gis", icon: "map" },
-          { label: "Lihat Master Material", href: "/master/barang", icon: "box" },
+          { label: "Inspeksi Peta GIS", href: "/spi/gis", icon: "map" },
+          { label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" },
         ];
         return {
           content: reply,
@@ -581,68 +596,87 @@ ${
       actionLinks.push({ label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" });
     } else if (
       lower.includes("stok") ||
+      lower.includes("gudang") ||
       lower.includes("kritis") ||
       lower.includes("safety") ||
       lower.includes("menipis") ||
       lower.includes("beli") ||
-      lower.includes("pengadaan")
+      lower.includes("pengadaan") ||
+      lower.includes("restock")
     ) {
-      reply = `### Analisis Ketersediaan & Peringatan Buffer Stock
-Hasil pemindaian persediaan gudang pusat & cabang terkini:
+      reply = `### Lingkup Sistem: Audit, Distribusi & Pengawasan Lapangan
+Sistem telah beralih sepenuhnya menjadi **Platform Audit, Distribusi & Pengawasan Lapangan**, dan tidak lagi mengelola atau memonitor stok fisik pergudangan.
 
-* **Total Varian Material**: **${liveItems.length} jenis item**.
-* **Item Menipis / Kritis**: **${criticalStockItems.length} item** berada pada atau di bawah batas *Safety Stock*.
+**Fokus pengawasan operasional meliputi:**
+1. **Audit Ketertelusuran Material**: Memastikan setiap unit material yang keluar dari Surat Jalan (BPB) benar-benar terdistribusi dan terpasang di lapangan sesuai peruntukan SPK.
+2. **Pengawasan Deviasi Geospasial (GIS)**: Mendeteksi titik pasang fisik pipa & aksesoris yang melenceng (*mismatch*) dari koordinat rencana.
+3. **Kepatuhan Batas Waktu (SLA)**: Memantau keterlambatan alur dari serah terima cabang hingga pemasangan selesai.
+4. **Verifikasi Bukti Lapangan SPI**: Memvalidasi dokumentasi foto ber-watermark GPS, koordinat WGS84, dan berita acara lapangan.
 
-| Kode | Nama Material | Stok Fisik | Safety Min | Rekomendasi Restock |
-|:---|:---|:---:|:---:|:---|
-${
-  criticalStockItems.length > 0
-    ? criticalStockItems
-        .slice(0, 5)
-        .map(
-          (it) =>
-            `| \`${it.code}\` | ${it.name} | **${it.currentStock}** | ${it.minimumStock} | Pesan +${Math.max(
-              it.minimumStock * 2,
-              50
-            )} ${it.unitName || "Unit"} segera |`
-        )
-        .join("\n")
-    : "| `MTR-002` | Meter Air DN 20mm | **7** | 10 | Pengadaan darurat 50 unit |\n| `AKS-004` | Coupling HDPE D63 | **3** | 15 | Tambah buffer stock cabang |"
-}
+> **Arahan Tindak Lanjut**: Untuk keperluan audit dan pengawasan, silakan periksa menu **Verifikasi Berkas SPI** atau tinjau sebaran pada **Peta Distribusi GIS**.`;
+      actionLinks.push({ label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" });
+      actionLinks.push({ label: "Inspeksi Peta GIS", href: "/spi/gis", icon: "map" });
+    } else if (
+      lower.includes("surat jalan") ||
+      lower.includes("distribusi") ||
+      lower.includes("keluar") ||
+      lower.includes("bpb") ||
+      lower.includes("sla") ||
+      lower.includes("pelacakan") ||
+      lower.includes("tracking")
+    ) {
+      reply = `### Pengawasan Distribusi & Ketertelusuran Surat Jalan (BPB)
+Pemantauan kepatuhan distribusi material ke seluruh unit cabang:
 
-> **Catatan Logistik**: Rekomendasi pengadaan dibuat dengan mempertimbangkan *Lead Time* pengiriman pabrik perpipaan ke Lombok Tengah (rata-rata 7--14 hari kerja).`;
-      actionLinks.push({ label: "Kelola Master Material", href: "/master/barang", icon: "box" });
-      actionLinks.push({ label: "Cetak Kartu Stok", href: "/laporan/stok", icon: "audit" });
-    } else if (lower.includes("surat jalan") || lower.includes("distribusi") || lower.includes("keluar")) {
-      reply = `### Rekapitulasi Distribusi & Surat Jalan (BPB)
-Pemantauan mutasi pengeluaran barang ke unit cabang:
+1. **Integritas Surat Jalan / BPB Digital**:
+   - Seluruh mutasi pengeluaran material ke cabang dilengkapi **QR Code pengesahan digital resmi** untuk memastikan material tidak tercecer atau dimanipulasi selama distribusi.
+2. **Alur Validasi Penerimaan Cabang**:
+   - Petugas cabang (Praya, Pujut, Kopang, Jonggat) wajib memindai QR Code lembar BPB saat barang tiba untuk mencatat waktu serah-terima riil demi audit kepatuhan SLA.
+3. **Pengawasan Keterlambatan Pemasangan (SLA)**:
+   - Material yang telah diterima cabang namun belum terpasang melewati batas waktu SLA otomatis masuk ke dalam pemantauan khusus auditor SPI.`;
+      actionLinks.push({ label: "Pelacakan Progres Material", href: "/cabang/tracking", icon: "box" });
+      actionLinks.push({ label: "Verifikasi Lapangan SPI", href: "/spi/verifikasi", icon: "audit" });
+    } else if (
+      lower.includes("audit") ||
+      lower.includes("spi") ||
+      lower.includes("temuan") ||
+      lower.includes("pasang") ||
+      lower.includes("verifikasi")
+    ) {
+      reply = `### Ringkasan Audit & Pengawasan Fisik Lapangan
+Berdasarkan data audit Satuan Pengawasan Intern (SPI) terkini:
 
-1. **Surat Jalan / BPB Terverifikasi QR**:
-   - Seluruh pengeluaran material dari Gudang Pusat Praya kini dilengkapi **QR Code berlogo resmi Perumdam** untuk serah-terima cabang secara digital.
-2. **Alur Validasi Fisik**:
-   - Petugas cabang wajib memindai QR Code pada lembar BPB melalui fitur *Penerimaan (Scan QR)* begitu material tiba di gudang cabang.
-3. **Penyaluran Prioritas**:
-   - Penyaluran terbesar minggu ini teralokasikan untuk pekerjaan perbaikan jaringan di **Cabang Praya** dan **Cabang Pujut**.`;
-      actionLinks.push({ label: "Buka Distribusi (Keluar)", href: "/transaksi/keluar", icon: "box" });
-      actionLinks.push({ label: "Scan Penerimaan Cabang", href: "/cabang/receive", icon: "audit" });
+* **Titik Pemasangan Terpantau**: **${liveGis.length} titik fisik**.
+* **Lolos Verifikasi Audit SPI**: **${verifiedGis.length} titik** terkonfirmasi dengan bukti foto ber-watermark GPS dan koordinat valid.
+* **Deviasi Koordinat (*Mismatch*)**: **${mismatchGis.length} titik** terindikasi bergeser di luar toleransi SPK awal.
+* **Menunggu Verifikasi**: **${pendingGis.length} titik** dalam antrean audit fisik lapangan.
+
+| Parameter Pengawasan | Standar Kepatuhan | Tindak Lanjut Lapangan |
+|:---|:---|:---|
+| Bukti Foto Lapangan | Watermark GPS & Waktu Riil | Mencegah pelaporan fiktif / duplikasi foto |
+| Akurasi Koordinat | Toleransi deviasi teknis | Investigasi bersama tim teknis cabang |
+| Rekonsiliasi SPK | Kesesuaian tipe & kuantitas | Menjamin material terpasang sesuai peruntukan |
+
+> **Arahan Audit**: Prioritaskan pemeriksaan langsung terhadap titik pasang dengan deviasi geospasial signifikan.`;
+      actionLinks.push({ label: "Buka Peta Temuan GIS", href: "/spi/gis", icon: "map" });
+      actionLinks.push({ label: "Laporan Audit SPI", href: "/spi/laporan-audit", icon: "audit" });
     } else {
-      reply = `### Ringkasan Intelijen Logistik & Perpipaan
+      reply = `### Ringkasan Intelijen Audit & Pengawasan Lapangan
 **PERUMDAM TIRTA ARDHIA RINJANI KABUPATEN LOMBOK TENGAH**
 
-Menjawab analisis Anda terkait: *"${userPrompt}"*:
+Analisis pengawasan terkait: *"${userPrompt}"*:
 
-1. **Kondisi Persediaan Gudang**:
-   - Terdata **${liveItems.length} varian material** dengan tingkat ketersediaan prima pada pipa transmisi HDPE dan fitting utama.
-   - **${criticalStockItems.length} jenis aksesoris** membutuhkan pesanan ulang (*Re-Order Point*) untuk mencegah kekosongan pekerjaan sambungan baru.
+1. **Audit Ketertelusuran Distribusi**:
+   - Pengawasan alur pergerakan material ke seluruh cabang operasional (Praya, Pujut, Kopang, Jonggat) dengan pengesahan digital Surat Jalan/BPB guna mencegah anomali alokasi.
 
-2. **Keterlacakan Geospasial (Traceability)**:
-   - Terpantau **${liveGis.length} titik fisik** terpasang dengan rekaman foto bukti GPS di seluruh kecamatan operasional Lombok Tengah.
-   - Akurasi rata-rata koordinat GPS perangkat lapangan tercatat **<5 meter**.
+2. **Keterlacakan Geospasial Lapangan (Traceability)**:
+   - Terpantau **${liveGis.length} titik fisik** terpasang dengan rekaman foto bukti GPS & watermark geospasial di seluruh wilayah operasional Lombok Tengah.
+   - Sebanyak **${mismatchGis.length} titik** terindikasi mengalami deviasi lokasi dari SPK awal dan perlu audit konfirmasi.
 
-3. **Integritas Tata Kelola Audit**:
-   - Seluruh pergerakan barang dari penerimaan supplier (GRN), distribusi cabang (Surat Jalan/BPB), hingga pemasangan di lapangan terlacak secara *real-time* dan siap diaudit oleh SPI.`;
-      actionLinks.push({ label: "Eksplorasi Peta GIS", href: "/spi/gis", icon: "map" });
-      actionLinks.push({ label: "Laporan Persediaan", href: "/laporan/stok", icon: "box" });
+3. **Integritas Tata Kelola & Pengawasan SPI**:
+   - Telah terverifikasi **${verifiedGis.length} titik** oleh auditor internal. Sistem secara aktif mendeteksi potensi anomali fisik dan kepatuhan batas waktu SLA pemasangan perpipaan secara *real-time*.`;
+      actionLinks.push({ label: "Inspeksi Peta GIS", href: "/spi/gis", icon: "map" });
+      actionLinks.push({ label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" });
     }
 
     return {
@@ -798,11 +832,11 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                   variant="outline"
                   className="text-[10px] py-0 border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/30 hidden sm:inline-flex"
                 >
-                  Tanya Seputar Audit dan GIS
+                  Audit, Distribusi & GIS
                 </Badge>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">
-                PERUMDAM Tirta Ardhia Rinjani Kabupaten Lombok Tengah
+                Asisten Ahli Audit, Distribusi & Pengawasan Lapangan
               </p>
             </div>
           </div>
@@ -847,7 +881,7 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
             <div className="flex items-center gap-2 truncate">
               <Sparkle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span className="truncate">
-                Kunci API Eksternal belum diatur. Menggunakan <strong>Mesin Analitik Kontekstual Lokal</strong> yang membaca data riil persediaan & GIS Lombok Tengah.
+                Kunci API Eksternal belum diatur. Menggunakan <strong>Mesin Analitik Kontekstual Lokal</strong> yang membaca data riil audit distribusi, pelacakan material & GIS lapangan Lombok Tengah.
               </span>
             </div>
             <button
@@ -871,8 +905,13 @@ Menjawab analisis Anda terkait: *"${userPrompt}"*:
                 <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-foreground">
                   Tiara Assistant
                 </h2>
+                <div className="flex justify-center">
+                  <Badge variant="outline" className="text-xs py-0.5 border-primary/30 text-primary">
+                    Asisten Ahli Audit, Distribusi & Pengawasan Lapangan
+                  </Badge>
+                </div>
                 <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                  Tanyakan seputar audit pemasangan, deviasi lokasi GIS, atau kondisi distribusi material.
+                  Pusat intelijen pengawasan ketertelusuran material, audit deviasi geospasial (GIS), verifikasi bukti fisik lapangan, dan kepatuhan SLA distribusi PERUMDAM Tirta Ardhia Rinjani.
                 </p>
               </div>
 
