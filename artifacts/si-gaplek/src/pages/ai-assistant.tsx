@@ -1316,9 +1316,6 @@ Analisis pengawasan terkait: *"${userPrompt}"*:
                     placeholder="Contoh: https://gateway.dahono.com/v1"
                     className="h-9 text-xs font-mono"
                   />
-                  <p className="text-[10px] text-muted-foreground">
-                    Cukup masukkan Base URL (misal: <code>https://gateway.dahono.com/v1</code>). Sistem otomatis mengarahkannya ke <code>/chat/completions</code> dengan perlindungan anti-CORS.
-                  </p>
                 </div>
               </div>
             )}
@@ -1402,9 +1399,6 @@ Analisis pengawasan terkait: *"${userPrompt}"*:
                   {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                Tersimpan aman di database server PERUMDAM Tirta Ardhia Rinjani. Begitu disimpan oleh Admin, pengaturan ini <strong>otomatis aktif di HP, laptop, dan semua komputer lain</strong> tanpa perlu atur ulang.
-              </p>
             </div>
           </div>
 

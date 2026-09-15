@@ -5,6 +5,23 @@ import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
 
+// Ensure system_settings table exists
+async function ensureSettingsTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_by INTEGER
+      );
+    `);
+  } catch (err) {
+    console.error("ensureSettingsTable error:", err?.message || err);
+  }
+}
+ensureSettingsTable();
+
 function resolveEndpoint(baseUrl?: string, provider?: string): string {
   if (provider === "gemini") return "";
   if (provider === "claude" && !baseUrl?.trim()) return "https://api.anthropic.com/v1/messages";
@@ -25,12 +42,13 @@ function resolveEndpoint(baseUrl?: string, provider?: string): string {
 }
 
 /**
- * GET /api/ai/config
+ * GET /ai/config & /api/ai/config
  * Retrieves system-wide AI configuration from PostgreSQL system_settings.
  * Sensitive API keys are masked for non-admins to ensure security.
  */
-router.get("/api/ai/config", requireAuth, async (req, res): Promise<void> => {
+router.get(["/ai/config", "/api/ai/config"], requireAuth, async (req, res): Promise<void> => {
   try {
+    await ensureSettingsTable();
     const result = await pool.query(
       "SELECT key, value, updated_at, updated_by FROM system_settings WHERE key = 'ai_config'"
     );
@@ -63,12 +81,13 @@ router.get("/api/ai/config", requireAuth, async (req, res): Promise<void> => {
 });
 
 /**
- * POST /api/ai/config
+ * POST /ai/config & /api/ai/config
  * Saves system-wide AI configuration into database.
  * RESTRICTED: Admin only.
  */
-router.post("/api/ai/config", requireAuth, requireRole("ADMIN"), async (req, res): Promise<void> => {
+router.post(["/ai/config", "/api/ai/config"], requireAuth, requireRole("ADMIN"), async (req, res): Promise<void> => {
   try {
+    await ensureSettingsTable();
     const { provider, model, apiKey, customBaseUrl, customProviderName, temperature } = req.body;
     if (!provider || !model) {
       res.status(400).json({ error: "Provider dan Model wajib diisi." });
@@ -115,11 +134,11 @@ router.post("/api/ai/config", requireAuth, requireRole("ADMIN"), async (req, res
 });
 
 /**
- * POST /api/ai/chat
+ * POST /ai/chat & /api/ai/chat
  * Server-side AI completion using the centrally configured AI key.
  * Available to authenticated users without requiring client to hold raw API keys.
  */
-router.post("/api/ai/chat", requireAuth, async (req, res): Promise<void> => {
+router.post(["/ai/chat", "/api/ai/chat"], requireAuth, async (req, res): Promise<void> => {
   try {
     const { prompt, context, system } = req.body;
     if (!prompt) {
@@ -128,6 +147,7 @@ router.post("/api/ai/chat", requireAuth, async (req, res): Promise<void> => {
     }
 
     // Retrieve active AI config from system_settings
+    await ensureSettingsTable();
     const configRes = await pool.query("SELECT value FROM system_settings WHERE key = 'ai_config'");
     const config = configRes.rows[0]?.value;
 
@@ -245,9 +265,9 @@ router.post("/api/ai/chat", requireAuth, async (req, res): Promise<void> => {
 });
 
 /**
- * POST /api/ai/proxy-chat (legacy/custom direct messages proxy)
+ * POST /ai/proxy-chat & /api/ai/proxy-chat (legacy/custom direct messages proxy)
  */
-router.post("/api/ai/proxy-chat", requireAuth, async (req, res): Promise<void> => {
+router.post(["/ai/proxy-chat", "/api/ai/proxy-chat"], requireAuth, async (req, res): Promise<void> => {
   try {
     const { endpoint, apiKey, model, messages, temperature } = req.body;
     if (!endpoint || !model || !messages) {
