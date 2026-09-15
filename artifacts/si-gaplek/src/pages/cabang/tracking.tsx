@@ -651,9 +651,9 @@ export default function CabangTrackingPage() {
                   className="p-4 border border-border/80 bg-card hover:border-foreground/30 transition-colors shadow-xs group cursor-pointer"
                   onClick={() => setSelectedTrackingUuid(track.uuid)}
                 >
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 items-center gap-4">
                     {/* Left: Material Info */}
-                    <div className="space-y-1 flex-1 min-w-[240px]">
+                    <div className="lg:col-span-5 space-y-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                           {track.itemName}
@@ -677,8 +677,8 @@ export default function CabangTrackingPage() {
                       </div>
                     </div>
 
-                    {/* Middle: Progress Bar & Clean Text */}
-                    <div className="w-full lg:w-64 space-y-1">
+                    {/* Middle: Progress Bar & Clean Text (Sejajar sempurna di semua baris) */}
+                    <div className="lg:col-span-3 w-full space-y-1.5">
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Progress:</span>
                         <span className="text-foreground font-mono font-medium">
@@ -686,14 +686,14 @@ export default function CabangTrackingPage() {
                         </span>
                       </div>
                       <Progress value={pct} className="h-1.5" />
-                      <p className="text-[11px] text-muted-foreground font-mono">
+                      <p className="text-[11px] text-muted-foreground font-mono truncate">
                         {track.totalQuantity} dikirim · {track.installedQuantity} terpasang · {track.remainingQuantity} sisa
                       </p>
                     </div>
 
                     {/* Right: Subdued Status & Detail Button */}
-                    <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0">
-                      <div className="flex flex-col items-start lg:items-end gap-1">
+                    <div className="lg:col-span-4 flex items-center justify-between lg:justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0">
+                      <div className="flex flex-col items-start lg:items-end gap-1 shrink-0">
                         {getStatusBadge(track.status)}
                         {getSlaIndicator(track.slaStatus, track.slaDeadlineAt)}
                       </div>
@@ -701,7 +701,7 @@ export default function CabangTrackingPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="gap-1 text-xs shadow-xs"
+                        className="gap-1 text-xs shadow-xs shrink-0 whitespace-nowrap"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedTrackingUuid(track.uuid);
