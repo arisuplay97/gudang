@@ -25,6 +25,19 @@ export default function SpiVerifikasiPage() {
 
     const pendingList = pendingData?.data || [];
 
+    const { data: detailData, isLoading: isDetailLoading } = useQuery({
+        queryKey: ["spi-evidence-detail", selectedPending?.evidenceUuid],
+        queryFn: () => apiFetch<{ data: any }>(`/api/spi/evidence/${selectedPending.evidenceUuid}`),
+        enabled: Boolean(selectedPending?.evidenceUuid),
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const currentDetail = detailData?.data;
+    const photoBefore = currentDetail?.photoBeforeUrl || currentDetail?.photoUrl || selectedPending?.photoBeforeUrl || selectedPending?.photoUrl;
+    const photoAfter = currentDetail?.photoAfterUrl || currentDetail?.photoUrl || selectedPending?.photoAfterUrl || selectedPending?.photoUrl;
+    const photoBeforeChecksum = currentDetail?.photoBeforeChecksum || selectedPending?.photoBeforeChecksum;
+    const photoChecksum = currentDetail?.photoChecksum || selectedPending?.photoChecksum;
+
     const verifyMutation = useMutation({
         mutationFn: async ({ evidenceUuid, status, notes }: { evidenceUuid: string, status: string, notes: string }) => {
             return apiFetch(`/api/spi/verify/${evidenceUuid}`, {
@@ -39,6 +52,7 @@ export default function SpiVerifikasiPage() {
             });
             queryClient.invalidateQueries({ queryKey: ["spi-pending"] });
             queryClient.invalidateQueries({ queryKey: ["spi-dashboard"] });
+            queryClient.invalidateQueries({ queryKey: ["spi-evidence-detail"] });
             setSelectedPending(null);
             setNotes("");
         },
@@ -156,16 +170,20 @@ export default function SpiVerifikasiPage() {
                                         </Badge>
                                     </div>
                                     <div
-                                        className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center group cursor-pointer"
+                                        className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center group cursor-pointer min-h-[160px]"
                                         onClick={() => {
-                                            const photo = selectedPending.photoBeforeUrl || selectedPending.photoUrl;
-                                            if (photo) setZoomPhoto({ url: photo, title: "Foto 1: Sebelum Pemasangan (Kondisi Awal)" });
+                                            if (photoBefore) setZoomPhoto({ url: photoBefore, title: "Foto 1: Sebelum Pemasangan (Kondisi Awal)" });
                                         }}
                                     >
-                                        {selectedPending.photoBeforeUrl || selectedPending.photoUrl ? (
+                                        {isDetailLoading ? (
+                                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 p-4">
+                                                <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                                                <span className="text-xs text-white/70">Memuat foto bukti awal...</span>
+                                            </div>
+                                        ) : photoBefore ? (
                                             <>
                                                 <img
-                                                    src={selectedPending.photoBeforeUrl || selectedPending.photoUrl}
+                                                    src={photoBefore}
                                                     alt="Foto Sebelum Pemasangan"
                                                     className="w-full h-full object-contain transition-transform group-hover:scale-102"
                                                 />
@@ -178,7 +196,7 @@ export default function SpiVerifikasiPage() {
                                         )}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground font-mono truncate">
-                                        SHA-256: {selectedPending.photoBeforeChecksum ? `${String(selectedPending.photoBeforeChecksum).substring(0, 18)}...` : "—"}
+                                        SHA-256: {photoBeforeChecksum ? `${String(photoBeforeChecksum).substring(0, 18)}...` : "—"}
                                     </div>
                                 </div>
 
@@ -194,16 +212,20 @@ export default function SpiVerifikasiPage() {
                                         </Badge>
                                     </div>
                                     <div
-                                        className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center group cursor-pointer"
+                                        className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center group cursor-pointer min-h-[160px]"
                                         onClick={() => {
-                                            const photo = selectedPending.photoAfterUrl || selectedPending.photoUrl;
-                                            if (photo) setZoomPhoto({ url: photo, title: "Foto 2: Sesudah Pemasangan (Hasil Akhir)" });
+                                            if (photoAfter) setZoomPhoto({ url: photoAfter, title: "Foto 2: Sesudah Pemasangan (Hasil Akhir)" });
                                         }}
                                     >
-                                        {selectedPending.photoAfterUrl || selectedPending.photoUrl ? (
+                                        {isDetailLoading ? (
+                                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 p-4">
+                                                <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                                                <span className="text-xs text-white/70">Memuat foto bukti hasil...</span>
+                                            </div>
+                                        ) : photoAfter ? (
                                             <>
                                                 <img
-                                                    src={selectedPending.photoAfterUrl || selectedPending.photoUrl}
+                                                    src={photoAfter}
                                                     alt="Foto Sesudah Pemasangan"
                                                     className="w-full h-full object-contain transition-transform group-hover:scale-102"
                                                 />
@@ -216,7 +238,7 @@ export default function SpiVerifikasiPage() {
                                         )}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground font-mono truncate">
-                                        SHA-256: {selectedPending.photoChecksum ? `${String(selectedPending.photoChecksum).substring(0, 18)}...` : "—"}
+                                        SHA-256: {photoChecksum ? `${String(photoChecksum).substring(0, 18)}...` : "—"}
                                     </div>
                                 </div>
                             </div>

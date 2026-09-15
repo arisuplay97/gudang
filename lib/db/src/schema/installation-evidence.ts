@@ -55,6 +55,7 @@ export const installationEvidenceTable = pgTable("installation_evidence", {
     index("idx_evidence_allocation").on(table.allocationId),
     index("idx_evidence_tracking").on(table.trackingId),
     index("idx_evidence_status").on(table.status),
+    index("idx_evidence_status_created").on(table.status, table.createdAt),
     index("idx_evidence_branch").on(table.branchId),
 ]);
 

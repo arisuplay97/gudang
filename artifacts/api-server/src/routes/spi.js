@@ -173,9 +173,6 @@ router.get("/spi/pending", requireAuth, requireRole("SPI", "ADMIN"), async (req,
         .select({
         evidenceId: installationEvidenceTable.id,
         evidenceUuid: installationEvidenceTable.uuid,
-        photoUrl: installationEvidenceTable.photoUrl,
-        photoBeforeUrl: installationEvidenceTable.photoBeforeUrl,
-        photoAfterUrl: installationEvidenceTable.photoAfterUrl,
         photoChecksum: installationEvidenceTable.photoChecksum,
         photoBeforeChecksum: installationEvidenceTable.photoBeforeChecksum,
         latitude: installationEvidenceTable.latitude,
@@ -211,6 +208,27 @@ router.get("/spi/pending", requireAuth, requireRole("SPI", "ADMIN"), async (req,
         .offset(offset);
     res.json({ data: rows, pagination: { page, limit, total: Number(count), totalPages: Math.ceil(Number(count) / limit) } });
 });
+// ─── GET SINGLE EVIDENCE DETAIL WITH PHOTOS ───
+router.get("/spi/evidence/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"), async (req, res) => {
+    const [evidence] = await db
+        .select({
+        evidenceId: installationEvidenceTable.id,
+        evidenceUuid: installationEvidenceTable.uuid,
+        photoUrl: installationEvidenceTable.photoUrl,
+        photoBeforeUrl: installationEvidenceTable.photoBeforeUrl,
+        photoAfterUrl: installationEvidenceTable.photoAfterUrl,
+        photoChecksum: installationEvidenceTable.photoChecksum,
+        photoBeforeChecksum: installationEvidenceTable.photoBeforeChecksum,
+    })
+        .from(installationEvidenceTable)
+        .where(eq(installationEvidenceTable.uuid, req.params.evidenceUuid));
+    if (!evidence) {
+        res.status(404).json({ error: "Evidence tidak ditemukan" });
+        return;
+    }
+    res.json({ data: evidence });
+});
+
 // ─── VERIFY EVIDENCE (Section 34, 35) ───
 router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"), async (req, res) => {
     const { status, notes } = req.body; // TERVERIFIKASI | DITOLAK

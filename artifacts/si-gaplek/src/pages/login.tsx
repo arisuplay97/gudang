@@ -87,11 +87,6 @@ export default function LoginPage() {
                 Masuk
               </Button>
             </form>
-            <div className="mt-6 p-3 bg-muted rounded-lg text-xs text-muted-foreground">
-              <p className="font-medium mb-1">Akun Demo:</p>
-              <p>admin / password • gudang1 / password</p>
-              <p>keuangan1 / password • pimpinan1 / password</p>
-            </div>
           </CardContent>
         </Card>
 
