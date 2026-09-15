@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -196,6 +197,8 @@ const STARTER_PROMPTS = [
 export default function AiAssistantPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = (user?.role || "").toUpperCase() === "ADMIN";
 
   /* ── State ── */
   const [config, setConfig] = useState<AiConfig>(() => {
@@ -210,6 +213,7 @@ export default function AiAssistantPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tempApiKey, setTempApiKey] = useState(config.apiKey);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [inputQuery, setInputQuery] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -217,6 +221,38 @@ export default function AiAssistantPage() {
   // Live context toggles
   const [includeGisContext, setIncludeGisContext] = useState(true);
   const [includeStockContext, setIncludeStockContext] = useState(true);
+
+  // Synchronize server AI config on mount
+  useEffect(() => {
+    let active = true;
+    apiFetch<{ config: (AiConfig & { hasApiKey?: boolean }) | null }>("/api/ai/config")
+      .then((res) => {
+        if (!active || !res?.config) return;
+        const serverConfig = res.config;
+        setConfig((prev) => {
+          const merged: AiConfig = {
+            ...prev,
+            provider: serverConfig.provider || prev.provider,
+            model: serverConfig.model || prev.model,
+            apiKey: serverConfig.apiKey || prev.apiKey,
+            customBaseUrl: serverConfig.customBaseUrl ?? prev.customBaseUrl,
+            customProviderName: serverConfig.customProviderName ?? prev.customProviderName,
+            temperature: typeof serverConfig.temperature === "number" ? serverConfig.temperature : prev.temperature,
+          };
+          localStorage.setItem("sigaplek_ai_config", JSON.stringify(merged));
+          return merged;
+        });
+        if (serverConfig.apiKey) {
+          setTempApiKey(serverConfig.apiKey);
+        }
+      })
+      .catch((e) => {
+        console.warn("Konfigurasi server AI belum tersinkron:", e);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Chat sessions state
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
@@ -261,16 +297,40 @@ export default function AiAssistantPage() {
     }
   }, [sessions]);
 
-  // Save config
-  const handleSaveConfig = () => {
+  // Save config (Local + Central Server Database)
+  const handleSaveConfig = async () => {
     const newConfig = { ...config, apiKey: tempApiKey.trim() };
     setConfig(newConfig);
     localStorage.setItem("sigaplek_ai_config", JSON.stringify(newConfig));
-    setSettingsOpen(false);
-    toast({
-      title: "Konfigurasi AI Disimpan",
-      description: `Model: ${newConfig.model} (${PROVIDER_MODELS[newConfig.provider]?.label})`,
-    });
+
+    if (isAdmin) {
+      setIsSavingConfig(true);
+      try {
+        await apiFetch("/api/ai/config", {
+          method: "POST",
+          body: JSON.stringify(newConfig),
+        });
+        toast({
+          title: "Tersinkron ke Server & Semua Perangkat",
+          description: `Konfigurasi model ${newConfig.model} berhasil disimpan ke database. Otomatis aktif di HP, laptop, dan semua device lain saat login.`,
+        });
+        setSettingsOpen(false);
+      } catch (err: any) {
+        toast({
+          title: "Tersimpan Lokal",
+          description: `Tersimpan di peramban ini (${err.message}).`,
+        });
+        setSettingsOpen(false);
+      } finally {
+        setIsSavingConfig(false);
+      }
+    } else {
+      setSettingsOpen(false);
+      toast({
+        title: "Konfigurasi AI Disimpan Lokal",
+        description: `Model: ${newConfig.model} (${PROVIDER_MODELS[newConfig.provider]?.label})`,
+      });
+    }
   };
 
   /* ── Live Database Feeds ── */
@@ -367,7 +427,39 @@ export default function AiAssistantPage() {
 - Kantor Pusat Pengawasan: Jl. Jend. A Yani No 11, Telp: 0821-1400-5005, Praya, Lombok Tengah.
 `;
 
-    // If user has provided their real API Key (or for Ollama/Custom local endpoints without key):
+    // 1. Prioritaskan eksekusi AI melalui Server Backend (Menggunakan API Key terpusat di Server)
+    try {
+      const serverRes = await apiFetch<{ content: string; actionLinks?: ActionLink[]; isLocalEngine?: boolean }>(
+        "/api/ai/chat",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            prompt: userPrompt,
+            context: auditContext,
+            system: `Anda adalah TIARA AI, Asisten Ahli Audit, Distribusi & Pengawasan Lapangan untuk PERUMDAM TIRTA ARDHIA RINJANI Kabupaten Lombok Tengah. Jawab dengan gaya bahasa resmi Indonesia, tegas, taktis, berbasis data audit & lapangan riil, dan sertakan tabel kepatuhan/deviasi jika relevan.
+
+PANDUAN EKSKLUSIF:
+- Fokus Anda HANYA pada: audit kepatuhan, pelacakan ketertelusuran material perpipaan dari Surat Jalan (BPB) hingga terpasang, verifikasi fisik lapangan, kepatuhan batas waktu SLA pengerjaan, dan deviasi koordinat geospasial GIS.
+- JANGAN membahas ketersediaan stok fisik gudang, sisa buffer/safety stock, atau pembelian/pengadaan gudang. Sistem kini murni difokuskan pada integritas distribusi, pengawasan lapangan, dan audit kepatuhan material. Jika pengguna bertanya tentang stok gudang, tegaskan secara santun bahwa sistem telah beralih ke fokus Audit, Distribusi & Pengawasan Lapangan.`,
+          }),
+        }
+      );
+
+      if (serverRes?.content) {
+        return {
+          content: serverRes.content,
+          isLocalEngine: false,
+          actionLinks: serverRes.actionLinks || [
+            { label: "Inspeksi Peta GIS", href: "/spi/gis", icon: "map" },
+            { label: "Verifikasi Berkas SPI", href: "/spi/verifikasi", icon: "audit" },
+          ],
+        };
+      }
+    } catch (serverErr: any) {
+      console.warn("Eksekusi server AI dilewati/fallback:", serverErr?.message);
+    }
+
+    // 2. Fallback: Eksekusi langsung dari browser jika kunci lokal tersedia
     const hasCustomUrl = !!config.customBaseUrl?.trim();
     const hasValidKey = !!(config.apiKey && config.apiKey.trim().length > 3);
 
@@ -1282,7 +1374,9 @@ Analisis pengawasan terkait: *"${userPrompt}"*:
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="font-semibold text-foreground">API Key</label>
-                <span className="text-[10px] text-muted-foreground">Tersimpan lokal di peramban</span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  {isAdmin ? "Tersinkron di Server (Semua Perangkat)" : "Tersinkron Terpusat"}
+                </span>
               </div>
               <div className="relative">
                 <Input
@@ -1309,7 +1403,7 @@ Analisis pengawasan terkait: *"${userPrompt}"*:
                 </button>
               </div>
               <p className="text-[10px] text-muted-foreground">
-                Jika dikosongkan, sistem akan otomatis menggunakan <strong>Mesin Analitik Lokal</strong> yang membaca data gudang tanpa kuota eksternal.
+                Tersimpan aman di database server PERUMDAM Tirta Ardhia Rinjani. Begitu disimpan oleh Admin, pengaturan ini <strong>otomatis aktif di HP, laptop, dan semua komputer lain</strong> tanpa perlu atur ulang.
               </p>
             </div>
           </div>
@@ -1325,10 +1419,11 @@ Analisis pengawasan terkait: *"${userPrompt}"*:
             </Button>
             <Button
               size="sm"
+              disabled={isSavingConfig}
               className="text-xs bg-primary hover:bg-primary/90"
               onClick={handleSaveConfig}
             >
-              Simpan Konfigurasi
+              {isSavingConfig ? "Menyimpan ke Server..." : "Simpan Konfigurasi"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -10,8 +10,14 @@ import { pool } from "@workspace/db";
 
 const PgSession = connectPgSimple(session);
 
-// Ensure DB columns exist for Before & After evidence, Cross-District Anti-Fraud, and Stock Out Items
+// Ensure DB columns exist for Before & After evidence, Cross-District Anti-Fraud, Stock Out Items, and System Settings
 pool.query(`
+  CREATE TABLE IF NOT EXISTS system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_by INTEGER
+  );
   ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS photo_before_url TEXT;
   ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS photo_after_url TEXT;
   ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS photo_before_checksum TEXT;
