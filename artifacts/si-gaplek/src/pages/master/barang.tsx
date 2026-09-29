@@ -161,7 +161,7 @@ export default function BarangPage() {
 
   const [form, setForm] = useState({
     code: "", name: "", barcode: "", categoryId: "", unitId: "",
-    description: "", unitPrice: "",
+    description: "", unitPrice: "", status: "active",
   });
 
   const { toast } = useToast();
@@ -217,6 +217,7 @@ export default function BarangPage() {
         unitId: form.unitId ? parseInt(form.unitId) : null,
         description: form.description || null,
         unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : 0,
+        status: form.status || "active",
       };
       if (editing) {
         return apiFetch(`/api/items/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -233,20 +234,30 @@ export default function BarangPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiFetch(`/api/items/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
+    mutationFn: (id: number) => apiFetch<{ success?: boolean; softDeleted?: boolean; message?: string }>(`/api/items/${id}`, { method: "DELETE" }),
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["items"] });
       qc.invalidateQueries({ queryKey: ["items-summary"] });
       setDeleteId(null);
-      toast({ title: "Barang dihapus" });
+      if (res?.softDeleted) {
+        toast({
+          title: "Status Barang Dinonaktifkan",
+          description: res.message || "Barang memiliki riwayat transaksi sehingga statusnya diubah menjadi Nonaktif.",
+        });
+      } else {
+        toast({
+          title: "Barang Dihapus Permanen",
+          description: res?.message || "Barang telah berhasil dihapus dari sistem.",
+        });
+      }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Gagal Menghapus", description: e.message, variant: "destructive" }),
   });
 
   /* ── Handlers ──────────────────────────────────────────────── */
   const openCreate = () => {
     setEditing(null);
-    setForm({ code: "", name: "", barcode: "", categoryId: "", unitId: "", description: "", unitPrice: "" });
+    setForm({ code: "", name: "", barcode: "", categoryId: "", unitId: "", description: "", unitPrice: "", status: "active" });
     setDialogOpen(true);
   };
 
@@ -257,6 +268,7 @@ export default function BarangPage() {
       categoryId: item.categoryId?.toString() ?? "", unitId: item.unitId?.toString() ?? "",
       description: item.description ?? "",
       unitPrice: (item.unitPrice ?? "").toString(),
+      status: item.status ?? "active",
     });
     setDialogOpen(true);
   };
@@ -446,9 +458,7 @@ export default function BarangPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Semua Status</SelectItem>
-              <SelectItem value="AMAN">Aman</SelectItem>
-              <SelectItem value="MENIPIS">Menipis</SelectItem>
-              <SelectItem value="HABIS">Habis</SelectItem>
+              <SelectItem value="active">Aktif</SelectItem>
               <SelectItem value="inactive">Nonaktif</SelectItem>
             </SelectContent>
           </Select>
@@ -774,6 +784,18 @@ export default function BarangPage() {
               </div>
             </div>
             <div className="space-y-1.5"><Label>Harga Satuan (Rp)</Label><Input type="number" min="0" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} /></div>
+            {editing && (
+              <div className="space-y-1.5">
+                <Label>Status Material</Label>
+                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Aktif</SelectItem>
+                    <SelectItem value="inactive">Nonaktif</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5"><Label>Deskripsi</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
           </div>
           <DialogFooter>
@@ -788,12 +810,14 @@ export default function BarangPage() {
       {/* ── Delete Confirmation ─────────────────────────────── */}
       <Dialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Hapus Barang?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground py-2">Tindakan ini tidak dapat dibatalkan.</p>
+          <DialogHeader><DialogTitle>Hapus Material?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Material yang belum pernah digunakan akan dihapus permanen. Jika sudah memiliki riwayat transaksi/surat jalan, statusnya otomatis dinonaktifkan agar rekam jejak logistik tetap aman.
+          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>Batal</Button>
             <Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending ? "Menghapus..." : "Hapus"}
+              {deleteMutation.isPending ? "Memproses..." : "Hapus"}
             </Button>
           </DialogFooter>
         </DialogContent>

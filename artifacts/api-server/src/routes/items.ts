@@ -6,6 +6,8 @@ import {
   stockInTable, stockInItemsTable, stockOutTable, stockOutItemsTable,
   adjustmentsTable, adjustmentItemsTable, returnsTable, returnItemsTable,
   mutationsTable, mutationItemsTable, branchesTable, departmentsTable,
+  branchStocksTable, stockBalancesTable, stockMovementsTable, serialNumbersTable,
+  opnameItemsTable,
 } from "@workspace/db";
 import {
   ListItemsQueryParams, CreateItemBody, GetItemParams, UpdateItemParams, UpdateItemBody,
@@ -491,13 +493,76 @@ router.patch("/items/:id", requireAuth, async (req, res): Promise<void> => {
 
 // DELETE /items/:id
 router.delete("/items/:id", requireAuth, async (req, res): Promise<void> => {
-  const params = DeleteItemParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [deleted] = await db.delete(itemsTable).where(eq(itemsTable.id, params.data.id)).returning();
-  if (!deleted) { res.status(404).json({ error: "Barang tidak ditemukan" }); return; }
+  try {
+    const params = DeleteItemParams.safeParse(req.params);
+    if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+    const id = params.data.id;
 
-  await db.insert(auditLogsTable).values({ entityType: "item", entityId: params.data.id, action: "delete", description: `Barang ${deleted.name} dihapus`, userId: req.session.userId, username: req.session.username });
-  res.sendStatus(204);
+    const [item] = await db.select().from(itemsTable).where(eq(itemsTable.id, id));
+    if (!item) { res.status(404).json({ error: "Barang tidak ditemukan" }); return; }
+
+    // Check transaction counts across operational tables
+    const [soCount] = await db.select({ count: sql<number>`count(*)::int` }).from(stockOutItemsTable).where(eq(stockOutItemsTable.itemId, id));
+    const [siCount] = await db.select({ count: sql<number>`count(*)::int` }).from(stockInItemsTable).where(eq(stockInItemsTable.itemId, id));
+    const [retCount] = await db.select({ count: sql<number>`count(*)::int` }).from(returnItemsTable).where(eq(returnItemsTable.itemId, id));
+    const [opCount] = await db.select({ count: sql<number>`count(*)::int` }).from(opnameItemsTable).where(eq(opnameItemsTable.itemId, id));
+
+    // Check remaining stock across branches
+    const [branchStockSum] = await db
+      .select({ totalQty: sql<number>`coalesce(sum(${branchStocksTable.quantity}), 0)::int` })
+      .from(branchStocksTable)
+      .where(eq(branchStocksTable.itemId, id));
+
+    const totalTx = (soCount?.count || 0) + (siCount?.count || 0) + (retCount?.count || 0) + (opCount?.count || 0);
+    const hasBranchStock = (branchStockSum?.totalQty || 0) > 0;
+
+    if (totalTx > 0 || hasBranchStock) {
+      // Item has operational history or current branch stock:
+      // Soft-delete to preserve ledger, delivery orders, and audit trail
+      await db.update(itemsTable).set({ status: "inactive" }).where(eq(itemsTable.id, id));
+      await db.insert(auditLogsTable).values({
+        entityType: "item",
+        entityId: id,
+        action: "deactivate",
+        description: `Barang ${item.name} dinonaktifkan (memiliki riwayat transaksi / sisa stok)`,
+        userId: req.session.userId,
+        username: req.session.username,
+      });
+
+      res.status(200).json({
+        success: true,
+        softDeleted: true,
+        message: `Barang "${item.name}" memiliki riwayat transaksi/stok cabang sehingga statusnya diubah menjadi Nonaktif agar riwayat distribusi tetap terjaga.`,
+      });
+      return;
+    }
+
+    // No historical transactions and zero stock: safely remove zero balance records & hard delete
+    await db.delete(branchStocksTable).where(eq(branchStocksTable.itemId, id));
+    await db.delete(stockBalancesTable).where(eq(stockBalancesTable.itemId, id));
+    await db.delete(stockMovementsTable).where(eq(stockMovementsTable.itemId, id));
+    await db.delete(serialNumbersTable).where(eq(serialNumbersTable.itemId, id));
+
+    const [deleted] = await db.delete(itemsTable).where(eq(itemsTable.id, id)).returning();
+
+    await db.insert(auditLogsTable).values({
+      entityType: "item",
+      entityId: id,
+      action: "delete",
+      description: `Barang ${deleted?.name ?? item.name} dihapus permanen`,
+      userId: req.session.userId,
+      username: req.session.username,
+    });
+
+    res.status(200).json({
+      success: true,
+      softDeleted: false,
+      message: `Barang "${item.name}" berhasil dihapus permanen.`,
+    });
+  } catch (error: any) {
+    console.error("Error deleting item:", error);
+    res.status(500).json({ error: error.message || "Gagal memproses penghapusan barang" });
+  }
 });
 
 // POST /import/items
