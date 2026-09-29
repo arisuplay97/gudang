@@ -508,13 +508,18 @@ router.delete("/items/:id", requireAuth, async (req, res): Promise<void> => {
     const [opCount] = await db.select({ count: sql<number>`count(*)::int` }).from(opnameItemsTable).where(eq(opnameItemsTable.itemId, id));
 
     // Check remaining stock across branches
-    const [branchStockSum] = await db
-      .select({ totalQty: sql<number>`coalesce(sum(${branchStocksTable.quantity}), 0)::int` })
-      .from(branchStocksTable)
-      .where(eq(branchStocksTable.itemId, id));
+    let hasBranchStock = false;
+    try {
+      const [branchStockSum] = await db
+        .select({ totalQty: sql<number>`coalesce(sum(${branchStocksTable.quantity}), 0)::int` })
+        .from(branchStocksTable)
+        .where(eq(branchStocksTable.itemId, id));
+      hasBranchStock = (branchStockSum?.totalQty || 0) > 0;
+    } catch (e) {
+      console.warn("branch_stocks check skipped:", e);
+    }
 
     const totalTx = (soCount?.count || 0) + (siCount?.count || 0) + (retCount?.count || 0) + (opCount?.count || 0);
-    const hasBranchStock = (branchStockSum?.totalQty || 0) > 0;
 
     if (totalTx > 0 || hasBranchStock) {
       // Item has operational history or current branch stock:
@@ -538,10 +543,10 @@ router.delete("/items/:id", requireAuth, async (req, res): Promise<void> => {
     }
 
     // No historical transactions and zero stock: safely remove zero balance records & hard delete
-    await db.delete(branchStocksTable).where(eq(branchStocksTable.itemId, id));
-    await db.delete(stockBalancesTable).where(eq(stockBalancesTable.itemId, id));
-    await db.delete(stockMovementsTable).where(eq(stockMovementsTable.itemId, id));
-    await db.delete(serialNumbersTable).where(eq(serialNumbersTable.itemId, id));
+    try { await db.delete(branchStocksTable).where(eq(branchStocksTable.itemId, id)); } catch (_) {}
+    try { await db.delete(stockBalancesTable).where(eq(stockBalancesTable.itemId, id)); } catch (_) {}
+    try { await db.delete(stockMovementsTable).where(eq(stockMovementsTable.itemId, id)); } catch (_) {}
+    try { await db.delete(serialNumbersTable).where(eq(serialNumbersTable.itemId, id)); } catch (_) {}
 
     const [deleted] = await db.delete(itemsTable).where(eq(itemsTable.id, id)).returning();
 

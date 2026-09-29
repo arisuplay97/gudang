@@ -178,29 +178,15 @@ export default function BarangKeluarPage() {
       toast({ title: "Barang tidak aktif", description: "Material tidak dapat digunakan untuk transaksi.", variant: "destructive" });
       return;
     }
-    const availStock = item.currentStock ?? 0;
-    if (availStock <= 0) {
-      toast({ title: "Stok Kosong", description: `Material ${item.name} saat ini tidak memiliki stok di gudang.`, variant: "destructive" });
-      return;
-    }
+    const safeQty = Math.max(1, qty);
     setDetails(ds => {
       const existing = ds.find(d => d.itemId === item.id);
       if (existing) {
-        const nextQty = existing.quantity + qty;
-        if (nextQty > availStock) {
-          toast({
-            title: "Batas Stok Terlampaui",
-            description: `Total kuantitas (${nextQty}) melebihi stok yang tersedia (${availStock}). Disesuaikan ke stok maksimal.`,
-            variant: "destructive",
-          });
-          return ds.map(d => d.itemId === item.id ? { ...d, quantity: availStock } : d);
-        }
-        return ds.map(d => d.itemId === item.id ? { ...d, quantity: nextQty } : d);
+        return ds.map(d => d.itemId === item.id ? { ...d, quantity: d.quantity + safeQty } : d);
       }
-      const safeQty = Math.min(qty, availStock);
       return [...ds, { itemId: item.id, quantity: safeQty, notes: null, _item: item }];
     });
-    toast({ title: `${item.name} ditambahkan` });
+    toast({ title: `${item.name} ditambahkan (${safeQty} ${item.unitName || "unit"})` });
   }, [toast]);
 
   /* Keyboard barcode scan handler (USB/Bluetooth scanner) */
@@ -234,16 +220,7 @@ export default function BarangKeluarPage() {
     if (!detailForm.itemId) return;
     const item = items?.find(i => i.id === parseInt(detailForm.itemId));
     if (!item) return;
-    const qty = parseInt(detailForm.quantity) || 1;
-    const availStock = item.currentStock ?? 0;
-    if (qty > availStock) {
-      toast({
-        title: "Stok tidak mencukupi",
-        description: `Stok tersedia untuk ${item.name} hanya ${availStock}.`,
-        variant: "destructive",
-      });
-      return;
-    }
+    const qty = Math.max(1, parseInt(detailForm.quantity) || 1);
     addItemToDraft(item, qty);
     setDetailForm({ itemId: "", quantity: "1" });
   };
@@ -397,35 +374,23 @@ export default function BarangKeluarPage() {
               {/* Manual dropdown add */}
               <div className="flex gap-2">
                 <Select value={detailForm.itemId} onValueChange={v => setDetailForm(f => ({ ...f, itemId: v }))}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Atau pilih barang" /></SelectTrigger>
-                  <SelectContent>{items?.filter(i => i.currentStock > 0).map(i => <SelectItem key={i.id} value={i.id.toString()}>{i.code} - {i.name} (stok: {i.currentStock})</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Pilih barang material..." /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {items?.filter(i => (i.status ?? "active") === "active").map(i => (
+                      <SelectItem key={i.id} value={i.id.toString()}>
+                        {i.code} - {i.name} {i.unitName ? `(${i.unitName})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
-                {(() => {
-                  const selItem = items?.find(i => i.id === parseInt(detailForm.itemId));
-                  const maxStock = selItem?.currentStock ?? 999999;
-                  return (
-                    <Input
-                      type="number"
-                      min="1"
-                      max={maxStock}
-                      value={detailForm.quantity}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (selItem && parseInt(val) > maxStock) {
-                          toast({
-                            title: "Melebihi Stok",
-                            description: `Stok tersedia untuk ${selItem.name} hanya ${maxStock}.`,
-                            variant: "destructive",
-                          });
-                          setDetailForm(f => ({ ...f, quantity: maxStock.toString() }));
-                          return;
-                        }
-                        setDetailForm(f => ({ ...f, quantity: val }));
-                      }}
-                      className="w-24"
-                    />
-                  );
-                })()}
+                <Input
+                  type="number"
+                  min="1"
+                  value={detailForm.quantity}
+                  onChange={e => setDetailForm(f => ({ ...f, quantity: e.target.value }))}
+                  placeholder="Qty"
+                  className="w-24 text-center"
+                />
                 <Button type="button" onClick={addDetail} disabled={!detailForm.itemId}>Tambah</Button>
               </div>
             </div>
@@ -459,19 +424,9 @@ export default function BarangKeluarPage() {
                             <Input
                               type="number"
                               min="1"
-                              max={d._item?.currentStock}
                               value={d.quantity}
                               onChange={(e) => {
-                                let newQty = parseInt(e.target.value) || 1;
-                                const maxStock = d._item?.currentStock ?? 999999;
-                                if (newQty > maxStock) {
-                                  toast({
-                                    title: "Melebihi Stok",
-                                    description: `Kuantitas disesuaikan ke stok maksimal (${maxStock}).`,
-                                    variant: "destructive",
-                                  });
-                                  newQty = maxStock;
-                                }
+                                const newQty = Math.max(1, parseInt(e.target.value) || 1);
                                 setDetails(ds => ds.map((dd, j) => j === i ? { ...dd, quantity: newQty } : dd));
                               }}
                               className="w-20 text-right inline-block font-medium"
