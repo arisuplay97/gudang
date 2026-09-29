@@ -132,6 +132,8 @@ interface TrackingItem {
   slaStartAt: string | null;
   slaDeadlineAt: string | null;
   receivedAt: string | null;
+  receivedByName?: string | null;
+  receivedByUsername?: string | null;
   installedAt: string | null;
   verifiedAt: string | null;
   createdAt: string;
@@ -140,6 +142,136 @@ interface TrackingItem {
 interface Branch {
   id: number;
   name: string;
+}
+
+function PaginationControl({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  if (totalItems === 0) return null;
+
+  const startIdx = (currentPage - 1) * pageSize + 1;
+  const endIdx = Math.min(currentPage * pageSize, totalItems);
+
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages: (number | "...")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push("...");
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push("...");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t text-xs">
+      <div className="text-muted-foreground text-xs">
+        Menampilkan <span className="font-medium text-foreground">{startIdx}-{endIdx}</span> dari{" "}
+        <span className="font-medium text-foreground">{totalItems}</span> material
+      </div>
+
+      <div className="flex items-center gap-1 flex-wrap justify-center">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          title="Halaman Pertama"
+        >
+          &laquo;
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2.5 text-xs"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          Sebelumnya
+        </Button>
+
+        {getPageNumbers().map((p, idx) =>
+          p === "..." ? (
+            <span key={`ellipsis-${idx}`} className="px-1 text-muted-foreground">
+              ...
+            </span>
+          ) : (
+            <Button
+              key={p}
+              variant={currentPage === p ? "default" : "outline"}
+              size="sm"
+              className={`h-8 min-w-8 px-2 text-xs font-mono ${
+                currentPage === p ? "bg-primary text-primary-foreground font-semibold shadow-xs" : ""
+              }`}
+              onClick={() => onPageChange(p as number)}
+            >
+              {p}
+            </Button>
+          )
+        )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2.5 text-xs"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+        >
+          Selanjutnya
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          title="Halaman Terakhir"
+        >
+          &raquo;
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs whitespace-nowrap">Baris:</span>
+        <Select
+          value={pageSize.toString()}
+          onValueChange={(v) => {
+            onPageSizeChange(parseInt(v));
+            onPageChange(1);
+          }}
+        >
+          <SelectTrigger className="h-8 w-[76px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="10">10</SelectItem>
+            <SelectItem value="15">15</SelectItem>
+            <SelectItem value="25">25</SelectItem>
+            <SelectItem value="50">50</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
 }
 
 const MONTHS = [
@@ -196,10 +328,14 @@ export default function CabangTrackingPage() {
   const [detailModalTab, setDetailModalTab] = useState<"timeline" | "allocations" | "events">("timeline");
   const [zoomTrackingPhoto, setZoomTrackingPhoto] = useState<{ url: string; title: string } | null>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
   // Fetch Tracking Data
   const { data: trackingResponse, isLoading } = useQuery({
     queryKey: ["cabang-tracking"],
-    queryFn: () => apiFetch<{ data: TrackingItem[] }>("/api/tracking?limit=150"),
+    queryFn: () => apiFetch<{ data: TrackingItem[] }>("/api/tracking?limit=1000"),
   });
 
   // Fetch Branches for filter
@@ -292,6 +428,20 @@ export default function CabangTrackingPage() {
     });
   }, [rawList, searchTerm, statusFilter, monthFilter, yearFilter, branchFilter]);
 
+  // Reset to page 1 on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, monthFilter, yearFilter, branchFilter]);
+
+  const totalFiltered = filteredList.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedList = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredList.slice(start, start + pageSize);
+  }, [filteredList, safeCurrentPage, pageSize]);
+
   const hasActiveFilters =
     searchTerm !== "" ||
     statusFilter !== "all" ||
@@ -305,6 +455,7 @@ export default function CabangTrackingPage() {
     setMonthFilter("all");
     setYearFilter("all");
     setBranchFilter("all");
+    setCurrentPage(1);
   };
 
   // Restrained, executive status badge (Clean, subtle, non-AI-slop)
@@ -318,7 +469,7 @@ export default function CabangTrackingPage() {
         );
       case "DITERIMA_CABANG":
         return (
-          <Badge variant="outline" className="border-border text-foreground bg-muted/60 font-medium text-[11px]">
+          <Badge variant="outline" className="border-emerald-500/40 text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20 font-medium text-[11px]">
             Diterima Cabang
           </Badge>
         );
@@ -404,19 +555,19 @@ export default function CabangTrackingPage() {
   const getStepIndex = (status: string) => {
     switch (status) {
       case "BARANG_KELUAR":
-      case "MENUNGGU_DITERIMA":
         return 0;
-      case "DITERIMA_CABANG":
+      case "MENUNGGU_DITERIMA":
         return 1;
+      case "DITERIMA_CABANG":
       case "MENUNGGU_PEMASANGAN":
         return 2;
       case "TERPASANG":
       case "MENUNGGU_VERIFIKASI":
         return 3;
       case "TERVERIFIKASI":
-        return 4;
+        return 5;
       default:
-        return 1;
+        return 2;
     }
   };
 
@@ -642,79 +793,101 @@ export default function CabangTrackingPage() {
               )}
             </Card>
           ) : (
-            filteredList.map((track) => {
-              const pct = Math.round((track.installedQuantity / (track.totalQuantity || 1)) * 100);
+            <>
+              {paginatedList.map((track) => {
+                const pct = Math.round((track.installedQuantity / (track.totalQuantity || 1)) * 100);
 
-              return (
-                <Card
-                  key={track.id}
-                  className="p-4 border border-border/80 bg-card hover:border-foreground/30 transition-colors shadow-xs group cursor-pointer"
-                  onClick={() => setSelectedTrackingUuid(track.uuid)}
-                >
-                  <div className="grid grid-cols-1 lg:grid-cols-12 items-center gap-4">
-                    {/* Left: Material Info */}
-                    <div className="lg:col-span-5 space-y-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                          {track.itemName}
-                        </h3>
-                        <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-muted/60 text-muted-foreground border border-border/50">
-                          {track.itemCode}
-                        </span>
-                        <span className="text-xs text-muted-foreground font-mono">Ref: {track.referenceNo}</span>
+                return (
+                  <Card
+                    key={track.id}
+                    className="p-4 border border-border/80 bg-card hover:border-foreground/30 transition-colors shadow-xs group cursor-pointer"
+                    onClick={() => setSelectedTrackingUuid(track.uuid)}
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-12 items-center gap-4">
+                      {/* Left: Material Info */}
+                      <div className="lg:col-span-5 space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
+                            {track.itemName}
+                          </h3>
+                          <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-muted/60 text-muted-foreground border border-border/50">
+                            {track.itemCode}
+                          </span>
+                          <span className="text-xs text-muted-foreground font-mono">Ref: {track.referenceNo}</span>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Building2 className="w-3 h-3 text-muted-foreground/60" />
+                            {track.branchName || "Cabang PDAM"}
+                          </span>
+                          {track.receivedByName && (
+                            <>
+                              <span>•</span>
+                              <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                                Diterima: {track.receivedByName}
+                              </span>
+                            </>
+                          )}
+                          <span>•</span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-muted-foreground/60" />
+                            {formatDate(track.createdAt)}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Building2 className="w-3 h-3 text-muted-foreground/60" />
-                          {track.branchName || "Cabang PDAM"}
-                        </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-muted-foreground/60" />
-                          {formatDate(track.createdAt)}
-                        </span>
+                      {/* Middle: Progress Bar & Clean Text (Sejajar sempurna di semua baris) */}
+                      <div className="lg:col-span-3 w-full space-y-1.5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Progress:</span>
+                          <span className="text-foreground font-mono font-medium">
+                            {track.installedQuantity} / {track.totalQuantity} ({pct}%)
+                          </span>
+                        </div>
+                        <Progress value={pct} className="h-1.5" />
+                        <p className="text-[11px] text-muted-foreground font-mono truncate">
+                          {track.totalQuantity} dikirim · {track.installedQuantity} terpasang · {track.remainingQuantity} sisa
+                        </p>
+                      </div>
+
+                      {/* Right: Subdued Status & Detail Button */}
+                      <div className="lg:col-span-4 flex items-center justify-between lg:justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0">
+                        <div className="flex flex-col items-start lg:items-end gap-1 shrink-0">
+                          {getStatusBadge(track.status)}
+                          {getSlaIndicator(track.slaStatus, track.slaDeadlineAt)}
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 text-xs shadow-xs shrink-0 whitespace-nowrap"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTrackingUuid(track.uuid);
+                          }}
+                        >
+                          Detail Pelacakan
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </div>
+                  </Card>
+                );
+              })}
 
-                    {/* Middle: Progress Bar & Clean Text (Sejajar sempurna di semua baris) */}
-                    <div className="lg:col-span-3 w-full space-y-1.5">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Progress:</span>
-                        <span className="text-foreground font-mono font-medium">
-                          {track.installedQuantity} / {track.totalQuantity} ({pct}%)
-                        </span>
-                      </div>
-                      <Progress value={pct} className="h-1.5" />
-                      <p className="text-[11px] text-muted-foreground font-mono truncate">
-                        {track.totalQuantity} dikirim · {track.installedQuantity} terpasang · {track.remainingQuantity} sisa
-                      </p>
-                    </div>
-
-                    {/* Right: Subdued Status & Detail Button */}
-                    <div className="lg:col-span-4 flex items-center justify-between lg:justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0">
-                      <div className="flex flex-col items-start lg:items-end gap-1 shrink-0">
-                        {getStatusBadge(track.status)}
-                        {getSlaIndicator(track.slaStatus, track.slaDeadlineAt)}
-                      </div>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 text-xs shadow-xs shrink-0 whitespace-nowrap"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedTrackingUuid(track.uuid);
-                        }}
-                      >
-                        Detail Pelacakan
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })
+              {/* Pagination Controls */}
+              {filteredList.length > 0 && (
+                <PaginationControl
+                  currentPage={safeCurrentPage}
+                  totalPages={totalPages}
+                  totalItems={totalFiltered}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -768,7 +941,7 @@ export default function CabangTrackingPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredList.map((t) => (
+                  paginatedList.map((t) => (
                     <TableRow
                       key={t.id}
                       className="cursor-pointer hover:bg-muted/30 transition-colors text-xs"
@@ -777,7 +950,16 @@ export default function CabangTrackingPage() {
                       <TableCell className="font-medium text-foreground">{t.itemName}</TableCell>
                       <TableCell className="font-mono text-muted-foreground">{t.itemCode}</TableCell>
                       <TableCell className="font-mono">{t.referenceNo}</TableCell>
-                      <TableCell>{t.branchName || "-"}</TableCell>
+                      <TableCell className="text-xs">
+                        <div className="font-medium text-foreground">{t.branchName || "—"}</div>
+                        {t.receivedByName ? (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono block">
+                            Diterima: {t.receivedByName}
+                          </span>
+                        ) : t.status === "MENUNGGU_DITERIMA" ? (
+                          <span className="text-[10px] text-amber-600 block">Menunggu Terima</span>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="text-right font-mono">{t.totalQuantity}</TableCell>
                       <TableCell className="text-right font-mono font-medium text-foreground">
                         {t.installedQuantity}
@@ -799,6 +981,20 @@ export default function CabangTrackingPage() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Table Pagination Controls */}
+          {filteredList.length > 0 && (
+            <div className="p-3 bg-muted/10 border-t">
+              <PaginationControl
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                totalItems={totalFiltered}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            </div>
+          )}
         </Card>
       )}
 
@@ -1000,6 +1196,23 @@ export default function CabangTrackingPage() {
                             </strong>
                           </div>
                         </div>
+
+                        {/* Status Penerimaan di Cabang */}
+                        {(detailData.tracking?.receivedByName || detailData.tracking?.receivedAt) && (
+                          <div className="pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-xs bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2 rounded-lg border border-emerald-200/50 dark:border-emerald-800/40">
+                            <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>
+                                Diambil & Diterima oleh: <strong className="text-foreground">{detailData.tracking?.receivedByName || detailData.tracking?.receivedByUsername || "Petugas Cabang"}</strong> ({detailData.branch?.name ?? "Cabang"})
+                              </span>
+                            </div>
+                            {detailData.tracking?.receivedAt && (
+                              <span className="text-[11px] text-muted-foreground font-mono">
+                                {formatDate(detailData.tracking.receivedAt)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Modal Internal Tabs */}
@@ -1048,15 +1261,44 @@ export default function CabangTrackingPage() {
                                   </div>
 
                                   {/* Step Details */}
-                                  <div className="p-3 rounded-lg border bg-card/60">
+                                  <div className="p-3.5 rounded-xl border bg-card/60 space-y-1.5">
                                     <div className="flex items-center justify-between">
                                       <p className={`text-sm font-medium ${isCurrent ? "text-foreground font-semibold" : isDone ? "text-foreground" : "text-muted-foreground"}`}>
                                         {step.label}
                                       </p>
-                                      {isDone && <span className="text-[10px] text-emerald-600 font-medium">Selesai</span>}
+                                      {isDone && (
+                                        <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3" /> Selesai
+                                        </span>
+                                      )}
                                       {isCurrent && <Badge variant="secondary" className="text-[10px]">Tahap Berjalan</Badge>}
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{step.desc}</p>
+                                    <p className="text-xs text-muted-foreground">{step.desc}</p>
+
+                                    {/* Khusus Step Diterima Cabang: Tampilkan Petugas Penerima */}
+                                    {step.key === "DITERIMA_CABANG" && (detailData.tracking?.receivedAt || isDone || detailData.tracking?.status === "DITERIMA_CABANG") && (
+                                      <div className="mt-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 text-xs space-y-1">
+                                        <div className="flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200 font-medium">
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                          <span>
+                                            Diterima oleh: <strong className="text-foreground">{detailData.tracking?.receivedByName || detailData.tracking?.receivedByUsername || "Petugas Cabang"}</strong> ({detailData.branch?.name ?? "Cabang"})
+                                          </span>
+                                        </div>
+                                        {detailData.tracking?.receivedAt && (
+                                          <p className="text-[11px] text-muted-foreground pl-5 font-mono">
+                                            Waktu Terima: {formatDate(detailData.tracking.receivedAt)}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Jika belum diterima */}
+                                    {step.key === "DITERIMA_CABANG" && !isDone && detailData.tracking?.status === "MENUNGGU_DITERIMA" && (
+                                      <div className="mt-2 p-2 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                        <span>Menunggu verifikasi fisik & konfirmasi penerimaan oleh petugas {detailData.branch?.name ?? "Cabang"}</span>
+                                      </div>
+                                    )}
                                   </div>
                                 </motion.div>
                               );
@@ -1244,19 +1486,39 @@ export default function CabangTrackingPage() {
                             </div>
                           ) : (
                             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                              {detailData.events.map((evt: any, i: number) => (
-                                <div key={i} className="p-2 rounded-lg bg-muted/30 border text-xs flex justify-between items-center">
-                                  <div>
-                                    <p className="font-medium text-foreground">{evt.eventType}</p>
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {new Date(evt.eventTime).toLocaleString("id-ID")}
-                                    </p>
+                              {detailData.events.map((evt: any, i: number) => {
+                                let eventTitle = evt.eventType;
+                                if (evt.eventType === "WAREHOUSE_RELEASED") eventTitle = "Barang Keluar (Gudang Pusat)";
+                                else if (evt.eventType === "BRANCH_RECEIVED") eventTitle = `Diterima di ${detailData.branch?.name ?? "Cabang"}`;
+                                else if (evt.eventType === "ALLOCATION_CREATED") eventTitle = "Alokasi Titik Pemasangan";
+                                else if (evt.eventType === "EVIDENCE_SUBMITTED") eventTitle = "Bukti Pemasangan Dikirim";
+                                else if (evt.eventType === "VERIFIED") eventTitle = "Audit SPI Disetujui (Terverifikasi)";
+
+                                const actorName = evt.userName
+                                  ? `${evt.userName}${evt.username ? ` (@${evt.username})` : ""}`
+                                  : evt.userId
+                                  ? `User #${evt.userId}`
+                                  : "Sistem";
+
+                                return (
+                                  <div key={i} className="p-2.5 rounded-lg bg-muted/30 border text-xs flex justify-between items-start gap-2">
+                                    <div>
+                                      <p className="font-medium text-foreground">{eventTitle}</p>
+                                      <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
+                                        {formatDate(evt.eventTime)}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="font-medium text-foreground block text-[11px]">
+                                        {actorName}
+                                      </span>
+                                      <span className="font-mono text-[10px] text-muted-foreground">
+                                        {evt.eventType}
+                                      </span>
+                                    </div>
                                   </div>
-                                  <span className="font-mono text-[10px] text-muted-foreground">
-                                    User #{evt.userId || "System"}
-                                  </span>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </TabsContent>

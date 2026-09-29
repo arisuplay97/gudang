@@ -12,6 +12,8 @@ import {
     installationAllocationsTable,
     installationEvidenceTable,
     materialVerificationsTable,
+    materialReceiptsTable,
+    usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
 
@@ -26,7 +28,7 @@ const SLA_DAYS = 7;
 router.get("/tracking", requireAuth, async (req, res): Promise<void> => {
     const { status, branchId, search, page: pageStr, limit: limitStr } = req.query;
     const page = Math.max(1, parseInt(pageStr as string) || 1);
-    const limit = Math.min(200, Math.max(1, parseInt(limitStr as string) || 100));
+    const limit = Math.min(1000, Math.max(1, parseInt(limitStr as string) || 100));
     const offset = (page - 1) * limit;
 
     const conditions: any[] = [];
@@ -49,7 +51,13 @@ router.get("/tracking", requireAuth, async (req, res): Promise<void> => {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(materialTrackingTable).where(whereClause);
+    const [{ count }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(materialTrackingTable)
+        .leftJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+        .leftJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .where(whereClause);
     const total = Number(count);
 
     const rows = await db
@@ -67,6 +75,9 @@ router.get("/tracking", requireAuth, async (req, res): Promise<void> => {
             slaStartAt: materialTrackingTable.slaStartAt,
             slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
             receivedAt: materialTrackingTable.receivedAt,
+            receivedBy: materialTrackingTable.receivedBy,
+            receivedByName: usersTable.fullName,
+            receivedByUsername: usersTable.username,
             installedAt: materialTrackingTable.installedAt,
             verifiedAt: materialTrackingTable.verifiedAt,
             createdAt: materialTrackingTable.createdAt,
@@ -76,6 +87,7 @@ router.get("/tracking", requireAuth, async (req, res): Promise<void> => {
         .leftJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
         .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
         .leftJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .leftJoin(usersTable, eq(materialTrackingTable.receivedBy, usersTable.id))
         .where(whereClause)
         .orderBy(desc(materialTrackingTable.createdAt))
         .limit(limit)
@@ -123,8 +135,27 @@ router.get("/tracking/:uuid", requireAuth, async (req, res): Promise<void> => {
     const trackingUuid = req.params.uuid;
 
     const [tracking] = await db
-        .select()
+        .select({
+            id: materialTrackingTable.id,
+            uuid: materialTrackingTable.uuid,
+            transactionItemId: materialTrackingTable.transactionItemId,
+            branchId: materialTrackingTable.branchId,
+            status: materialTrackingTable.status,
+            slaStartAt: materialTrackingTable.slaStartAt,
+            slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
+            receivedAt: materialTrackingTable.receivedAt,
+            receivedBy: materialTrackingTable.receivedBy,
+            receivedByName: usersTable.fullName,
+            receivedByUsername: usersTable.username,
+            installedAt: materialTrackingTable.installedAt,
+            installedBy: materialTrackingTable.installedBy,
+            verifiedAt: materialTrackingTable.verifiedAt,
+            verifiedBy: materialTrackingTable.verifiedBy,
+            createdAt: materialTrackingTable.createdAt,
+            updatedAt: materialTrackingTable.updatedAt,
+        })
         .from(materialTrackingTable)
+        .leftJoin(usersTable, eq(materialTrackingTable.receivedBy, usersTable.id))
         .where(eq(materialTrackingTable.uuid, trackingUuid));
 
     if (!tracking) { res.status(404).json({ error: "Tracking tidak ditemukan" }); return; }
@@ -137,6 +168,7 @@ router.get("/tracking/:uuid", requireAuth, async (req, res): Promise<void> => {
     // Get transaction item details
     const [txItem] = await db
         .select({
+            stockOutId: stockOutItemsTable.stockOutId,
             quantity: stockOutItemsTable.quantity,
             itemName: itemsTable.name,
             itemCode: itemsTable.code,
@@ -151,6 +183,29 @@ router.get("/tracking/:uuid", requireAuth, async (req, res): Promise<void> => {
         .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
         .leftJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
         .where(eq(stockOutItemsTable.id, tracking.transactionItemId));
+
+    // Fallback: If receivedByName is null but transaction had a material_receipts record
+    if (!tracking.receivedByName && txItem?.stockOutId) {
+        const [receipt] = await db
+            .select({
+                receivedAt: materialReceiptsTable.receivedAt,
+                receivedBy: materialReceiptsTable.receivedBy,
+                receivedByName: usersTable.fullName,
+                receivedByUsername: usersTable.username,
+            })
+            .from(materialReceiptsTable)
+            .leftJoin(usersTable, eq(materialReceiptsTable.receivedBy, usersTable.id))
+            .where(and(
+                eq(materialReceiptsTable.transactionId, txItem.stockOutId),
+                eq(materialReceiptsTable.branchId, tracking.branchId)
+            ));
+        if (receipt) {
+            tracking.receivedAt = tracking.receivedAt || receipt.receivedAt;
+            tracking.receivedBy = tracking.receivedBy || receipt.receivedBy;
+            tracking.receivedByName = receipt.receivedByName;
+            tracking.receivedByUsername = receipt.receivedByUsername;
+        }
+    }
 
     // Get branch
     const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, tracking.branchId));
@@ -171,8 +226,20 @@ router.get("/tracking/:uuid", requireAuth, async (req, res): Promise<void> => {
         return { ...alloc, evidence, verifications };
     }));
 
-    // Get events timeline
-    const events = await db.select().from(materialTrackingEventsTable)
+    // Get events timeline with user actor info
+    const events = await db
+        .select({
+            id: materialTrackingEventsTable.id,
+            trackingId: materialTrackingEventsTable.trackingId,
+            eventType: materialTrackingEventsTable.eventType,
+            userId: materialTrackingEventsTable.userId,
+            userName: usersTable.fullName,
+            username: usersTable.username,
+            eventTime: materialTrackingEventsTable.eventTime,
+            metadata: materialTrackingEventsTable.metadata,
+        })
+        .from(materialTrackingEventsTable)
+        .leftJoin(usersTable, eq(materialTrackingEventsTable.userId, usersTable.id))
         .where(eq(materialTrackingEventsTable.trackingId, tracking.id))
         .orderBy(materialTrackingEventsTable.eventTime);
 
@@ -202,7 +269,19 @@ router.get("/tracking/:uuid/events", requireAuth, async (req, res): Promise<void
         .where(eq(materialTrackingTable.uuid, req.params.uuid));
     if (!tracking) { res.status(404).json({ error: "Tracking tidak ditemukan" }); return; }
 
-    const events = await db.select().from(materialTrackingEventsTable)
+    const events = await db
+        .select({
+            id: materialTrackingEventsTable.id,
+            trackingId: materialTrackingEventsTable.trackingId,
+            eventType: materialTrackingEventsTable.eventType,
+            userId: materialTrackingEventsTable.userId,
+            userName: usersTable.fullName,
+            username: usersTable.username,
+            eventTime: materialTrackingEventsTable.eventTime,
+            metadata: materialTrackingEventsTable.metadata,
+        })
+        .from(materialTrackingEventsTable)
+        .leftJoin(usersTable, eq(materialTrackingEventsTable.userId, usersTable.id))
         .where(eq(materialTrackingEventsTable.trackingId, tracking.id))
         .orderBy(materialTrackingEventsTable.eventTime);
 
