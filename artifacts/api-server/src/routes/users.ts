@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { db, usersTable, branchesTable, auditLogsTable } from "@workspace/db";
 import { GetUserParams, UpdateUserParams, DeleteUserParams } from "@workspace/api-zod";
 import { requireAuth, requireRole, hashPassword, comparePassword } from "../lib/auth";
@@ -42,6 +42,31 @@ router.get("/users", requireAuth, requireRole("ADMIN"), async (req, res): Promis
   res.json(users.map(formatUser));
 });
 
+// ── GET /users/technicians (Dropdown list for installation assignment) ──
+router.get("/users/technicians", requireAuth, async (req, res): Promise<void> => {
+  const branchId = req.query.branchId ? parseInt(req.query.branchId as string) : req.session.branchId;
+  const conditions = [eq(usersTable.isActive, true)];
+  if (branchId && req.session.userRole !== "ADMIN") {
+    conditions.push(or(eq(usersTable.branchId, branchId), eq(usersTable.role, "TEKNISI")));
+  }
+  
+  const technicians = await db
+    .select({
+      id: usersTable.id,
+      fullName: usersTable.fullName,
+      username: usersTable.username,
+      role: usersTable.role,
+      branchId: usersTable.branchId,
+      branchName: branchesTable.name,
+    })
+    .from(usersTable)
+    .leftJoin(branchesTable, eq(usersTable.branchId, branchesTable.id))
+    .where(and(...conditions))
+    .orderBy(usersTable.fullName);
+
+  res.json(technicians);
+});
+
 // ── POST /users (Create new user) ──
 router.post("/users", requireAuth, requireRole("ADMIN"), async (req, res): Promise<void> => {
   const { username, password, fullName, email, role, branchId, isActive } = req.body;
@@ -65,7 +90,7 @@ router.post("/users", requireAuth, requireRole("ADMIN"), async (req, res): Promi
     fullName: fullName.trim(),
     email: email ? String(email).trim() : null,
     role: normalizedRole,
-    branchId: normalizedRole === "CABANG" && branchId ? Number(branchId) : null,
+    branchId: (["CABANG", "TEKNISI"].includes(normalizedRole)) && branchId ? Number(branchId) : (branchId ? Number(branchId) : null),
     passwordHash,
     isActive: isActive !== false,
   }).returning();

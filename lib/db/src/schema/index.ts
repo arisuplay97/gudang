@@ -28,4 +28,4 @@ export * from "./installation-evidence";
 export * from "./material-verifications";
 export * from "./material-tracking-events";
 export * from "./spi-findings";
-
+export * from "./branch-stocks";

@@ -100,22 +100,9 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Material", href: "/master/barang", icon: Package, roles: ["ADMIN", "GUDANG"] },
       { label: "Kategori", href: "/master/kategori", icon: Tags, roles: ["ADMIN", "GUDANG"] },
       { label: "Satuan", href: "/master/satuan", icon: Ruler, roles: ["ADMIN", "GUDANG"] },
-      { label: "Supplier", href: "/master/supplier", icon: Truck, roles: ["ADMIN", "GUDANG"] },
       { label: "Cabang & Gudang", href: "/master/gudang", icon: Warehouse, roles: ["ADMIN"] },
       { label: "Lokasi Gudang", href: "/master/lokasi", icon: MapPin, roles: ["ADMIN", "GUDANG"] },
       { label: "Departemen", href: "/master/departemen", icon: Building2, roles: ["ADMIN", "GUDANG"] },
-    ],
-  },
-  {
-    label: "PERSEDIAAN",
-    icon: Archive,
-    roles: ["ADMIN", "GUDANG"],
-    group: "PERSEDIAAN",
-    children: [
-      { label: "Stock Opname", href: "/transaksi/opname", icon: ClipboardList, roles: ["ADMIN", "GUDANG"] },
-      { label: "Penyesuaian", href: "/transaksi/penyesuaian", icon: Settings, roles: ["ADMIN", "GUDANG"] },
-      { label: "Retur", href: "/transaksi/retur", icon: RotateCcw, roles: ["ADMIN", "GUDANG"] },
-      { label: "Mutasi Stok", href: "/transaksi/mutasi", icon: ArrowLeftRight, roles: ["ADMIN", "GUDANG"] },
     ],
   },
   {
@@ -124,10 +111,10 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["ADMIN", "GUDANG", "CABANG"],
     group: "TRANSAKSI",
     children: [
-      { label: "Material Masuk", href: "/transaksi/masuk", icon: PackagePlus, roles: ["ADMIN", "GUDANG"] },
       { label: "Distribusi (Keluar)", href: "/transaksi/keluar", icon: PackageMinus, roles: ["ADMIN", "GUDANG"] },
       { label: "Penerimaan (Scan QR)", href: "/cabang/receive", icon: ScanBarcode, roles: ["ADMIN", "CABANG"] },
       { label: "Pemasangan Material", href: "/cabang/pemasangan", icon: Ruler, roles: ["ADMIN", "CABANG"] },
+      { label: "Retur Material", href: "/transaksi/retur", icon: RotateCcw, roles: ["ADMIN", "GUDANG", "CABANG"] },
     ],
   },
   {
@@ -157,7 +144,8 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
     group: "LAPORAN",
     children: [
-      { label: "Stok", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Stok Cabang", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
+      { label: "Produktivitas Teknisi", href: "/laporan/teknisi", icon: Users, roles: ["ADMIN", "GUDANG", "CABANG", "SPI"] },
       { label: "Transaksi", href: "/laporan/transaksi", icon: FileSpreadsheet, roles: ["ADMIN", "GUDANG", "SPI"] },
       { label: "Pemasangan Aksesoris", href: "/laporan/pemasangan-aksesoris", icon: Wrench, roles: ["ADMIN", "GUDANG", "CABANG", "SPI"] },
       { label: "Nilai Inventaris", href: "/laporan/nilai", icon: ScrollText, roles: ["ADMIN", "GUDANG", "SPI"] },
@@ -204,6 +192,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/spi/gis": "Peta Material",
   "/spi/laporan-audit": "Laporan Audit SPI",
   "/laporan/stok": "Laporan Stok",
+  "/laporan/teknisi": "Laporan Produktivitas Teknisi",
   "/laporan/transaksi": "Laporan Transaksi",
   "/laporan/pemasangan-aksesoris": "Laporan Pemasangan Aksesoris",
   "/laporan/nilai": "Nilai Inventaris",
@@ -435,13 +424,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-10 h-10 rounded-xl bg-white p-1 border border-border/80 shadow-xs flex items-center justify-center shrink-0">
             <img
               src="/logo-perumdam.png"
-              alt="Logo SI GAPLEK"
+              alt="Logo SIMONA"
               className="w-full h-full object-contain"
             />
           </div>
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-sm leading-tight text-foreground">SI GAPLEK</p>
+              <p className="font-bold text-sm leading-tight text-foreground">SIMONA</p>
               <p className="text-[11px] text-muted-foreground truncate">Perumdam Tirta Ardhia Rinjani</p>
             </div>
           )}
@@ -534,7 +523,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex sm:hidden items-center gap-2">
             <img src="/logo-perumdam.png" alt="Logo" className="w-6 h-6 object-contain" />
             <span className="font-bold text-sm">
-              {ROUTE_LABELS[location] || "SI GAPLEK"}
+              {ROUTE_LABELS[location] || "SIMONA"}
             </span>
           </div>
 

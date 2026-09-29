@@ -34,6 +34,7 @@ import {
   RotateCw,
   SwitchCamera,
   Grid,
+  Users,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -99,6 +100,16 @@ export default function CabangPemasanganPage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Petugas yang mengerjakan
+  const [selectedTechIds, setSelectedTechIds] = useState<number[]>([]);
+  const [customTechNames, setCustomTechNames] = useState<string>("");
+
+  const { data: techniciansData } = useQuery<{ id: number; fullName: string; username: string; role: string }[]>({
+    queryKey: ["technicians-list"],
+    queryFn: () => apiFetch<{ id: number; fullName: string; username: string; role: string }[]>("/api/users/technicians"),
+  });
+  const technicians = techniciansData || [];
 
   // 1. Fetch Active Trackings for Cabang (to create allocations)
   const { data: trackingsData, isLoading: isTrackingsLoading } = useQuery({
@@ -173,6 +184,7 @@ export default function CabangPemasanganPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["cabang-allocations"] });
       queryClient.invalidateQueries({ queryKey: ["cabang-tracking"] });
+      queryClient.invalidateQueries({ queryKey: ["branch-stocks"] });
       closeCameraModal();
     },
     onError: (err: Error) => {
@@ -477,7 +489,7 @@ export default function CabangPemasanganPage() {
     ctx.font = `bold ${fontSizeTitle}px sans-serif`;
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "left";
-    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SI GAPLEK", textLeft, yOffset);
+    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SIMONA", textLeft, yOffset);
 
     ctx.font = `bold 10px sans-serif`;
     ctx.fillStyle = accentColor;
@@ -543,6 +555,20 @@ export default function CabangPemasanganPage() {
     const lat = currentGps?.lat ?? (selectedAllocation.plannedLatitude ? parseFloat(selectedAllocation.plannedLatitude) : -8.584);
     const lon = currentGps?.lon ?? (selectedAllocation.plannedLongitude ? parseFloat(selectedAllocation.plannedLongitude) : 116.109);
 
+    const selectedTechObjects = (techniciansData || []).filter(t => selectedTechIds.includes(t.id));
+    const selectedNames = selectedTechObjects.map(t => t.fullName);
+    const customNames = customTechNames.split(",").map(n => n.trim()).filter(Boolean);
+    const allNames = Array.from(new Set([...selectedNames, ...customNames]));
+
+    if (allNames.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Petugas Belum Diisi",
+        description: "Pilih atau ketik minimal 1 nama petugas yang mengerjakan pemasangan ini.",
+      });
+      return;
+    }
+
     submitEvidenceMutation.mutate({
       allocationId: selectedAllocation.allocationId,
       photoBeforeBase64: capturedPhotoBefore,
@@ -552,6 +578,8 @@ export default function CabangPemasanganPage() {
       gpsAccuracy: currentGps?.accuracy ?? 5.0,
       clientCaptureTime: new Date().toISOString(),
       idempotencyKey: crypto.randomUUID(),
+      technicianNames: allNames.join(", "),
+      technicianIds: selectedTechIds.join(","),
     });
   };
 
@@ -1175,6 +1203,43 @@ export default function CabangPemasanganPage() {
                       Foto Ulang Sesudah
                     </Button>
                   </div>
+                </div>
+
+                {/* Petugas / Teknisi yang Mengerjakan */}
+                <div className="p-3.5 rounded-xl border bg-card space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-[#5b7553]" />
+                      Petugas / Teknisi yang Mengerjakan
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground font-mono">Wajib Diisi</span>
+                  </div>
+
+                  {technicians.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-28 overflow-y-auto p-1.5 border rounded-lg bg-muted/20">
+                      {technicians.map((t) => (
+                        <label key={t.id} className="flex items-center gap-2 p-1.5 rounded text-xs cursor-pointer hover:bg-muted/40 transition-colors">
+                          <input
+                            type="checkbox"
+                            className="rounded border-input text-[#5b7553] focus:ring-[#5b7553]"
+                            checked={selectedTechIds.includes(t.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedTechIds([...selectedTechIds, t.id]);
+                              else setSelectedTechIds(selectedTechIds.filter(id => id !== t.id));
+                            }}
+                          />
+                          <span className="truncate">{t.fullName}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  <Input
+                    placeholder="Nama teknisi / tim lapangan tambahan (pisahkan dengan koma)..."
+                    value={customTechNames}
+                    onChange={(e) => setCustomTechNames(e.target.value)}
+                    className="text-xs h-9 bg-white dark:bg-card"
+                  />
                 </div>
               </div>
             )}

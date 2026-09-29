@@ -21,6 +21,7 @@ import {
     branchesTable,
     usersTable,
     warehousesTable,
+    branchStocksTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
 import { auditCrossDistrictEvidence } from "../lib/geo-districts";
@@ -318,6 +319,24 @@ router.post("/branch/receive-unit", requireAuth, requireRole("CABANG", "ADMIN"),
             }
         }
 
+        // Increment branch stock for this item
+        const [existingStock] = await tx.select().from(branchStocksTable)
+            .where(and(
+                eq(branchStocksTable.branchId, userBranchId),
+                eq(branchStocksTable.itemId, tracking.itemId)
+            ));
+        if (existingStock) {
+            await tx.update(branchStocksTable)
+                .set({ quantity: sql`${branchStocksTable.quantity} + 1`, updatedAt: new Date() })
+                .where(eq(branchStocksTable.id, existingStock.id));
+        } else {
+            await tx.insert(branchStocksTable).values({
+                branchId: userBranchId,
+                itemId: tracking.itemId,
+                quantity: 1,
+            });
+        }
+
         res.json({
             message: `Unit "${tracking.itemName}" berhasil diterima di cabang!`,
             unit: { ...tracking, status: "DITERIMA_CABANG", receivedAt: now.toISOString() },
@@ -487,6 +506,29 @@ router.post("/branch/receive", requireAuth, requireRole("CABANG", "ADMIN"), asyn
 
         const totalQty = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
 
+        // Update branch stocks for all received items
+        for (const itm of items) {
+            const qty = Number(itm.quantity) || 0;
+            if (qty > 0) {
+                const [existingStock] = await tx.select().from(branchStocksTable)
+                    .where(and(
+                        eq(branchStocksTable.branchId, userBranchId),
+                        eq(branchStocksTable.itemId, itm.itemId)
+                    ));
+                if (existingStock) {
+                    await tx.update(branchStocksTable)
+                        .set({ quantity: sql`${branchStocksTable.quantity} + ${qty}`, updatedAt: new Date() })
+                        .where(eq(branchStocksTable.id, existingStock.id));
+                } else {
+                    await tx.insert(branchStocksTable).values({
+                        branchId: userBranchId,
+                        itemId: itm.itemId,
+                        quantity: qty,
+                    });
+                }
+            }
+        }
+
         res.status(200).json({
             message: `Seluruh material pada Surat Jalan ${transaction.referenceNo} (${totalQty} unit) berhasil diterima di cabang!`,
             receipt,
@@ -589,7 +631,7 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG", "ADMIN"), 
 router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
     const {
         allocationId, photoBase64, photoBeforeBase64, latitude, longitude, gpsAccuracy,
-        clientCaptureTime, idempotencyKey
+        clientCaptureTime, idempotencyKey, technicianNames, technicianIds
     } = req.body;
 
     if (!allocationId || !photoBase64 || latitude == null || longitude == null) {
@@ -675,6 +717,8 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
         clientCaptureTime: clientCaptureTime ? new Date(clientCaptureTime) : null,
         capturedBy: req.session.userId!,
         branchId: tracking.branchId,
+        technicianNames: technicianNames ? String(technicianNames) : null,
+        technicianIds: technicianIds ? String(technicianIds) : null,
         locationMismatch,
         locationDeviationMeters: locationDeviationMeters !== null ? String(locationDeviationMeters) : null,
         mismatchThresholdMeters: String(MISMATCH_THRESHOLD_METERS),
@@ -684,6 +728,30 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
         crossDistrictNotes: districtAudit.notes,
         idempotencyKey: idempotencyKey ?? null,
     }).returning();
+
+    // Decrement branch stock for the installed material
+    const [allocItem] = await db
+        .select({
+            itemId: stockOutItemsTable.itemId,
+            quantity: installationAllocationsTable.quantity,
+        })
+        .from(installationAllocationsTable)
+        .innerJoin(materialTrackingTable, eq(installationAllocationsTable.trackingId, materialTrackingTable.id))
+        .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+        .where(eq(installationAllocationsTable.id, allocation.id));
+
+    if (allocItem && allocItem.itemId) {
+        const qtyInstalled = Number(allocItem.quantity) || 1;
+        await db.update(branchStocksTable)
+            .set({
+                quantity: sql`GREATEST(0, ${branchStocksTable.quantity} - ${qtyInstalled})`,
+                updatedAt: new Date(),
+            })
+            .where(and(
+                eq(branchStocksTable.branchId, tracking.branchId),
+                eq(branchStocksTable.itemId, allocItem.itemId)
+            ));
+    }
 
     // Update tracking status with exact photo installation time
     await db.update(materialTrackingTable).set({

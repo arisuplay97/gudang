@@ -37,6 +37,8 @@ export const installationEvidenceTable = pgTable("installation_evidence", {
     // Who
     capturedBy: integer("captured_by").notNull().references(() => usersTable.id),
     branchId: integer("branch_id").notNull().references(() => branchesTable.id),
+    technicianNames: text("technician_names"), // Nama-nama petugas yang mengerjakan (koma / teks)
+    technicianIds: text("technician_ids"), // ID akun petugas (JSON array / koma)
     // Verification status
     status: text("status").notNull().default("PENDING"), // PENDING | TERVERIFIKASI | DITOLAK
     rejectionReason: text("rejection_reason"),

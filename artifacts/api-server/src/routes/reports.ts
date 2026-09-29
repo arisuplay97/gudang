@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
 import {
   db,
   itemsTable,
@@ -17,6 +17,7 @@ import {
   installationAllocationsTable,
   installationEvidenceTable,
   materialReceiptsTable,
+  branchStocksTable,
 } from "@workspace/db";
 import { GetStockReportQueryParams, GetTransactionReportQueryParams, ListAuditLogsQueryParams } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
@@ -25,6 +26,8 @@ const router: IRouter = Router();
 
 router.get("/reports/stock", requireAuth, async (req, res): Promise<void> => {
   const qp = GetStockReportQueryParams.safeParse(req.query);
+
+  // Ambil data barang beserta agregasi total stok di seluruh cabang
   const rows = await db
     .select({
       itemId: itemsTable.id,
@@ -32,8 +35,6 @@ router.get("/reports/stock", requireAuth, async (req, res): Promise<void> => {
       itemName: itemsTable.name,
       categoryName: categoriesTable.name,
       unitName: unitsTable.name,
-      currentStock: itemsTable.currentStock,
-      minimumStock: itemsTable.minimumStock,
       unitPrice: itemsTable.unitPrice,
       categoryId: itemsTable.categoryId,
     })
@@ -42,23 +43,39 @@ router.get("/reports/stock", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id))
     .orderBy(itemsTable.name);
 
-  let filtered = rows;
-  if (qp.success) {
-    if (qp.data.categoryId) filtered = filtered.filter(r => r.categoryId === qp.data.categoryId);
+  const branchStocks = await db
+    .select({
+      itemId: branchStocksTable.itemId,
+      totalStock: sql<number>`COALESCE(SUM(${branchStocksTable.quantity}), 0)`,
+    })
+    .from(branchStocksTable)
+    .groupBy(branchStocksTable.itemId);
+
+  const stockMap = new Map<number, number>();
+  for (const bs of branchStocks) {
+    stockMap.set(bs.itemId, Number(bs.totalStock) || 0);
   }
 
-  res.json(filtered.map(r => ({
-    itemId: r.itemId,
-    itemCode: r.itemCode,
-    itemName: r.itemName,
-    categoryName: r.categoryName,
-    unitName: r.unitName,
-    currentStock: r.currentStock,
-    minimumStock: r.minimumStock,
-    unitPrice: parseFloat(r.unitPrice),
-    totalValue: r.currentStock * parseFloat(r.unitPrice),
-    status: r.currentStock <= r.minimumStock ? "low" : "normal",
-  })));
+  let filtered = rows;
+  if (qp.success && qp.data.categoryId) {
+    filtered = filtered.filter(r => r.categoryId === qp.data.categoryId);
+  }
+
+  res.json(filtered.map(r => {
+    const curStock = stockMap.get(r.itemId) || 0;
+    const price = parseFloat(r.unitPrice || 0);
+    return {
+      itemId: r.itemId,
+      itemCode: r.itemCode,
+      itemName: r.itemName,
+      categoryName: r.categoryName,
+      unitName: r.unitName,
+      currentStock: curStock,
+      unitPrice: price,
+      totalValue: curStock * price,
+      status: curStock <= 0 ? "habis" : curStock <= 5 ? "menipis" : "aman",
+    };
+  }));
 });
 
 router.get("/reports/transactions", requireAuth, async (req, res): Promise<void> => {
@@ -110,24 +127,26 @@ router.get("/reports/transactions", requireAuth, async (req, res): Promise<void>
 });
 
 router.get("/reports/inventory-value", requireAuth, async (_req, res): Promise<void> => {
-  const items = await db
+  const branchStocks = await db
     .select({
-      categoryName: categoriesTable.name,
-      currentStock: itemsTable.currentStock,
+      itemId: branchStocksTable.itemId,
+      quantity: branchStocksTable.quantity,
       unitPrice: itemsTable.unitPrice,
+      categoryName: categoriesTable.name,
     })
-    .from(itemsTable)
+    .from(branchStocksTable)
+    .innerJoin(itemsTable, eq(branchStocksTable.itemId, itemsTable.id))
     .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id));
 
-  const totalItems = items.length;
-  const totalValue = items.reduce((sum, i) => sum + i.currentStock * parseFloat(i.unitPrice), 0);
+  const totalItems = branchStocks.length;
+  const totalValue = branchStocks.reduce((sum, i) => sum + (i.quantity * parseFloat(i.unitPrice || 0)), 0);
 
   const byCategory: Record<string, { itemCount: number; totalValue: number }> = {};
-  for (const item of items) {
+  for (const item of branchStocks) {
     const cat = item.categoryName ?? "Tanpa Kategori";
     if (!byCategory[cat]) byCategory[cat] = { itemCount: 0, totalValue: 0 };
-    byCategory[cat].itemCount++;
-    byCategory[cat].totalValue += item.currentStock * parseFloat(item.unitPrice);
+    byCategory[cat].itemCount += item.quantity;
+    byCategory[cat].totalValue += item.quantity * parseFloat(item.unitPrice || 0);
   }
 
   res.json({
@@ -135,6 +154,108 @@ router.get("/reports/inventory-value", requireAuth, async (_req, res): Promise<v
     totalValue,
     byCategory: Object.entries(byCategory).map(([categoryName, data]) => ({ categoryName, ...data })),
   });
+});
+
+// ── GET /reports/technicians (Laporan Produktivitas & Audit per Teknisi) ──
+router.get("/reports/technicians", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const { branchId, startDate, endDate, search } = req.query;
+
+    const conditions: any[] = [];
+    if (branchId && branchId !== "all") {
+      conditions.push(eq(installationEvidenceTable.branchId, parseInt(branchId as string)));
+    }
+    if (startDate) {
+      conditions.push(gte(installationEvidenceTable.createdAt, new Date(startDate as string)));
+    }
+    if (endDate) {
+      conditions.push(lte(installationEvidenceTable.createdAt, new Date(endDate as string)));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        id: installationEvidenceTable.id,
+        uuid: installationEvidenceTable.uuid,
+        allocationId: installationEvidenceTable.allocationId,
+        trackingId: installationEvidenceTable.trackingId,
+        branchId: installationEvidenceTable.branchId,
+        branchName: branchesTable.name,
+        capturedBy: installationEvidenceTable.capturedBy,
+        capturedByName: usersTable.fullName,
+        technicianNames: installationEvidenceTable.technicianNames,
+        technicianIds: installationEvidenceTable.technicianIds,
+        photoUrl: installationEvidenceTable.photoUrl,
+        photoAfterUrl: installationEvidenceTable.photoAfterUrl,
+        latitude: installationEvidenceTable.latitude,
+        longitude: installationEvidenceTable.longitude,
+        status: installationEvidenceTable.status,
+        createdAt: installationEvidenceTable.createdAt,
+        clientCaptureTime: installationEvidenceTable.clientCaptureTime,
+        itemName: itemsTable.name,
+        itemCode: itemsTable.code,
+        quantity: installationAllocationsTable.quantity,
+        referenceNo: stockOutTable.referenceNo,
+      })
+      .from(installationEvidenceTable)
+      .leftJoin(branchesTable, eq(installationEvidenceTable.branchId, branchesTable.id))
+      .leftJoin(usersTable, eq(installationEvidenceTable.capturedBy, usersTable.id))
+      .leftJoin(installationAllocationsTable, eq(installationEvidenceTable.allocationId, installationAllocationsTable.id))
+      .leftJoin(materialTrackingTable, eq(installationEvidenceTable.trackingId, materialTrackingTable.id))
+      .leftJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+      .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+      .leftJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+      .where(whereClause)
+      .orderBy(desc(installationEvidenceTable.createdAt));
+
+    // Rekap per teknisi
+    const techMap = new Map<string, { name: string; count: number; totalUnits: number; branchName: string; verifiedCount: number }>();
+
+    for (const r of rows) {
+      const rawNames = r.technicianNames 
+        ? r.technicianNames.split(",").map(n => n.trim()).filter(Boolean)
+        : [r.capturedByName || "Teknisi Lapangan"];
+
+      for (const name of rawNames) {
+        if (!techMap.has(name)) {
+          techMap.set(name, {
+            name,
+            count: 0,
+            totalUnits: 0,
+            branchName: r.branchName || "-",
+            verifiedCount: 0,
+          });
+        }
+        const entry = techMap.get(name)!;
+        entry.count += 1;
+        entry.totalUnits += (Number(r.quantity) || 1);
+        if (r.status === "TERVERIFIKASI") entry.verifiedCount += 1;
+      }
+    }
+
+    let leaderboard = Array.from(techMap.values()).sort((a, b) => b.totalUnits - a.totalUnits);
+    if (search) {
+      const s = String(search).toLowerCase();
+      leaderboard = leaderboard.filter(t => t.name.toLowerCase().includes(s) || t.branchName.toLowerCase().includes(s));
+    }
+
+    res.json({
+      summary: {
+        totalInstallations: rows.length,
+        totalUnitsInstalled: rows.reduce((sum, r) => sum + (Number(r.quantity) || 1), 0),
+        totalTechnicians: techMap.size,
+      },
+      leaderboard,
+      records: rows.map(r => ({
+        ...r,
+        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+        clientCaptureTime: r.clientCaptureTime instanceof Date ? r.clientCaptureTime.toISOString() : r.clientCaptureTime,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Gagal mengambil data laporan teknisi" });
+  }
 });
 
 router.get("/audit-logs", requireAuth, async (req, res): Promise<void> => {

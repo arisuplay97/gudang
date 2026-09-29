@@ -22,6 +22,7 @@ import PenyesuaianPage from "@/pages/transaksi/penyesuaian";
 import LaporanStokPage from "@/pages/laporan/stok";
 import LaporanTransaksiPage from "@/pages/laporan/transaksi";
 import LaporanPemasanganAksesorisPage from "@/pages/laporan/pemasangan-aksesoris";
+import LaporanTeknisiPage from "@/pages/laporan/teknisi";
 import LaporanNilaiPage from "@/pages/laporan/nilai";
 import AuditLogPage from "@/pages/laporan/log";
 import PenggunaPage from "@/pages/pengguna";
@@ -93,6 +94,7 @@ function AppRouter() {
         <Route path="/laporan/stok" component={LaporanStokPage} />
         <Route path="/laporan/transaksi" component={LaporanTransaksiPage} />
         <Route path="/laporan/pemasangan-aksesoris" component={LaporanPemasanganAksesorisPage} />
+        <Route path="/laporan/teknisi" component={LaporanTeknisiPage} />
         <Route path="/laporan/nilai" component={LaporanNilaiPage} />
         <Route path="/laporan/log" component={AuditLogPage} />
 

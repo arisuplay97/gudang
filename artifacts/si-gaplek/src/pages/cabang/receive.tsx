@@ -152,10 +152,11 @@ export default function CabangReceivePage() {
       qc.invalidateQueries({ queryKey: ["branch-shipments"] });
       qc.invalidateQueries({ queryKey: ["branch-dashboard-stats"] });
       qc.invalidateQueries({ queryKey: ["cabang-tracking"] });
+      qc.invalidateQueries({ queryKey: ["branch-stocks"] });
 
       toast({
         title: "🎉 Surat Jalan / BPB Berhasil Diterima!",
-        description: `Seluruh material pada Surat Jalan ${data.referenceNo} (${data.totalQuantity} unit) telah resmi diterima di inventaris cabang.`,
+        description: `Diterima resmi oleh ${user?.fullName || user?.username}. Seluruh material pada Surat Jalan ${data.referenceNo} (${data.totalQuantity} unit) telah resmi masuk ke Stok Cabang.`,
       });
     },
     onError: (err: any) => {
@@ -287,19 +288,19 @@ export default function CabangReceivePage() {
         {/* ── Header ── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#e8f5e3] dark:bg-green-950/50 text-[#5b7553] dark:text-green-400 border border-[#a3b899]/40">
                 <Building2 className="w-3.5 h-3.5" /> {branchTitle}
               </span>
-              <span className="text-xs text-[#8a8a7a] dark:text-muted-foreground font-mono">
-                Logistik Masuk
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                <ShieldCheck className="w-3.5 h-3.5" /> Petugas Penerima: {user?.fullName || user?.username || "Petugas Cabang"}
               </span>
             </div>
             <h1 className="text-2xl font-semibold text-[#2d2d2a] dark:text-foreground tracking-tight">
               Penerimaan Material (Scan Surat Jalan / BPB)
             </h1>
             <p className="text-sm text-[#8a8a7a] dark:text-muted-foreground">
-              Pindai kode QR pada Surat Jalan / Bukti Pengeluaran Barang (BPB) fisik dari gudang pusat untuk memverifikasi seluruh kuantitas secara otomatis.
+              Pindai kode QR pada Surat Jalan fisik untuk memverifikasi penerimaan. Barang otomatis masuk ke <strong>Stok Cabang</strong> dan tercatat identitas penerima.
             </p>
           </div>
 

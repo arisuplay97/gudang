@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatNumber } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Truck,
   ScanBarcode,
@@ -20,6 +21,9 @@ import {
   Building2,
   Activity,
   FolderOpen,
+  Layers,
+  Package,
+  RotateCcw,
 } from "lucide-react";
 
 interface ShipmentItem {
@@ -81,6 +85,12 @@ export default function CabangDashboardPage() {
     queryFn: () => apiFetch<{ data: Shipment[] }>("/api/branch/shipments"),
   });
 
+  const { data: branchStocksData, isLoading: loadingStocks } = useQuery<{ data: any[] }>({
+    queryKey: ["branch-stocks", user?.branchId],
+    queryFn: () => apiFetch<{ data: any[] }>("/api/branch-stocks"),
+  });
+
+  const branchStocks = branchStocksData?.data || [];
   const shipments = shipmentsData?.data || [];
   const branchName = user?.branchName || statsData?.branchName || "Unit Cabang";
 
@@ -368,6 +378,86 @@ export default function CabangDashboardPage() {
             </div>
           </DashCard>
         </div>
+
+        {/* ── Row 2.5: Sisa Stok Aksesoris Cabang Ini ── */}
+        <DashCard className="p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-[#eae8e0] dark:border-border">
+            <div>
+              <p className="text-base font-semibold text-[#2d2d2a] dark:text-foreground flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[#5b7553]" />
+                Sisa Stok Aksesoris di Gudang Cabang {branchName}
+              </p>
+              <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-0.5">
+                Stok fisik aksesoris & material yang tersedia di cabang ini untuk kebutuhan pemasangan atau retur ke pusat
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setLocation("/cabang/pemasangan")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#5b7553] hover:bg-[#4d6346] text-white transition-colors"
+              >
+                <Wrench className="w-3.5 h-3.5" /> Pakai untuk Pasang
+              </button>
+              <button
+                onClick={() => setLocation("/transaksi/retur")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-card hover:bg-[#f0efe9] dark:hover:bg-muted text-[#2d2d2a] dark:text-foreground border border-[#eae8e0] dark:border-border transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-[#8b6b4a]" /> Retur ke Pusat
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#eae8e0] dark:border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-[#f7f6f3] dark:bg-muted/40 hover:bg-[#f7f6f3]">
+                  <TableHead className="text-xs font-semibold uppercase text-[#6b6b5e] pl-4">Kode</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase text-[#6b6b5e]">Nama Material / Aksesoris</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase text-[#6b6b5e]">Kategori</TableHead>
+                  <TableHead className="text-right text-xs font-semibold uppercase text-[#6b6b5e]">Sisa Stok</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase text-[#6b6b5e]">Satuan</TableHead>
+                  <TableHead className="text-right text-xs font-semibold uppercase text-[#6b6b5e] pr-4">Pembaruan Terakhir</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingStocks ? (
+                  Array(3).fill(0).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={6} className="p-3">
+                        <Skeleton className="h-8 w-full rounded" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : branchStocks.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-[#8a8a7a]">
+                      <Package className="w-7 h-7 mx-auto mb-1.5 opacity-30" />
+                      <p className="text-xs font-medium">Belum ada stok aksesoris tersimpan di cabang ini</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Material akan otomatis bertambah setelah surat jalan di-scan terima atau dari sisa pemakaian lapangan
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  branchStocks.map((stock: any) => (
+                    <TableRow key={stock.id} className="hover:bg-muted/30">
+                      <TableCell className="pl-4 font-mono text-xs text-primary font-medium">{stock.itemCode}</TableCell>
+                      <TableCell className="font-medium text-sm text-[#2d2d2a] dark:text-foreground">{stock.itemName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{stock.categoryName || "-"}</TableCell>
+                      <TableCell className="text-right font-mono font-bold text-sm text-[#5b7553] dark:text-green-400">
+                        {formatNumber(stock.quantity)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{stock.unitName || "pcs"}</TableCell>
+                      <TableCell className="text-right pr-4 text-xs text-muted-foreground">
+                        {stock.updatedAt ? formatDate(stock.updatedAt) : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </DashCard>
 
         {/* ── Row 3: Daftar Pengiriman Material Masuk ── */}
         <div className="space-y-3">

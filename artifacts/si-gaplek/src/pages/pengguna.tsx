@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Users, FolderOpen, Building2, ShieldCheck, Warehouse, UserCheck, KeyRound } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, FolderOpen, Building2, ShieldCheck, Warehouse, UserCheck, KeyRound, Wrench } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface User {
@@ -69,7 +69,7 @@ export default function PenggunaPage() {
         fullName: form.fullName.trim(),
         email: form.email.trim() || null,
         role: form.role,
-        branchId: form.role === "CABANG" && form.branchId ? Number(form.branchId) : null,
+        branchId: (form.role === "CABANG" || form.role === "TEKNISI") && form.branchId ? Number(form.branchId) : null,
         password: form.password || undefined,
         isActive: form.isActive,
       };
@@ -169,6 +169,14 @@ export default function PenggunaPage() {
         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-medium">
           <ShieldCheck className="w-3 h-3 mr-1 text-purple-600" />
           Auditor SPI
+        </Badge>
+      );
+    }
+    if (r === "TEKNISI") {
+      return (
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 font-medium">
+          <Wrench className="w-3 h-3 mr-1 text-amber-600" />
+          Teknisi Lapangan
         </Badge>
       );
     }
@@ -394,6 +402,7 @@ export default function PenggunaPage() {
                     <SelectItem value="ADMIN">Administrator</SelectItem>
                     <SelectItem value="GUDANG">Staff Gudang</SelectItem>
                     <SelectItem value="CABANG">Operator Cabang</SelectItem>
+                    <SelectItem value="TEKNISI">Teknisi Lapangan</SelectItem>
                     <SelectItem value="SPI">Auditor SPI</SelectItem>
                   </SelectContent>
                 </Select>
@@ -413,8 +422,8 @@ export default function PenggunaPage() {
               </div>
             </div>
 
-            {/* Branch selector if role is CABANG */}
-            {form.role === "CABANG" && (
+            {/* Branch selector if role is CABANG or TEKNISI */}
+            {(form.role === "CABANG" || form.role === "TEKNISI") && (
               <div className="space-y-1.5 p-3 rounded-lg border border-sky-200 bg-sky-50/50 dark:bg-sky-950/20 animate-in fade-in">
                 <Label className="text-xs font-semibold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-sky-600" />

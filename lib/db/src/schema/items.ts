@@ -3,7 +3,6 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { categoriesTable } from "./categories";
 import { unitsTable } from "./units";
-import { suppliersTable } from "./suppliers";
 import { racksTable } from "./racks";
 
 export const itemsTable = pgTable("items", {
@@ -15,11 +14,7 @@ export const itemsTable = pgTable("items", {
   categoryId: integer("category_id").references(() => categoriesTable.id),
   unitId: integer("unit_id").references(() => unitsTable.id),
   description: text("description"),
-  minimumStock: integer("minimum_stock").notNull().default(0),
-  maximumStock: integer("maximum_stock").notNull().default(0),
-  currentStock: integer("current_stock").notNull().default(0),
   unitPrice: numeric("unit_price", { precision: 15, scale: 2 }).notNull().default("0"),
-  supplierId: integer("supplier_id").references(() => suppliersTable.id),
   // Lokasi rak spesifik
   rackId: integer("rack_id").references(() => racksTable.id),
   // SI GAPLEK: TRACKED = perlu QR/evidence/GIS, NON_TRACKED = barang operasional biasa

@@ -507,7 +507,7 @@ export default function SpiGisPage() {
   const POSTGIS_SQL_SCHEMA = `-- 1. Aktifkan Ekstensi PostGIS di PostgreSQL
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- 2. Buat Tabel Titik Material (Kompatibel 100% QGIS & SI GAPLEK)
+-- 2. Buat Tabel Titik Material (Kompatibel 100% QGIS & SIMONA)
 CREATE TABLE IF NOT EXISTS pdam_material_gis (
     id SERIAL PRIMARY KEY,
     item_code VARCHAR(50) NOT NULL,            -- e.g. MTR-001, AKS-004
@@ -1558,7 +1558,7 @@ FROM pdam_material_gis;`;
                     </Badge>
                   </DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                    Sinkronisasi dua arah antara QGIS, database PostgreSQL/PostGIS server IT, dan peta tracking SI GAPLEK.
+                    Sinkronisasi dua arah antara QGIS, database PostgreSQL/PostGIS server IT, dan peta tracking SIMONA.
                   </DialogDescription>
                 </div>
               </div>
@@ -1701,7 +1701,7 @@ FROM pdam_material_gis;`;
                   <div className="p-3.5 rounded-xl border border-sky-500/20 bg-sky-50/50 dark:bg-sky-950/20 space-y-2">
                     <p className="font-bold text-sky-900 dark:text-sky-200 text-xs flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-                      Cara 1: Sambung Live Feed SI GAPLEK Langsung ke QGIS (Instan)
+                      Cara 1: Sambung Live Feed SIMONA Langsung ke QGIS (Instan)
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                       QGIS memuat layer titik material langsung via protokol GeoJSON:
@@ -1790,7 +1790,7 @@ FROM pdam_material_gis;`;
                 </div>
 
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Tabel di atas memiliki kolom geometri <code>geom</code> bertipe Point EPSG:4326 yang otomatis dikenali oleh QGIS sebagai layer spasial dan mendukung pengeluaran format GeoJSON standar untuk web SI GAPLEK.
+                  Tabel di atas memiliki kolom geometri <code>geom</code> bertipe Point EPSG:4326 yang otomatis dikenali oleh QGIS sebagai layer spasial dan mendukung pengeluaran format GeoJSON standar untuk web SIMONA.
                 </p>
               </TabsContent>
             </Tabs>
@@ -1801,7 +1801,7 @@ FROM pdam_material_gis;`;
                 <strong>
                   {tempExtConfig.enabled
                     ? "Server IT Mandiri Aktif"
-                    : "Database Lokal SI GAPLEK Aktif"}
+                    : "Database Lokal SIMONA Aktif"}
                 </strong>
               </p>
               <div className="flex items-center gap-2">

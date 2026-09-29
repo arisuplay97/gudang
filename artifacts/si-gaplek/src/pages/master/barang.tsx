@@ -37,17 +37,8 @@ interface Item {
   code: string;
   name: string;
   barcode: string | null;
-  categoryId: number | null;
-  unitId: number | null;
-  supplierId: number | null;
-  description: string | null;
-  minimumStock: number;
-  maximumStock: number;
-  currentStock: number;
-  unitPrice: string | null;
   categoryName?: string;
   unitName?: string;
-  supplierName?: string;
   status: string;
   trackingType: string;
   createdAt?: string;
@@ -78,10 +69,8 @@ interface Supplier { id: number; name: string; }
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 function getStockStatus(item: Item) {
-  if (item.status === "inactive") return { label: "Inactive", color: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400", dot: "bg-gray-400" };
-  if (item.currentStock <= 0) return { label: "Habis", color: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400", dot: "bg-red-500" };
-  if (item.currentStock <= item.minimumStock) return { label: "Menipis", color: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400", dot: "bg-amber-500" };
-  return { label: "Aman", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400", dot: "bg-emerald-500" };
+  if (item.status === "inactive") return { label: "Nonaktif", color: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400", dot: "bg-gray-400" };
+  return { label: "Aktif", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400", dot: "bg-emerald-500" };
 }
 
 function getTrackingBadge(type: string) {
@@ -167,8 +156,8 @@ export default function BarangPage() {
   const [labelPrintItems, setLabelPrintItems] = useState<LabelItem[]>([]);
 
   const [form, setForm] = useState({
-    code: "", name: "", barcode: "", categoryId: "", unitId: "", supplierId: "",
-    description: "", minimumStock: "0", unitPrice: "",
+    code: "", name: "", barcode: "", categoryId: "", unitId: "",
+    description: "", unitPrice: "",
   });
 
   const { toast } = useToast();
@@ -209,7 +198,6 @@ export default function BarangPage() {
 
   const { data: categories } = useQuery({ queryKey: ["categories"], queryFn: () => apiFetch<Category[]>("/api/categories") });
   const { data: units } = useQuery({ queryKey: ["units"], queryFn: () => apiFetch<Unit[]>("/api/units") });
-  const { data: suppliers } = useQuery({ queryKey: ["suppliers"], queryFn: () => apiFetch<Supplier[]>("/api/suppliers") });
 
   const items = pageData?.data ?? [];
   const totalPages = pageData?.totalPages ?? 1;
@@ -223,10 +211,7 @@ export default function BarangPage() {
         barcode: null,
         categoryId: form.categoryId ? parseInt(form.categoryId) : null,
         unitId: form.unitId ? parseInt(form.unitId) : null,
-        supplierId: form.supplierId ? parseInt(form.supplierId) : null,
         description: form.description || null,
-        minimumStock: parseInt(form.minimumStock) || 0,
-        currentStock: 0,
         unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : 0,
       };
       if (editing) {
@@ -257,7 +242,7 @@ export default function BarangPage() {
   /* ── Handlers ──────────────────────────────────────────────── */
   const openCreate = () => {
     setEditing(null);
-    setForm({ code: "", name: "", barcode: "", categoryId: "", unitId: "", supplierId: "", description: "", minimumStock: "0", unitPrice: "" });
+    setForm({ code: "", name: "", barcode: "", categoryId: "", unitId: "", description: "", unitPrice: "" });
     setDialogOpen(true);
   };
 
@@ -266,8 +251,8 @@ export default function BarangPage() {
     setForm({
       code: item.code, name: item.name, barcode: item.barcode ?? "",
       categoryId: item.categoryId?.toString() ?? "", unitId: item.unitId?.toString() ?? "",
-      supplierId: item.supplierId?.toString() ?? "", description: item.description ?? "",
-      minimumStock: item.minimumStock.toString(), unitPrice: (item.unitPrice ?? "").toString(),
+      description: item.description ?? "",
+      unitPrice: (item.unitPrice ?? "").toString(),
     });
     setDialogOpen(true);
   };
@@ -317,7 +302,6 @@ export default function BarangPage() {
   };
 
   const activeFilterCount = [filterCategory, filterTracking, filterStatus].filter(Boolean).length;
-  const lowStockCount = summary?.stokMenipis ?? 0;
 
   const SortIcon = ({ col }: { col: string }) => {
     if (sortBy !== col) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 opacity-40" />;
@@ -358,9 +342,9 @@ export default function BarangPage() {
       </motion.div>
 
       {/* ── KPI Cards ───────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard
-          label="Total Barang"
+          label="Total Material"
           value={summary?.total ?? 0}
           icon={Package}
           isActive={!filterStatus && !filterTracking && !filterCategory}
@@ -368,81 +352,42 @@ export default function BarangPage() {
           onClick={() => { setFilterStatus(""); setFilterCategory(""); setFilterTracking(""); }}
         />
         <KpiCard
-          label="Stok Aman"
-          value={summary?.stokAman ?? 0}
-          icon={CheckCircle2}
-          isActive={filterStatus === "AMAN"}
-          delay={0.04}
-          onClick={() => {
-            setFilterStatus(filterStatus === "AMAN" ? "" : "AMAN");
-            setFilterCategory("");
-            setFilterTracking("");
-          }}
-        />
-        <KpiCard
-          label="Stok Menipis"
-          value={summary?.stokMenipis ?? 0}
-          icon={AlertTriangle}
-          isActive={filterStatus === "MENIPIS"}
-          delay={0.08}
-          onClick={() => {
-            setFilterStatus(filterStatus === "MENIPIS" ? "" : "MENIPIS");
-            setFilterCategory("");
-            setFilterTracking("");
-          }}
-        />
-        <KpiCard
-          label="Stok Habis"
-          value={summary?.stokHabis ?? 0}
-          icon={XCircle}
-          isActive={filterStatus === "HABIS"}
-          delay={0.12}
-          onClick={() => {
-            setFilterStatus(filterStatus === "HABIS" ? "" : "HABIS");
-            setFilterCategory("");
-            setFilterTracking("");
-          }}
-        />
-        <KpiCard
-          label="Tracked"
+          label="Material Tracked"
           value={summary?.tracked ?? 0}
           icon={Radio}
           isActive={filterTracking === "TRACKED"}
-          delay={0.16}
+          delay={0.04}
           onClick={() => {
             setFilterTracking(filterTracking === "TRACKED" ? "" : "TRACKED");
             setFilterCategory("");
             setFilterStatus("");
           }}
         />
+        <KpiCard
+          label="Non-Tracked"
+          value={summary?.nonTracked ?? 0}
+          icon={Package}
+          isActive={filterTracking === "NON_TRACKED"}
+          delay={0.08}
+          onClick={() => {
+            setFilterTracking(filterTracking === "NON_TRACKED" ? "" : "NON_TRACKED");
+            setFilterCategory("");
+            setFilterStatus("");
+          }}
+        />
+        <KpiCard
+          label="Material Aktif"
+          value={summary ? summary.total - (summary.inactive ?? 0) : 0}
+          icon={CheckCircle2}
+          isActive={filterStatus === "active"}
+          delay={0.12}
+          onClick={() => {
+            setFilterStatus(filterStatus === "active" ? "" : "active");
+            setFilterCategory("");
+            setFilterTracking("");
+          }}
+        />
       </div>
-
-      {/* ── Info Banner ──────────────────────────────────────── */}
-      <AnimatePresence>
-        {lowStockCount > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="flex items-center justify-between gap-3 bg-muted/30 border border-border rounded-xl px-4 py-2.5 text-xs text-muted-foreground"
-          >
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-muted-foreground shrink-0" />
-              <p>
-                <span className="font-semibold text-foreground">{lowStockCount} barang</span> stok menipis dan memerlukan pengadaan ulang.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs shadow-xs"
-              onClick={() => { setFilterStatus("MENIPIS"); setFilterCategory(""); setFilterTracking(""); }}
-            >
-              Lihat Detail →
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ── Search + Filters ────────────────────────────────── */}
       <motion.div
@@ -595,13 +540,7 @@ export default function BarangPage() {
                     <TableHead className="text-xs font-semibold uppercase tracking-wider">Kategori</TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider">Satuan</TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider">Tracking</TableHead>
-                    <TableHead className="cursor-pointer select-none text-right" onClick={() => toggleSort("stock")}>
-                      <span className="flex items-center justify-end text-xs font-semibold uppercase tracking-wider">
-                        Stok <SortIcon col="stock" />
-                      </span>
-                    </TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider">Status</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Supplier</TableHead>
                     <TableHead className="text-right text-xs font-semibold uppercase tracking-wider pr-4">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -687,17 +626,12 @@ export default function BarangPage() {
                                 {tracking.label}
                               </span>
                             </TableCell>
-                            <TableCell className="text-right">
-                              <span className="font-mono text-sm font-semibold">{formatNumber(item.currentStock)}</span>
-                              <span className="text-[10px] text-muted-foreground ml-1">/ {formatNumber(item.minimumStock)}</span>
-                            </TableCell>
                             <TableCell>
                               <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium", stockStatus.color)}>
                                 <span className={cn("w-1.5 h-1.5 rounded-full", stockStatus.dot)} />
                                 {stockStatus.label}
                               </span>
                             </TableCell>
-                            <TableCell className="text-sm">{item.supplierName ?? <span className="text-muted-foreground">-</span>}</TableCell>
                             <TableCell className="text-right pr-4">
                               <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Tooltip>
@@ -821,7 +755,7 @@ export default function BarangPage() {
               <div className="space-y-1.5"><Label>Nama *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
             </div>
             <div className="space-y-1.5"><Label>Barcode</Label><Input value="[AUTO GENERATED]" readOnly className="bg-muted text-muted-foreground" /></div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Kategori</Label>
                 <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Pilih" /></SelectTrigger>
@@ -834,17 +768,8 @@ export default function BarangPage() {
                   <SelectContent>{units?.map(u => <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5"><Label>Supplier</Label>
-                <Select value={form.supplierId} onValueChange={v => setForm(f => ({ ...f, supplierId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Pilih" /></SelectTrigger>
-                  <SelectContent>{suppliers?.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Stok Minimum</Label><Input type="number" min="0" value={form.minimumStock} onChange={e => setForm(f => ({ ...f, minimumStock: e.target.value }))} /></div>
-              <div className="space-y-1.5"><Label>Harga Satuan</Label><Input type="number" min="0" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} /></div>
-            </div>
+            <div className="space-y-1.5"><Label>Harga Satuan (Rp)</Label><Input type="number" min="0" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Deskripsi</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
           </div>
           <DialogFooter>
@@ -914,16 +839,8 @@ export default function BarangPage() {
                       <p className="text-sm font-medium">{detailItem.unitName ?? "-"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-0.5">Stok Saat Ini</p>
-                      <p className="text-sm font-semibold">{formatNumber(detailItem.currentStock)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-0.5">Stok Minimum</p>
-                      <p className="text-sm font-medium">{formatNumber(detailItem.minimumStock)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-0.5">Supplier</p>
-                      <p className="text-sm font-medium">{detailItem.supplierName ?? "-"}</p>
+                      <p className="text-xs text-muted-foreground mb-0.5">Status</p>
+                      <p className="text-sm font-semibold">{detailItem.status === "active" ? "Aktif" : "Nonaktif"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-0.5">Harga Satuan</p>

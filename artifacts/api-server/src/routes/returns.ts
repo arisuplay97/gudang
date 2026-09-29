@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
-import { db, returnsTable, returnItemsTable, itemsTable, auditLogsTable } from "@workspace/db";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { db, returnsTable, returnItemsTable, itemsTable, auditLogsTable, branchStocksTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -75,11 +75,18 @@ router.post("/returns", requireAuth, async (req, res): Promise<void> => {
       notes: item.notes ?? null,
     });
 
-    // Kalau kondisi "good", tambah ke stok (increment atomic)
-    if (item.condition === "good") {
-      await db.update(itemsTable)
-        .set({ currentStock: sql`${itemsTable.currentStock} + ${item.quantity}` })
-        .where(eq(itemsTable.id, item.itemId));
+    // Jika retur dikirim dari cabang ke pusat, kurangi stok cabang yang bersangkutan
+    const returnBranchId = req.body.branchId || req.session.branchId;
+    if (returnBranchId) {
+      await db.update(branchStocksTable)
+        .set({
+          quantity: sql`GREATEST(0, ${branchStocksTable.quantity} - ${item.quantity})`,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(branchStocksTable.branchId, parseInt(returnBranchId)),
+          eq(branchStocksTable.itemId, item.itemId)
+        ));
     }
   }
 
