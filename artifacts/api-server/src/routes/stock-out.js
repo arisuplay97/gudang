@@ -107,21 +107,6 @@ router.post("/stock-out", requireAuth, async (req, res) => {
     else if (destinationBranchId) {
         destinationBranchId = parseInt(destinationBranchId);
     }
-    // Validasi stok sebelum disimpan
-    for (const item of rawItems) {
-        if (!item.itemId || !item.quantity || item.quantity <= 0)
-            continue;
-        const [itm] = await db.select().from(itemsTable).where(eq(itemsTable.id, item.itemId));
-        if (itm) {
-            const availStock = itm.currentStock ?? 0;
-            if (item.quantity > availStock) {
-                res.status(400).json({
-                    error: `Stok tidak mencukupi untuk "${itm.name}". Stok tersedia: ${availStock}, diminta: ${item.quantity}.`
-                });
-                return;
-            }
-        }
-    }
     const [header] = await db.insert(stockOutTable).values({
         referenceNo: refNo,
         departmentId: departmentId ?? null,
@@ -161,16 +146,6 @@ router.post("/stock-out", requireAuth, async (req, res) => {
         await db.transaction(async (tx) => {
             const releasedAt = new Date();
             const slaDeadline = new Date(releasedAt.getTime() + SLA_DAYS * 24 * 60 * 60 * 1000);
-            // Kurangi stok untuk semua item
-            for (const item of txItems) {
-                await StockService.decreaseStock(tx, item.itemId, warehouseId, item.quantity, {
-                    referenceType: "stock_out",
-                    referenceId: header.id,
-                    referenceNo: header.referenceNo,
-                    userId: req.session.userId,
-                    movementDate: header.transactionDate,
-                });
-            }
             // Generate official QR token for shipment verification
             const qrToken = crypto.randomUUID();
             await tx.update(stockOutTable).set({
@@ -320,16 +295,6 @@ router.post("/stock-out/:id/finalize", requireAuth, async (req, res) => {
         await db.transaction(async (tx) => {
             const releasedAt = new Date();
             const slaDeadline = new Date(releasedAt.getTime() + SLA_DAYS * 24 * 60 * 60 * 1000);
-            // Decrease stock for all items
-            for (const item of txItems) {
-                await StockService.decreaseStock(tx, item.itemId, warehouseId, item.quantity, {
-                    referenceType: "stock_out",
-                    referenceId: header.id,
-                    referenceNo: header.referenceNo,
-                    userId: req.session.userId,
-                    movementDate: header.transactionDate,
-                });
-            }
             // Generate official QR token for shipment verification
             const qrToken = crypto.randomUUID();
             // Update header status

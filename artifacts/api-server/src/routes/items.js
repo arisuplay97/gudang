@@ -17,19 +17,19 @@ function fmtItem(row) {
         unitName: row.unitName,
         unitAbbreviation: row.unitAbbreviation,
         description: row.description,
-        minimumStock: row.minimumStock,
-        maximumStock: row.maximumStock ?? 0,
-        currentStock: row.currentStock,
-        unitPrice: parseFloat(row.unitPrice),
-        supplierId: row.supplierId,
-        supplierName: row.supplierName,
+        minimumStock: 0,
+        maximumStock: 0,
+        currentStock: 0,
+        unitPrice: parseFloat(row.unitPrice || 0),
+        supplierId: null,
+        supplierName: "-",
         rackId: row.rackId ?? null,
         trackingType: row.trackingType ?? "NON_TRACKED",
         trackSerialNumber: row.trackSerialNumber ?? false,
         secondaryUnitId: row.secondaryUnitId ?? null,
         conversionFactor: row.conversionFactor ? parseFloat(row.conversionFactor) : 1,
         status: row.status ?? "active",
-        isLowStock: row.currentStock <= row.minimumStock,
+        isLowStock: false,
         createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
         updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
     };
@@ -45,12 +45,7 @@ const itemSelect = {
     unitName: unitsTable.name,
     unitAbbreviation: unitsTable.abbreviation,
     description: itemsTable.description,
-    minimumStock: itemsTable.minimumStock,
-    maximumStock: itemsTable.maximumStock,
-    currentStock: itemsTable.currentStock,
     unitPrice: itemsTable.unitPrice,
-    supplierId: itemsTable.supplierId,
-    supplierName: suppliersTable.name,
     rackId: itemsTable.rackId,
     trackingType: itemsTable.trackingType,
     trackSerialNumber: itemsTable.trackSerialNumber,
@@ -64,15 +59,14 @@ const joinedItems = () => db
     .select(itemSelect)
     .from(itemsTable)
     .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
-    .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id))
-    .leftJoin(suppliersTable, eq(itemsTable.supplierId, suppliersTable.id));
+    .leftJoin(unitsTable, eq(itemsTable.unitId, unitsTable.id));
 // GET /items/summary — KPI counts for dashboard cards
 router.get("/items/summary", requireAuth, async (_req, res) => {
     const [result] = await db.select({
         total: sql `count(*)::int`,
-        stokAman: sql `count(*) filter (where ${itemsTable.currentStock} > ${itemsTable.minimumStock} and ${itemsTable.status} = 'active')::int`,
-        stokMenipis: sql `count(*) filter (where ${itemsTable.currentStock} > 0 and ${itemsTable.currentStock} <= ${itemsTable.minimumStock} and ${itemsTable.status} = 'active')::int`,
-        stokHabis: sql `count(*) filter (where ${itemsTable.currentStock} <= 0 and ${itemsTable.status} = 'active')::int`,
+        stokAman: sql `count(*) filter (where ${itemsTable.status} = 'active')::int`,
+        stokMenipis: sql `0::int`,
+        stokHabis: sql `0::int`,
         tracked: sql `count(*) filter (where ${itemsTable.trackingType} = 'TRACKED')::int`,
         nonTracked: sql `count(*) filter (where ${itemsTable.trackingType} = 'NON_TRACKED' or ${itemsTable.trackingType} is null)::int`,
         inactive: sql `count(*) filter (where ${itemsTable.status} = 'inactive')::int`,
@@ -102,27 +96,11 @@ router.get("/items", requireAuth, async (req, res) => {
     if (status === "active" || status === "inactive") {
         conditions.push(eq(itemsTable.status, status));
     }
-    if (status === "AMAN") {
-        conditions.push(sql `${itemsTable.currentStock} > ${itemsTable.minimumStock}`);
-        conditions.push(eq(itemsTable.status, "active"));
-    }
-    if (status === "MENIPIS") {
-        conditions.push(sql `${itemsTable.currentStock} > 0 AND ${itemsTable.currentStock} <= ${itemsTable.minimumStock}`);
-        conditions.push(eq(itemsTable.status, "active"));
-    }
-    if (status === "HABIS") {
-        conditions.push(sql `${itemsTable.currentStock} <= 0`);
-        conditions.push(eq(itemsTable.status, "active"));
-    }
-    if (lowStock === "true") {
-        conditions.push(sql `${itemsTable.currentStock} <= ${itemsTable.minimumStock}`);
-    }
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     // Determine sort column
     const sortCol = (() => {
         switch (sortBy) {
             case "code": return itemsTable.code;
-            case "stock": return itemsTable.currentStock;
             case "createdAt": return itemsTable.createdAt;
             case "updatedAt": return itemsTable.updatedAt;
             case "name":
@@ -148,10 +126,9 @@ router.get("/items", requireAuth, async (req, res) => {
         totalPages: Math.ceil(total / limit),
     });
 });
-// GET /items/low-stock — barang stok menipis
+// GET /items/low-stock — barang stok menipis (disederhanakan)
 router.get("/items/low-stock", requireAuth, async (_req, res) => {
-    const rows = await joinedItems().orderBy(itemsTable.currentStock);
-    res.json(rows.filter(r => r.currentStock <= r.minimumStock).map(fmtItem));
+    res.json([]);
 });
 // GET /items/:id/stock-card — kartu stok digital komprehensif
 router.get("/items/:id/stock-card", requireAuth, async (req, res) => {
@@ -370,15 +347,6 @@ router.post("/items/import", requireAuth, async (req, res) => {
                 unitMap.set(uKey, unitId);
             }
         }
-        // Resolve supplier
-        let supplierId = null;
-        const supName = String(raw.supplierName || "").trim();
-        if (supName && supMap.has(supName.toLowerCase())) {
-            supplierId = supMap.get(supName.toLowerCase());
-        }
-        const minStock = Math.max(0, parseInt(String(raw.minimumStock || 0), 10) || 0);
-        const maxStock = Math.max(minStock, parseInt(String(raw.maximumStock || 100), 10) || 100);
-        const curStock = Math.max(0, parseInt(String(raw.currentStock || 0), 10) || 0);
         const price = parseFloat(String(raw.unitPrice || 0)) || 0;
         const barcode = String(raw.barcode || code).trim();
         const trackingType = String(raw.trackingType || "NON_TRACKED").toUpperCase() === "TRACKED" ? "TRACKED" : "NON_TRACKED";
@@ -392,9 +360,6 @@ router.post("/items/import", requireAuth, async (req, res) => {
                     barcode,
                     categoryId: categoryId ?? existing.categoryId,
                     unitId: unitId ?? existing.unitId,
-                    supplierId: supplierId ?? existing.supplierId,
-                    minimumStock: minStock,
-                    maximumStock: maxStock,
                     unitPrice: price.toString(),
                     trackingType,
                     description: raw.description || existing.description,
@@ -413,11 +378,7 @@ router.post("/items/import", requireAuth, async (req, res) => {
                     barcode,
                     categoryId,
                     unitId,
-                    supplierId,
                     description: raw.description || null,
-                    minimumStock: minStock,
-                    maximumStock: maxStock,
-                    currentStock: curStock,
                     unitPrice: price.toString(),
                     trackingType,
                     status: "active",
@@ -472,7 +433,8 @@ router.post("/items", requireAuth, async (req, res) => {
         res.status(400).json({ error: parsed.error.message });
         return;
     }
-    const insertData = { ...parsed.data, unitPrice: String(parsed.data.unitPrice) };
+    const { currentStock, minimumStock, maximumStock, supplierId, ...cleanedData } = parsed.data;
+    const insertData = { ...cleanedData, unitPrice: String(parsed.data.unitPrice || 0) };
     // Auto-generate barcode from code if not provided
     if (!insertData.barcode || insertData.barcode === "") {
         insertData.barcode = insertData.code;
@@ -494,7 +456,8 @@ router.patch("/items/:id", requireAuth, async (req, res) => {
         res.status(400).json({ error: parsed.error.message });
         return;
     }
-    const updateData = { ...parsed.data };
+    const { currentStock, minimumStock, maximumStock, supplierId, ...cleanedUpdate } = parsed.data;
+    const updateData = { ...cleanedUpdate };
     if (parsed.data.unitPrice != null)
         updateData.unitPrice = String(parsed.data.unitPrice);
     if (updateData.barcode === "")

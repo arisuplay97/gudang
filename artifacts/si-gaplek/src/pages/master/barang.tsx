@@ -37,6 +37,10 @@ interface Item {
   code: string;
   name: string;
   barcode: string | null;
+  categoryId?: number | null;
+  unitId?: number | null;
+  description?: string | null;
+  unitPrice?: string | number | null;
   categoryName?: string;
   unitName?: string;
   status: string;

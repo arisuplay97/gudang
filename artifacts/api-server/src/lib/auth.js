@@ -19,7 +19,9 @@ export function requireRole(...roles) {
             res.status(401).json({ error: "Unauthorized" });
             return;
         }
-        if (!roles.includes(req.session.userRole ?? "")) {
+        const currentRole = (req.session.userRole ?? "").toUpperCase();
+        const allowedRoles = roles.map(r => r.toUpperCase());
+        if (!allowedRoles.includes(currentRole)) {
             res.status(403).json({ error: "Forbidden" });
             return;
         }

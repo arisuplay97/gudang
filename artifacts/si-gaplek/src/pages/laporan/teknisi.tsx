@@ -66,7 +66,9 @@ export default function LaporanTeknisiPage() {
     queryKey: ["branches-list"],
     queryFn: () => apiFetch<{ id: number; name: string }[]>("/api/branches"),
   });
-  const branches = Array.isArray(branchesData) ? branchesData : (branchesData as any)?.data || [];
+  const branches: { id: number; name: string }[] = Array.isArray(branchesData)
+    ? branchesData
+    : ((branchesData as any)?.data as { id: number; name: string }[]) || [];
 
   // Fetch technician report
   const queryParams = new URLSearchParams();
@@ -178,7 +180,7 @@ export default function LaporanTeknisiPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Cabang</SelectItem>
-                {branches.map((b) => (
+                {branches.map((b: { id: number; name: string }) => (
                   <SelectItem key={b.id} value={String(b.id)}>
                     {b.name}
                   </SelectItem>

@@ -228,7 +228,6 @@ router.get("/spi/evidence/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN
     }
     res.json({ data: evidence });
 });
-
 // ─── VERIFY EVIDENCE (Section 34, 35) ───
 router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"), async (req, res) => {
     const { status, notes } = req.body; // TERVERIFIKASI | DITOLAK
