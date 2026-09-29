@@ -107,10 +107,13 @@ export default function DashboardPage() {
   });
 
   // 2. Branches list for filter
-  const { data: branches } = useQuery({
+  const { data: branchesData, isLoading: loadingBranchesList } = useQuery<{ data: Branch[] } | Branch[]>({
     queryKey: ["branches-list"],
-    queryFn: () => apiFetch<Branch[]>("/api/branches"),
+    queryFn: () => apiFetch<{ data: Branch[] } | Branch[]>("/api/branches"),
   });
+  const branches: Branch[] = useMemo(() => {
+    return Array.isArray(branchesData) ? branchesData : branchesData?.data || [];
+  }, [branchesData]);
 
   // 3. Granular Branch Stocks
   const { data: branchStocksData, isLoading: loadingBranchStocks } = useQuery({
@@ -143,8 +146,27 @@ export default function DashboardPage() {
     refetchInterval: 30_000,
   });
 
+  const safeTopBranches: TopBranch[] = useMemo(() => {
+    if (Array.isArray(topBranches)) return topBranches;
+    return (topBranches as any)?.data || [];
+  }, [topBranches]);
+
+  const safeTopOutgoing: TopOutgoing[] = useMemo(() => {
+    if (Array.isArray(topOutgoing)) return topOutgoing;
+    return (topOutgoing as any)?.data || [];
+  }, [topOutgoing]);
+
+  const safeRecentTx: RecentTx[] = useMemo(() => {
+    if (Array.isArray(recentTx)) return recentTx;
+    return (recentTx as any)?.data || [];
+  }, [recentTx]);
+
   // Filtered branch stock table
-  const allRows = branchStocksData?.data || [];
+  const allRows: BranchStockRow[] = useMemo(() => {
+    if (Array.isArray(branchStocksData)) return branchStocksData;
+    return branchStocksData?.data || [];
+  }, [branchStocksData]);
+
   const filteredRows = useMemo(() => {
     return allRows.filter((row) => {
       const matchBranch = selectedBranchId === "all" || row.branchId === Number(selectedBranchId);
@@ -256,12 +278,12 @@ export default function DashboardPage() {
               <p className="text-sm font-medium text-[#8a8a7a] dark:text-muted-foreground">Cabang Wilayah</p>
               <Building2 className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
             </div>
-            {loadingBranches ? (
+            {loadingBranchesList ? (
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
                 <p className="text-3xl font-bold text-[#2d2d2a] dark:text-foreground">
-                  {branches?.length ?? 0}
+                  {branches.length}
                 </p>
                 <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">Kantor cabang aktif terintegrasi</p>
               </>
@@ -303,7 +325,7 @@ export default function DashboardPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua Cabang</SelectItem>
-                    {branches?.map((b) => (
+                    {branches.map((b) => (
                       <SelectItem key={b.id} value={String(b.id)}>
                         {b.name}
                       </SelectItem>
@@ -415,17 +437,17 @@ export default function DashboardPage() {
               <MapPin className="w-4 h-4 text-[#5b7553]" />
             </div>
 
-            {loadingBranches || !topBranches ? (
+            {loadingBranches || !safeTopBranches ? (
               <div className="space-y-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-8 w-full rounded" />)}</div>
-            ) : topBranches.length === 0 ? (
+            ) : safeTopBranches.length === 0 ? (
               <div className="h-36 flex flex-col items-center justify-center text-[#8a8a7a]">
                 <Package className="w-7 h-7 mb-1.5 opacity-30" />
                 <p className="text-xs">Belum ada data distribusi</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {topBranches.slice(0, 5).map((b, idx) => {
-                  const maxQty = Math.max(...topBranches.map(t => t.totalQty), 1);
+                {safeTopBranches.slice(0, 5).map((b, idx) => {
+                  const maxQty = Math.max(...safeTopBranches.map(t => t.totalQty), 1);
                   const pct = Math.max(10, Math.round((b.totalQty / maxQty) * 100));
                   return (
                     <div key={b.branchId} className="space-y-1">
@@ -460,17 +482,17 @@ export default function DashboardPage() {
               <PackageMinus className="w-4 h-4 text-[#c27c5a]" />
             </div>
 
-            {loadingOutgoing || !topOutgoing ? (
+            {loadingOutgoing || !safeTopOutgoing ? (
               <div className="space-y-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-8 w-full rounded" />)}</div>
-            ) : topOutgoing.length === 0 ? (
+            ) : safeTopOutgoing.length === 0 ? (
               <div className="h-36 flex flex-col items-center justify-center text-[#8a8a7a]">
                 <PackageMinus className="w-7 h-7 mb-1.5 opacity-30" />
                 <p className="text-xs">Belum ada distribusi aksesoris</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {topOutgoing.slice(0, 5).map((item, idx) => {
-                  const maxQty = topOutgoing[0]?.totalQty || 1;
+                {safeTopOutgoing.slice(0, 5).map((item, idx) => {
+                  const maxQty = safeTopOutgoing[0]?.totalQty || 1;
                   const pct = Math.max(10, Math.round((item.totalQty / maxQty) * 100));
                   return (
                     <div key={item.itemId} className="space-y-1">
@@ -511,14 +533,14 @@ export default function DashboardPage() {
 
             {loadingTx ? (
               <div className="space-y-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full rounded" />)}</div>
-            ) : (recentTx ?? []).length === 0 ? (
+            ) : safeRecentTx.length === 0 ? (
               <div className="h-36 flex flex-col items-center justify-center text-[#8a8a7a]">
                 <BarChart3 className="w-7 h-7 mb-1.5 opacity-30" />
                 <p className="text-xs">Belum ada surat jalan keluar</p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-                {(recentTx ?? []).slice(0, 6).map((t) => (
+                {safeRecentTx.slice(0, 6).map((t) => (
                   <div key={t.id} className="flex items-center justify-between p-2 rounded-xl bg-[#f7f6f3] dark:bg-muted/40 border border-[#eae8e0]/60">
                     <div className="min-w-0 pr-2">
                       <p className="text-xs font-mono font-bold text-primary truncate">{t.referenceNo}</p>

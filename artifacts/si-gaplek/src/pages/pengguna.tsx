@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api";
@@ -57,10 +57,14 @@ export default function PenggunaPage() {
     queryFn: () => apiFetch<User[]>("/api/users"),
   });
 
-  const { data: branches } = useQuery({
+  const { data: branchesData } = useQuery<{ data: Branch[] } | Branch[]>({
     queryKey: ["branches"],
-    queryFn: () => apiFetch<Branch[]>("/api/branches"),
+    queryFn: () => apiFetch<{ data: Branch[] } | Branch[]>("/api/branches"),
   });
+
+  const branches: Branch[] = useMemo(() => {
+    return Array.isArray(branchesData) ? branchesData : branchesData?.data || [];
+  }, [branchesData]);
 
   const save = useMutation({
     mutationFn: () => {

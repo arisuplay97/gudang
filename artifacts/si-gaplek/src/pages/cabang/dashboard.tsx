@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
@@ -90,8 +90,15 @@ export default function CabangDashboardPage() {
     queryFn: () => apiFetch<{ data: any[] }>("/api/branch-stocks"),
   });
 
-  const branchStocks = branchStocksData?.data || [];
-  const shipments = shipmentsData?.data || [];
+  const branchStocks = useMemo(() => {
+    if (Array.isArray(branchStocksData)) return branchStocksData;
+    return branchStocksData?.data || [];
+  }, [branchStocksData]);
+
+  const shipments = useMemo(() => {
+    if (Array.isArray(shipmentsData)) return shipmentsData;
+    return shipmentsData?.data || [];
+  }, [shipmentsData]);
   const branchName = user?.branchName || statsData?.branchName || "Unit Cabang";
 
   const handleScannerDetected = (code: string) => {
@@ -566,7 +573,7 @@ export default function CabangDashboardPage() {
 
                     {/* Items preview */}
                     <div className="bg-[#f7f6f3] dark:bg-muted/30 rounded-xl p-3 space-y-1.5 text-xs border border-[#eae8e0]/60 dark:border-border/40">
-                      {s.units.slice(0, 3).map((u, i) => (
+                      {(s.units ?? []).slice(0, 3).map((u: ShipmentItem, i: number) => (
                         <div key={u.trackingId} className="flex items-center justify-between py-0.5">
                           <span className="font-medium text-[#2d2d2a] dark:text-foreground truncate max-w-[200px] sm:max-w-[260px]">
                             {i + 1}. {u.itemName}
