@@ -382,7 +382,7 @@ router.post("/items/import", requireAuth, async (req, res): Promise<void> => {
 
     const price = parseFloat(String(raw.unitPrice || 0)) || 0;
     const barcode = String(raw.barcode || code).trim();
-    const trackingType = String(raw.trackingType || "NON_TRACKED").toUpperCase() === "TRACKED" ? "TRACKED" : "NON_TRACKED";
+    const trackingType = String(raw.trackingType || "TRACKED").toUpperCase() === "NON_TRACKED" ? "NON_TRACKED" : "TRACKED";
 
     try {
       const [existing] = await db.select().from(itemsTable).where(eq(itemsTable.code, code));
@@ -456,7 +456,11 @@ router.post("/items", requireAuth, async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { currentStock, minimumStock, maximumStock, supplierId, ...cleanedData } = parsed.data as any;
-  const insertData = { ...cleanedData, unitPrice: String(parsed.data.unitPrice || 0) };
+  const insertData = {
+    ...cleanedData,
+    trackingType: (req.body as any).trackingType || "TRACKED",
+    unitPrice: String(parsed.data.unitPrice || 0),
+  };
   // Auto-generate barcode from code if not provided
   if (!insertData.barcode || insertData.barcode === "") {
     insertData.barcode = insertData.code;

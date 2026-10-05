@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
@@ -70,7 +70,7 @@ interface Shipment {
 
 function DashCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl p-5 bg-white dark:bg-card border border-[#eae8e0] dark:border-border transition-colors duration-200 ${className}`}>
+    <div className={`rounded-2xl p-5 bg-card text-card-foreground border border-border shadow-xs dark:shadow-none transition-colors duration-200 ${className}`}>
       {children}
     </div>
   );
@@ -86,6 +86,7 @@ export default function CabangReceivePage() {
   const [activeShipmentId, setActiveShipmentId] = useState<number | null>(null);
   const [tokenInput, setTokenInput] = useState("");
   const [filterSearch, setFilterSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "COMPLETED">("ALL");
   const [showUnitsDetail, setShowUnitsDetail] = useState(false);
 
   // 1. Fetch all shipments for this branch
@@ -95,6 +96,21 @@ export default function CabangReceivePage() {
   });
 
   const shipments = shipmentsData?.data || [];
+
+  const filteredShipments = useMemo(() => {
+    return shipments.filter((s) => {
+      if (statusFilter === "PENDING" && s.isFullyReceived) return false;
+      if (statusFilter === "COMPLETED" && !s.isFullyReceived) return false;
+      if (filterSearch.trim()) {
+        const q = filterSearch.toLowerCase();
+        const ref = s.referenceNo.toLowerCase();
+        const wh = (s.warehouseName || "").toLowerCase();
+        const dest = (s.destinationBranchName || "").toLowerCase();
+        if (!ref.includes(q) && !wh.includes(q) && !dest.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [shipments, statusFilter, filterSearch]);
 
   // Read URL query params on mount (e.g. ?shipment=BK-509105 or ?scan=...)
   useEffect(() => {
@@ -283,31 +299,31 @@ export default function CabangReceivePage() {
   const totalItemQty = itemsList.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) || activeShipment?.totalUnits || 0;
 
   return (
-    <div className="min-h-screen bg-[#f7f6f3] dark:bg-background transition-colors duration-200">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
       <div className="p-5 md:p-8 max-w-[1600px] mx-auto space-y-5">
         {/* ── Header ── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#e8f5e3] dark:bg-green-950/50 text-[#5b7553] dark:text-green-400 border border-[#a3b899]/40">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
                 <Building2 className="w-3.5 h-3.5" /> {branchTitle}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                <ShieldCheck className="w-3.5 h-3.5" /> Petugas Penerima: {user?.fullName || user?.username || "Petugas Cabang"}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-foreground border border-border">
+                <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Petugas: {user?.fullName || user?.username || "Petugas Cabang"}
               </span>
             </div>
-            <h1 className="text-2xl font-semibold text-[#2d2d2a] dark:text-foreground tracking-tight">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
               Penerimaan Material (Scan Surat Jalan / BPB)
             </h1>
-            <p className="text-sm text-[#8a8a7a] dark:text-muted-foreground">
-              Pindai kode QR pada Surat Jalan fisik untuk memverifikasi penerimaan. Barang otomatis masuk ke <strong>Stok Cabang</strong> dan tercatat identitas penerima.
+            <p className="text-sm text-muted-foreground">
+              Pindai kode QR pada Surat Jalan fisik untuk memverifikasi penerimaan. Barang otomatis masuk ke <strong>Stok Cabang</strong>.
             </p>
           </div>
 
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setScannerOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-[#5b7553] hover:bg-[#4d6346] text-white transition-colors shadow-xs"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-xs"
             >
               <Camera className="w-4 h-4" />
               Scan QR Surat Jalan / BPB
@@ -316,85 +332,129 @@ export default function CabangReceivePage() {
         </div>
 
         {/* ── Quick Scan Barcode or Search Input ── */}
-        <DashCard className="p-4">
+        <DashCard className="p-3.5">
           <form onSubmit={handleManualCodeSubmit} className="flex flex-col sm:flex-row gap-2.5">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-[#8a8a7a] dark:text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
               <Input
                 placeholder="Scan / ketik Nomor SPK Surat Jalan (misal: BK-20260811-0025)..."
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
-                className="pl-10 font-mono text-sm bg-white dark:bg-card border-[#eae8e0] dark:border-border h-11 rounded-xl"
+                className="pl-10 font-mono text-sm bg-muted/30 border-border h-10 rounded-xl"
               />
             </div>
             <button
               type="submit"
-              className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-xl text-sm font-medium bg-white dark:bg-card hover:bg-[#f0efe9] dark:hover:bg-muted text-[#2d2d2a] dark:text-foreground border border-[#eae8e0] dark:border-border transition-colors shadow-xs shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-5 h-10 rounded-xl text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors shadow-2xs shrink-0"
             >
-              <ScanLine className="w-4 h-4 text-[#5b7553]" /> Cari / Proses Kode
+              <ScanLine className="w-4 h-4 text-primary" /> Cari / Proses Kode
             </button>
           </form>
         </DashCard>
 
-        {/* ── Main Layout: Left: Shipments List, Right: Active Shipment BPB Summary ── */}
+        {/* ── Main Layout: Left: Compact Shipments List, Right: Active Shipment BPB Summary ── */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Column: List of Shipments (5 cols) */}
-          <div className="lg:col-span-4 space-y-3">
+          {/* Left Column: Compact List of Shipments (5 cols) */}
+          <div className="lg:col-span-5 space-y-3">
             <div className="flex items-center justify-between px-1">
-              <p className="text-sm font-semibold text-[#2d2d2a] dark:text-foreground flex items-center gap-2">
-                <Truck className="w-4 h-4 text-[#5b7553]" />
+              <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Truck className="w-4 h-4 text-primary" />
                 Daftar Surat Jalan Menuju Cabang
               </p>
-              <span className="text-xs font-mono text-[#8a8a7a] dark:text-muted-foreground px-2 py-0.5 rounded-full bg-[#f0efe9] dark:bg-muted">
-                {shipments.length} Surat Jalan
+              <span className="text-xs font-mono text-muted-foreground px-2 py-0.5 rounded-full bg-muted border border-border">
+                {filteredShipments.length} Surat Jalan
               </span>
             </div>
 
+            {/* Quick Status Filter Pills & Search */}
+            <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-card border border-border">
+              <div className="flex items-center gap-1.5 p-1 rounded-lg bg-muted/50 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("ALL")}
+                  className={`flex-1 py-1 rounded-md text-center font-medium transition-all ${
+                    statusFilter === "ALL"
+                      ? "bg-card text-foreground shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Semua ({shipments.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("PENDING")}
+                  className={`flex-1 py-1 rounded-md text-center font-medium transition-all ${
+                    statusFilter === "PENDING"
+                      ? "bg-card text-amber-600 dark:text-amber-400 shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Belum Selesai ({shipments.filter(s => !s.isFullyReceived).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("COMPLETED")}
+                  className={`flex-1 py-1 rounded-md text-center font-medium transition-all ${
+                    statusFilter === "COMPLETED"
+                      ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Selesai ({shipments.filter(s => s.isFullyReceived).length})
+                </button>
+              </div>
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <Input
+                  placeholder="Filter no referensi..."
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="pl-8 h-8 text-xs bg-muted/30 border-border"
+                />
+              </div>
+            </div>
+
+            {/* Compact Scrollable Shipments List */}
             {loadingShipments ? (
-              <DashCard className="p-6 text-center text-xs text-[#8a8a7a]">
+              <DashCard className="p-6 text-center text-xs text-muted-foreground">
                 Memuat daftar surat jalan cabang...
               </DashCard>
-            ) : shipments.length === 0 ? (
-              <DashCard className="py-8 text-center text-xs text-[#8a8a7a]">
-                <PackageOpen className="w-8 h-8 mx-auto mb-2 opacity-30 text-[#8a8a7a]" />
-                Tidak ada pengiriman aktif menuju cabang ini.
+            ) : filteredShipments.length === 0 ? (
+              <DashCard className="py-8 text-center text-xs text-muted-foreground">
+                <PackageOpen className="w-8 h-8 mx-auto mb-2 opacity-30 text-muted-foreground" />
+                Tidak ada pengiriman yang cocok dengan filter.
               </DashCard>
             ) : (
-              <div className="space-y-2.5 max-h-[640px] overflow-y-auto pr-1">
-                {shipments.map((s) => {
+              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                {filteredShipments.map((s: Shipment) => {
                   const isActive = s.id === activeShipmentId;
                   const pct = s.totalUnits > 0 ? Math.round((s.receivedUnits / s.totalUnits) * 100) : 0;
                   return (
                     <div
                       key={s.id}
                       onClick={() => setActiveShipmentId(s.id)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
                         isActive
-                          ? "border-[#5b7553] bg-white dark:bg-card shadow-sm ring-1 ring-[#5b7553]"
-                          : "border-[#eae8e0] dark:border-border hover:border-[#a3b899] bg-white dark:bg-card"
+                          ? "border-primary bg-primary/[0.04] dark:bg-primary/[0.08] shadow-xs ring-1 ring-primary/40"
+                          : "border-border hover:border-primary/40 bg-card"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-3.5 h-3.5 text-[#5b7553]" />
-                            <span className="font-mono font-bold text-sm text-[#2d2d2a] dark:text-foreground">
-                              {s.referenceNo}
-                            </span>
-                          </div>
-                          <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">
-                            {formatDate(s.transactionDate)} • {s.warehouseName || "Gudang Pusat"}
-                            {s.destinationBranchName ? ` → ${s.destinationBranchName}` : ""}
-                          </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span className="font-mono font-bold text-xs text-foreground truncate">
+                            {s.referenceNo}
+                          </span>
                         </div>
 
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${
                             s.isFullyReceived
-                              ? "bg-[#e8f5e3] text-[#5b7553] border border-[#a3b899]/50"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                               : s.receivedUnits > 0
-                              ? "bg-[#f5f0e0] text-[#8b6b4a] border border-[#e8c468]/50"
-                              : "bg-[#fff0e6] text-[#c27c5a] border border-[#c27c5a]/30"
+                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                              : "bg-muted text-muted-foreground border-border"
                           }`}
                         >
                           {s.isFullyReceived
@@ -403,22 +463,18 @@ export default function CabangReceivePage() {
                         </span>
                       </div>
 
-                      <div className="mt-3 space-y-1">
-                        <div className="flex items-center justify-between text-[11px] text-[#8a8a7a] dark:text-muted-foreground">
-                          <span>Status Penerimaan:</span>
-                          <span className="font-mono font-semibold text-[#2d2d2a] dark:text-foreground">
-                            {s.receivedUnits} dari {s.totalUnits} unit ({pct}%)
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-[#f0efe9] dark:bg-muted overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${pct}%`,
-                              background: s.isFullyReceived ? "#5b7553" : pct > 0 ? "#e8c468" : "#c27c5a",
-                            }}
-                          />
-                        </div>
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1.5">
+                        <span className="truncate">{formatDate(s.transactionDate)} • {s.destinationBranchName || s.warehouseName || "Gudang Pusat"}</span>
+                        <span className="font-mono text-[10px] shrink-0 font-medium">{pct}%</span>
+                      </div>
+
+                      <div className="w-full h-1 rounded-full bg-muted overflow-hidden mt-1.5">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            s.isFullyReceived ? "bg-emerald-500" : pct > 0 ? "bg-amber-500" : "bg-primary"
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -427,38 +483,38 @@ export default function CabangReceivePage() {
             )}
           </div>
 
-          {/* Right Column: Selected Shipment Detail (BPB & Quantity Breakdown) (8 cols) */}
-          <div className="lg:col-span-8">
+          {/* Right Column: Selected Shipment Detail (BPB & Quantity Breakdown) (7 cols) */}
+          <div className="lg:col-span-7">
             {!activeShipment ? (
               <DashCard className="h-full min-h-[360px] flex items-center justify-center text-center">
-                <div className="text-[#8a8a7a] dark:text-muted-foreground py-12">
-                  <PackageOpen className="w-12 h-12 mx-auto mb-3 opacity-30 text-[#8a8a7a]" />
-                  <p className="font-semibold text-sm text-[#2d2d2a] dark:text-foreground">Pilih Surat Jalan / BPB</p>
+                <div className="text-muted-foreground py-12">
+                  <PackageOpen className="w-12 h-12 mx-auto mb-3 opacity-30 text-muted-foreground" />
+                  <p className="font-bold text-sm text-foreground">Pilih Surat Jalan / BPB</p>
                   <p className="text-xs mt-1">Pilih dari daftar di sebelah kiri atau scan QR Code Surat Jalan fisik Anda.</p>
                 </div>
               </DashCard>
             ) : (
               <div className="space-y-4">
                 {/* Main BPB Verification Card */}
-                <DashCard className="space-y-5">
+                <DashCard className="space-y-4">
                   {/* Top info row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#eae8e0] dark:border-border">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
                     <div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-mono font-black text-xl text-[#2d2d2a] dark:text-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-lg text-foreground">
                           {activeShipment.referenceNo}
                         </span>
                         <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold ${
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${
                             activeShipment.isFullyReceived
-                              ? "bg-[#e8f5e3] text-[#5b7553] border border-[#a3b899]/50"
-                              : "bg-[#f5f0e0] text-[#8b6b4a] border border-[#e8c468]/50"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
                           }`}
                         >
                           {activeShipment.isFullyReceived ? "✓ LENGKAP DITERIMA" : "MENUNGGU VERIFIKASI CABANG"}
                         </span>
                       </div>
-                      <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Dari: <strong>{activeShipment.warehouseName || "Gudang Pusat"}</strong> • Tujuan: <strong>{activeShipment.destinationBranchName}</strong> • Tgl SPK: {formatDate(activeShipment.transactionDate)}
                       </p>
                     </div>
@@ -466,7 +522,7 @@ export default function CabangReceivePage() {
                     {activeShipment.isFullyReceived && (
                       <button
                         onClick={() => setLocation("/cabang/pemasangan")}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-[#5b7553] hover:bg-[#4d6346] text-white transition-colors shadow-xs shrink-0"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-colors shadow-xs shrink-0"
                       >
                         <ArrowRight className="w-3.5 h-3.5" />
                         Lanjut Alokasi Pasang
@@ -476,14 +532,14 @@ export default function CabangReceivePage() {
 
                   {/* Prominent Action Banner for Single-Scan Confirmation */}
                   {!activeShipment.isFullyReceived ? (
-                    <div className="p-4 rounded-2xl bg-[#fffdf5] dark:bg-card border border-[#eae8e0] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="p-4 rounded-xl bg-muted/40 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="space-y-1">
-                        <p className="text-sm font-bold text-[#2d2d2a] dark:text-foreground flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-[#5b7553]" />
+                        <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-primary" />
                           Konfirmasi Penerimaan Fisik Surat Jalan
                         </p>
-                        <p className="text-xs text-[#8a8a7a] dark:text-muted-foreground">
-                          Dengan mengklik tombol ini, seluruh kuantitas ({totalItemQty} unit) pada lembar Surat Jalan / BPB ini otomatis tercatat diterima di cabang.
+                        <p className="text-xs text-muted-foreground">
+                          Dengan mengonfirmasi, seluruh kuantitas ({totalItemQty} unit) pada lembar Surat Jalan / BPB ini otomatis tercatat diterima di cabang.
                         </p>
                       </div>
 
@@ -494,7 +550,7 @@ export default function CabangReceivePage() {
                           })
                         }
                         disabled={receiveShipmentMutation.isPending}
-                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold bg-[#5b7553] hover:bg-[#4d6346] text-white transition-all shadow-md shrink-0 disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-xs shrink-0 disabled:opacity-50"
                       >
                         <Check className="w-4 h-4" />
                         {receiveShipmentMutation.isPending
@@ -503,64 +559,64 @@ export default function CabangReceivePage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="p-3.5 rounded-xl bg-[#e8f5e3]/60 dark:bg-green-950/20 border border-[#a3b899]/40 flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-[#5b7553] dark:text-green-400 shrink-0" />
-                      <div className="text-xs text-[#2d2d2a] dark:text-foreground">
-                        <p className="font-semibold">Seluruh material telah lengkap diterima!</p>
-                        <p className="text-[#8a8a7a] dark:text-muted-foreground mt-0.5">
+                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <div className="text-xs text-foreground">
+                        <p className="font-semibold text-emerald-800 dark:text-emerald-300">Seluruh material telah lengkap diterima!</p>
+                        <p className="text-muted-foreground mt-0.5">
                           Barang telah tercatat di inventaris cabang dan siap dialokasikan ke pelanggan melalui menu <strong>Alokasi Pemasangan</strong>.
                         </p>
                       </div>
                     </div>
                   )}
 
-                  {/* Items Breakdown Table (Otomatis Muncul Jumlah Kuantitasnya!) */}
+                  {/* Items Breakdown Table */}
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-[#2d2d2a] dark:text-foreground flex items-center gap-2">
-                        <Boxes className="w-4 h-4 text-[#5b7553]" />
+                      <h3 className="text-xs font-bold text-foreground flex items-center gap-2">
+                        <Boxes className="w-4 h-4 text-primary" />
                         Daftar Barang & Kuantitas Fisik Sesuai Surat Jalan / BPB
                       </h3>
-                      <span className="text-xs font-mono text-[#8a8a7a] dark:text-muted-foreground">
+                      <span className="text-xs font-mono text-muted-foreground">
                         {itemsList.length > 0 ? `${itemsList.length} Jenis Barang` : `${activeShipment.totalUnits} Unit Material`}
                       </span>
                     </div>
 
-                    <div className="overflow-hidden rounded-xl border border-[#eae8e0] dark:border-border">
+                    <div className="overflow-hidden rounded-xl border border-border">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-[#fbfbf9] dark:bg-muted/40 text-[#6b6b5e] dark:text-muted-foreground font-semibold border-b border-[#eae8e0] dark:border-border">
+                        <thead className="bg-muted/40 text-muted-foreground font-semibold border-b border-border">
                           <tr>
-                            <th className="p-3 w-12 text-center">No</th>
-                            <th className="p-3">Kode & Nama Barang</th>
-                            <th className="p-3 text-center w-32">Kuantitas Fisik</th>
-                            <th className="p-3 text-center w-32">Status Barang</th>
+                            <th className="p-2.5 w-12 text-center">No</th>
+                            <th className="p-2.5">Kode & Nama Barang</th>
+                            <th className="p-2.5 text-center w-32">Kuantitas Fisik</th>
+                            <th className="p-2.5 text-center w-32">Status Barang</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#eae8e0] dark:divide-border bg-white dark:bg-card">
+                        <tbody className="divide-y divide-border bg-card">
                           {itemsList.length > 0 ? (
                             itemsList.map((item, idx) => (
                               <tr key={item.id || idx} className="hover:bg-muted/20 transition-colors">
-                                <td className="p-3 text-center font-mono text-[#8a8a7a]">{idx + 1}</td>
-                                <td className="p-3">
-                                  <p className="font-semibold text-sm text-[#2d2d2a] dark:text-foreground">
+                                <td className="p-2.5 text-center font-mono text-muted-foreground">{idx + 1}</td>
+                                <td className="p-2.5">
+                                  <p className="font-semibold text-xs text-foreground">
                                     {item.itemName}
                                   </p>
-                                  <p className="text-[11px] font-mono text-[#8a8a7a] dark:text-muted-foreground">
+                                  <p className="text-[11px] font-mono text-muted-foreground">
                                     {item.itemCode}
                                   </p>
                                 </td>
-                                <td className="p-3 text-center">
-                                  <span className="inline-flex items-center font-mono font-bold text-sm text-[#2d2d2a] dark:text-foreground px-2.5 py-1 rounded-lg bg-[#f0efe9] dark:bg-muted">
+                                <td className="p-2.5 text-center">
+                                  <span className="inline-flex items-center font-mono font-bold text-xs text-foreground px-2 py-0.5 rounded-lg bg-muted">
                                     {formatNumber(item.quantity)} {item.unitName || "Unit"}
                                   </span>
                                 </td>
-                                <td className="p-3 text-center">
+                                <td className="p-2.5 text-center">
                                   {activeShipment.isFullyReceived ? (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#5b7553] dark:text-green-400">
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
                                       <CheckCircle2 className="w-3.5 h-3.5" /> Diterima
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8b6b4a] dark:text-yellow-500">
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
                                       <Clock className="w-3.5 h-3.5" /> Siap Diterima
                                     </span>
                                   )}
@@ -568,23 +624,22 @@ export default function CabangReceivePage() {
                               </tr>
                             ))
                           ) : (
-                            // Fallback jika belum terkelompokkan: ambil dari units
                             <tr>
-                              <td colSpan={4} className="p-6 text-center text-[#8a8a7a]">
+                              <td colSpan={4} className="p-6 text-center text-muted-foreground">
                                 Total Kuantitas: <strong>{activeShipment.totalUnits} Unit</strong>
                               </td>
                             </tr>
                           )}
                         </tbody>
-                        <tfoot className="bg-[#fbfbf9] dark:bg-muted/40 font-bold border-t border-[#eae8e0] dark:border-border text-[#2d2d2a] dark:text-foreground">
+                        <tfoot className="bg-muted/40 font-bold border-t border-border text-foreground">
                           <tr>
-                            <td colSpan={2} className="p-3 text-right">
+                            <td colSpan={2} className="p-2.5 text-right text-xs">
                               TOTAL KUANTITAS FISIK:
                             </td>
-                            <td className="p-3 text-center font-mono text-sm text-[#5b7553]">
+                            <td className="p-2.5 text-center font-mono text-xs text-primary font-bold">
                               {formatNumber(totalItemQty)} Unit
                             </td>
-                            <td className="p-3 text-center text-xs text-[#8a8a7a] font-normal">
+                            <td className="p-2.5 text-center text-xs text-muted-foreground font-normal">
                               {activeShipment.isFullyReceived ? "100% Selesai" : "Siap Dikonfirmasi"}
                             </td>
                           </tr>
@@ -594,38 +649,38 @@ export default function CabangReceivePage() {
                   </div>
 
                   {/* Expandable Section: Rincian Nomor Seri Unit (Opsional) */}
-                  <div className="pt-2 border-t border-[#eae8e0] dark:border-border">
+                  <div className="pt-2 border-t border-border">
                     <button
                       onClick={() => setShowUnitsDetail(!showUnitsDetail)}
-                      className="w-full flex items-center justify-between text-xs text-[#8a8a7a] hover:text-[#2d2d2a] dark:hover:text-foreground py-2 transition-colors font-medium"
+                      className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground py-2 transition-colors font-medium"
                     >
                       <span className="flex items-center gap-2">
-                        <ScanBarcode className="w-4 h-4 text-[#5b7553]" />
+                        <ScanBarcode className="w-4 h-4 text-primary" />
                         Lihat Rincian Nomor Seri / Unit Pelacakan ({activeShipment.units?.length || 0} Unit)
                       </span>
                       {showUnitsDetail ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
 
                     {showUnitsDetail && (
-                      <div className="mt-3 space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                      <div className="mt-2.5 space-y-2 max-h-[260px] overflow-y-auto pr-1">
                         {activeShipment.units?.map((unit, index) => {
                           const isReceived = unit.status !== "MENUNGGU_DITERIMA" || !!unit.receivedAt;
                           return (
                             <div
                               key={unit.trackingId}
-                              className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
                                 isReceived
-                                  ? "bg-[#fcfdfa] dark:bg-card border-[#c8d6c0] dark:border-green-950/40"
-                                  : "bg-white dark:bg-card border-[#eae8e0] dark:border-border"
+                                  ? "bg-muted/20 border-border"
+                                  : "bg-card border-border"
                               }`}
                             >
                               <div className="flex items-center gap-2.5">
-                                <span className="w-6 h-6 rounded-full bg-[#f0efe9] dark:bg-muted text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                                <span className="w-5 h-5 rounded-full bg-muted text-[10px] font-mono font-bold flex items-center justify-center shrink-0">
                                   #{index + 1}
                                 </span>
                                 <div>
-                                  <p className="font-semibold text-[#2d2d2a] dark:text-foreground">{unit.itemName}</p>
-                                  <p className="font-mono text-[10px] text-[#8a8a7a]">
+                                  <p className="font-semibold text-foreground text-xs">{unit.itemName}</p>
+                                  <p className="font-mono text-[10px] text-muted-foreground">
                                     UUID: {unit.trackingUuid.slice(0, 10)}... | {unit.itemCode}
                                   </p>
                                 </div>
@@ -633,14 +688,14 @@ export default function CabangReceivePage() {
 
                               <div className="shrink-0">
                                 {isReceived ? (
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#5b7553] dark:text-green-400">
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
                                     <CheckCircle2 className="w-3.5 h-3.5" /> Diterima
                                   </span>
                                 ) : (
                                   <button
                                     onClick={() => receiveUnitMutation.mutate({ trackingId: unit.trackingId })}
                                     disabled={receiveUnitMutation.isPending}
-                                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#5b7553] text-white hover:bg-[#4d6346] transition-colors"
+                                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                                   >
                                     Terima Satuan
                                   </button>
@@ -655,12 +710,12 @@ export default function CabangReceivePage() {
                 </DashCard>
 
                 {/* SOP Info Box */}
-                <div className="p-4 rounded-2xl bg-[#fffdf5] dark:bg-card border border-[#eae8e0] text-xs text-[#6b6b5e] dark:text-muted-foreground flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-[#e8f5e3] dark:bg-green-950/50 flex items-center justify-center shrink-0 mt-0.5">
-                    <ShieldCheck className="w-4 h-4 text-[#5b7553] dark:text-green-500" />
+                <div className="p-3.5 rounded-2xl bg-card border border-border text-xs text-muted-foreground flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 border border-primary/20">
+                    <ShieldCheck className="w-4 h-4 text-primary" />
                   </div>
                   <div className="space-y-0.5">
-                    <p className="font-semibold text-[#2d2d2a] dark:text-foreground">SOP Penerimaan Cabang Per Surat Jalan / BPB:</p>
+                    <p className="font-semibold text-foreground">SOP Penerimaan Cabang Per Surat Jalan / BPB:</p>
                     <p className="leading-relaxed">
                       1. Petugas cabang cukup memindai kode QR pada lembar Surat Jalan / BPB fisik.<br />
                       2. Sistem otomatis memvalidasi keaslian dokumen dan memunculkan kuantitas seluruh barang.<br />
@@ -683,3 +738,4 @@ export default function CabangReceivePage() {
     </div>
   );
 }
+

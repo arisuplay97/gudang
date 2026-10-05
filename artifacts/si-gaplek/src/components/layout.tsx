@@ -100,9 +100,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Material", href: "/master/barang", icon: Package, roles: ["ADMIN", "GUDANG"] },
       { label: "Kategori", href: "/master/kategori", icon: Tags, roles: ["ADMIN", "GUDANG"] },
       { label: "Satuan", href: "/master/satuan", icon: Ruler, roles: ["ADMIN", "GUDANG"] },
-      { label: "Cabang & Gudang", href: "/master/gudang", icon: Warehouse, roles: ["ADMIN"] },
-      { label: "Lokasi Gudang", href: "/master/lokasi", icon: MapPin, roles: ["ADMIN", "GUDANG"] },
-      { label: "Departemen", href: "/master/departemen", icon: Building2, roles: ["ADMIN", "GUDANG"] },
+      { label: "Cabang", href: "/master/gudang", icon: Warehouse, roles: ["ADMIN"] },
     ],
   },
   {

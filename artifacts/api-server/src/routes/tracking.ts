@@ -132,135 +132,214 @@ router.get("/tracking", requireAuth, async (req, res): Promise<void> => {
 
 // ─── GET TRACKING DETAIL (Material Journey — Section 33) ───
 router.get("/tracking/:uuid", requireAuth, async (req, res): Promise<void> => {
-    const trackingUuid = req.params.uuid;
+    try {
+        const trackingUuid = req.params.uuid;
+        const isNumeric = /^\d+$/.test(trackingUuid);
 
-    const [tracking] = await db
-        .select({
-            id: materialTrackingTable.id,
-            uuid: materialTrackingTable.uuid,
-            transactionItemId: materialTrackingTable.transactionItemId,
-            branchId: materialTrackingTable.branchId,
-            status: materialTrackingTable.status,
-            slaStartAt: materialTrackingTable.slaStartAt,
-            slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
-            receivedAt: materialTrackingTable.receivedAt,
-            receivedBy: materialTrackingTable.receivedBy,
-            receivedByName: usersTable.fullName,
-            receivedByUsername: usersTable.username,
-            installedAt: materialTrackingTable.installedAt,
-            installedBy: materialTrackingTable.installedBy,
-            verifiedAt: materialTrackingTable.verifiedAt,
-            verifiedBy: materialTrackingTable.verifiedBy,
-            createdAt: materialTrackingTable.createdAt,
-            updatedAt: materialTrackingTable.updatedAt,
-        })
-        .from(materialTrackingTable)
-        .leftJoin(usersTable, eq(materialTrackingTable.receivedBy, usersTable.id))
-        .where(eq(materialTrackingTable.uuid, trackingUuid));
-
-    if (!tracking) { res.status(404).json({ error: "Tracking tidak ditemukan" }); return; }
-
-    // Check branch access for CABANG users
-    if (req.session.userRole === "CABANG" && req.session.branchId && tracking.branchId !== req.session.branchId) {
-        res.status(403).json({ error: "Forbidden" }); return;
-    }
-
-    // Get transaction item details
-    const [txItem] = await db
-        .select({
-            stockOutId: stockOutItemsTable.stockOutId,
-            quantity: stockOutItemsTable.quantity,
-            itemName: itemsTable.name,
-            itemCode: itemsTable.code,
-            trackingType: itemsTable.trackingType,
-            unit: itemsTable.unitId,
-            referenceNo: stockOutTable.referenceNo,
-            transactionUuid: stockOutTable.uuid,
-            transactionDate: stockOutTable.transactionDate,
-            warehouseName: sql<string>`(SELECT name FROM warehouses WHERE id = ${stockOutTable.warehouseId})`,
-        })
-        .from(stockOutItemsTable)
-        .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
-        .leftJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
-        .where(eq(stockOutItemsTable.id, tracking.transactionItemId));
-
-    // Fallback: If receivedByName is null but transaction had a material_receipts record
-    if (!tracking.receivedByName && txItem?.stockOutId) {
-        const [receipt] = await db
+        const [tracking] = await db
             .select({
-                receivedAt: materialReceiptsTable.receivedAt,
-                receivedBy: materialReceiptsTable.receivedBy,
+                id: materialTrackingTable.id,
+                uuid: materialTrackingTable.uuid,
+                transactionItemId: materialTrackingTable.transactionItemId,
+                branchId: materialTrackingTable.branchId,
+                status: materialTrackingTable.status,
+                slaStartAt: materialTrackingTable.slaStartAt,
+                slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
+                receivedAt: materialTrackingTable.receivedAt,
+                receivedBy: materialTrackingTable.receivedBy,
                 receivedByName: usersTable.fullName,
                 receivedByUsername: usersTable.username,
+                installedAt: materialTrackingTable.installedAt,
+                installedBy: materialTrackingTable.installedBy,
+                installedByName: sql<string | null>`(SELECT full_name FROM users WHERE id = ${materialTrackingTable.installedBy})`,
+                installedByUsername: sql<string | null>`(SELECT username FROM users WHERE id = ${materialTrackingTable.installedBy})`,
+                verifiedAt: materialTrackingTable.verifiedAt,
+                verifiedBy: materialTrackingTable.verifiedBy,
+                verifiedByName: sql<string | null>`(SELECT full_name FROM users WHERE id = ${materialTrackingTable.verifiedBy})`,
+                verifiedByUsername: sql<string | null>`(SELECT username FROM users WHERE id = ${materialTrackingTable.verifiedBy})`,
+                createdAt: materialTrackingTable.createdAt,
+                updatedAt: materialTrackingTable.updatedAt,
             })
-            .from(materialReceiptsTable)
-            .leftJoin(usersTable, eq(materialReceiptsTable.receivedBy, usersTable.id))
-            .where(and(
-                eq(materialReceiptsTable.transactionId, txItem.stockOutId),
-                eq(materialReceiptsTable.branchId, tracking.branchId)
-            ));
-        if (receipt) {
-            tracking.receivedAt = tracking.receivedAt || receipt.receivedAt;
-            tracking.receivedBy = tracking.receivedBy || receipt.receivedBy;
-            tracking.receivedByName = receipt.receivedByName;
-            tracking.receivedByUsername = receipt.receivedByUsername;
+            .from(materialTrackingTable)
+            .leftJoin(usersTable, eq(materialTrackingTable.receivedBy, usersTable.id))
+            .where(isNumeric ? eq(materialTrackingTable.id, parseInt(trackingUuid, 10)) : eq(materialTrackingTable.uuid, trackingUuid));
+
+        if (!tracking) { res.status(404).json({ error: "Tracking tidak ditemukan" }); return; }
+
+        // Get transaction item details safely
+        let txItem = null;
+        if (tracking.transactionItemId) {
+            const [foundTx] = await db
+                .select({
+                    stockOutId: stockOutItemsTable.stockOutId,
+                    quantity: stockOutItemsTable.quantity,
+                    itemName: itemsTable.name,
+                    itemCode: itemsTable.code,
+                    trackingType: itemsTable.trackingType,
+                    unit: itemsTable.unitId,
+                    referenceNo: stockOutTable.referenceNo,
+                    transactionUuid: stockOutTable.uuid,
+                    transactionDate: stockOutTable.transactionDate,
+                    releasedAt: stockOutTable.releasedAt,
+                    notes: stockOutTable.notes,
+                    warehouseName: sql<string>`(SELECT name FROM warehouses WHERE id = ${stockOutTable.warehouseId})`,
+                    createdByName: sql<string | null>`(SELECT full_name FROM users WHERE id = ${stockOutTable.createdBy})`,
+                    createdByUsername: sql<string | null>`(SELECT username FROM users WHERE id = ${stockOutTable.createdBy})`,
+                })
+                .from(stockOutItemsTable)
+                .leftJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
+                .leftJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+                .where(eq(stockOutItemsTable.id, tracking.transactionItemId));
+            txItem = foundTx;
         }
+
+        // Fallback: If receivedByName is null but transaction had a material_receipts record
+        if (!tracking.receivedByName && txItem?.stockOutId) {
+            const [receipt] = await db
+                .select({
+                    receivedAt: materialReceiptsTable.receivedAt,
+                    receivedBy: materialReceiptsTable.receivedBy,
+                    receivedByName: usersTable.fullName,
+                    receivedByUsername: usersTable.username,
+                })
+                .from(materialReceiptsTable)
+                .leftJoin(usersTable, eq(materialReceiptsTable.receivedBy, usersTable.id))
+                .where(and(
+                    eq(materialReceiptsTable.transactionId, txItem.stockOutId),
+                    eq(materialReceiptsTable.branchId, tracking.branchId)
+                ));
+            if (receipt) {
+                tracking.receivedAt = tracking.receivedAt || receipt.receivedAt;
+                tracking.receivedBy = tracking.receivedBy || receipt.receivedBy;
+                tracking.receivedByName = receipt.receivedByName;
+                tracking.receivedByUsername = receipt.receivedByUsername;
+            }
+        }
+
+        // Get branch
+        const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, tracking.branchId));
+
+        // Get allocations
+        const allocations = await db.select().from(installationAllocationsTable)
+            .where(eq(installationAllocationsTable.trackingId, tracking.id));
+
+        // Get evidence for each allocation
+        const allocationsWithEvidence = await Promise.all(allocations.map(async (alloc) => {
+            const evidence = await db
+                .select({
+                    id: installationEvidenceTable.id,
+                    uuid: installationEvidenceTable.uuid,
+                    allocationId: installationEvidenceTable.allocationId,
+                    trackingId: installationEvidenceTable.trackingId,
+                    photoUrl: installationEvidenceTable.photoUrl,
+                    originalPhotoUrl: installationEvidenceTable.originalPhotoUrl,
+                    photoBeforeUrl: installationEvidenceTable.photoBeforeUrl,
+                    photoAfterUrl: installationEvidenceTable.photoAfterUrl,
+                    latitude: installationEvidenceTable.latitude,
+                    longitude: installationEvidenceTable.longitude,
+                    gpsAccuracy: installationEvidenceTable.gpsAccuracy,
+                    clientCaptureTime: installationEvidenceTable.clientCaptureTime,
+                    serverReceivedAt: installationEvidenceTable.serverReceivedAt,
+                    capturedBy: installationEvidenceTable.capturedBy,
+                    capturedByName: sql<string | null>`(SELECT full_name FROM users WHERE id = ${installationEvidenceTable.capturedBy})`,
+                    capturedByUsername: sql<string | null>`(SELECT username FROM users WHERE id = ${installationEvidenceTable.capturedBy})`,
+                    technicianNames: installationEvidenceTable.technicianNames,
+                    status: installationEvidenceTable.status,
+                    rejectionReason: installationEvidenceTable.rejectionReason,
+                    locationMismatch: installationEvidenceTable.locationMismatch,
+                    createdAt: installationEvidenceTable.createdAt,
+                })
+                .from(installationEvidenceTable)
+                .where(eq(installationEvidenceTable.allocationId, alloc.id))
+                .orderBy(desc(installationEvidenceTable.createdAt));
+
+            const verifications = await db
+                .select({
+                    id: materialVerificationsTable.id,
+                    uuid: materialVerificationsTable.uuid,
+                    trackingId: materialVerificationsTable.trackingId,
+                    evidenceId: materialVerificationsTable.evidenceId,
+                    verifiedBy: materialVerificationsTable.verifiedBy,
+                    verifiedByName: sql<string | null>`(SELECT full_name FROM users WHERE id = ${materialVerificationsTable.verifiedBy})`,
+                    verifiedByUsername: sql<string | null>`(SELECT username FROM users WHERE id = ${materialVerificationsTable.verifiedBy})`,
+                    verifiedAt: materialVerificationsTable.verifiedAt,
+                    status: materialVerificationsTable.status,
+                    notes: materialVerificationsTable.notes,
+                })
+                .from(materialVerificationsTable)
+                .where(eq(materialVerificationsTable.trackingId, tracking.id))
+                .orderBy(desc(materialVerificationsTable.verifiedAt));
+
+            return { ...alloc, evidence, verifications };
+        }));
+
+        // Fallbacks for installer and verifier from evidence / verifications
+        const allEvidences = allocationsWithEvidence.flatMap((a) => a.evidence || []);
+        const techName = allEvidences.map((e) => e.technicianNames).find(Boolean) ||
+            allEvidences.map((e) => e.capturedByName || e.capturedByUsername).find(Boolean);
+        if (techName) {
+            tracking.technicianNames = techName;
+            if (!tracking.installedByName) {
+                tracking.installedByName = techName;
+            }
+        }
+        const instTime = allEvidences.map((e) => e.clientCaptureTime || e.createdAt).find(Boolean);
+        if (instTime && !tracking.installedAt) {
+            tracking.installedAt = instTime;
+        }
+
+        const allVerifications = allocationsWithEvidence.flatMap((a) => a.verifications || []);
+        if (allVerifications.length > 0) {
+            const lastVer = allVerifications[0];
+            if (!tracking.verifiedByName) {
+                tracking.verifiedByName = lastVer.verifiedByName;
+                tracking.verifiedByUsername = lastVer.verifiedByUsername;
+            }
+            if (!tracking.verifiedAt) {
+                tracking.verifiedAt = lastVer.verifiedAt;
+            }
+            tracking.verificationNotes = lastVer.notes;
+        }
+
+        // Get events timeline with user actor info
+        const events = await db
+            .select({
+                id: materialTrackingEventsTable.id,
+                trackingId: materialTrackingEventsTable.trackingId,
+                eventType: materialTrackingEventsTable.eventType,
+                userId: materialTrackingEventsTable.userId,
+                userName: usersTable.fullName,
+                username: usersTable.username,
+                eventTime: materialTrackingEventsTable.eventTime,
+                metadata: materialTrackingEventsTable.metadata,
+            })
+            .from(materialTrackingEventsTable)
+            .leftJoin(usersTable, eq(materialTrackingEventsTable.userId, usersTable.id))
+            .where(eq(materialTrackingEventsTable.trackingId, tracking.id))
+            .orderBy(materialTrackingEventsTable.eventTime);
+
+        // Compute installed quantity
+        const installedQuantity = allocations.reduce((sum, a) => sum + (Number(a.quantity) || 0), 0);
+        const totalQuantity = Number(txItem?.quantity ?? 0);
+
+        res.json({
+            tracking,
+            item: txItem,
+            transactionItem: txItem,
+            branch,
+            allocations: allocationsWithEvidence,
+            events,
+            summary: {
+                totalQuantity,
+                installedQuantity,
+                remainingQuantity: Math.max(0, totalQuantity - installedQuantity),
+                isPartial: installedQuantity > 0 && installedQuantity < totalQuantity,
+            },
+        });
+    } catch (err: any) {
+        console.error("Error fetching tracking detail:", err);
+        res.status(500).json({ error: err.message || "Gagal memuat detail pelacakan" });
     }
-
-    // Get branch
-    const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, tracking.branchId));
-
-    // Get allocations
-    const allocations = await db.select().from(installationAllocationsTable)
-        .where(eq(installationAllocationsTable.trackingId, tracking.id));
-
-    // Get evidence for each allocation
-    const allocationsWithEvidence = await Promise.all(allocations.map(async (alloc) => {
-        const evidence = await db.select().from(installationEvidenceTable)
-            .where(eq(installationEvidenceTable.allocationId, alloc.id))
-            .orderBy(desc(installationEvidenceTable.createdAt));
-
-        const verifications = await db.select().from(materialVerificationsTable)
-            .where(eq(materialVerificationsTable.trackingId, tracking.id));
-
-        return { ...alloc, evidence, verifications };
-    }));
-
-    // Get events timeline with user actor info
-    const events = await db
-        .select({
-            id: materialTrackingEventsTable.id,
-            trackingId: materialTrackingEventsTable.trackingId,
-            eventType: materialTrackingEventsTable.eventType,
-            userId: materialTrackingEventsTable.userId,
-            userName: usersTable.fullName,
-            username: usersTable.username,
-            eventTime: materialTrackingEventsTable.eventTime,
-            metadata: materialTrackingEventsTable.metadata,
-        })
-        .from(materialTrackingEventsTable)
-        .leftJoin(usersTable, eq(materialTrackingEventsTable.userId, usersTable.id))
-        .where(eq(materialTrackingEventsTable.trackingId, tracking.id))
-        .orderBy(materialTrackingEventsTable.eventTime);
-
-    // Compute installed quantity
-    const installedQuantity = allocations.reduce((sum, a) => sum + a.quantity, 0);
-    const totalQuantity = txItem?.quantity ?? 0;
-
-    res.json({
-        tracking,
-        item: txItem,
-        transactionItem: txItem,
-        branch,
-        allocations: allocationsWithEvidence,
-        events,
-        summary: {
-            totalQuantity,
-            installedQuantity,
-            remainingQuantity: totalQuantity - installedQuantity,
-            isPartial: installedQuantity > 0 && installedQuantity < totalQuantity,
-        },
-    });
 });
 
 // ─── GET TRACKING EVENTS (Audit/Timeline) ───

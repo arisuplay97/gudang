@@ -360,7 +360,7 @@ export default function CabangTrackingPage() {
   });
 
   // Fetch Detail Data for active modal
-  const { data: detailData, isLoading: isDetailLoading } = useQuery({
+  const { data: detailData, isLoading: isDetailLoading, refetch: refetchDetail } = useQuery({
     queryKey: ["tracking-detail", selectedTrackingUuid],
     queryFn: () => apiFetch<any>(`/api/tracking/${selectedTrackingUuid}`),
     enabled: !!selectedTrackingUuid,
@@ -371,6 +371,11 @@ export default function CabangTrackingPage() {
     if (Array.isArray(trackingResponse)) return trackingResponse as any;
     return [];
   }, [trackingResponse]);
+
+  const selectedTrackingItem = useMemo(() => {
+    if (!selectedTrackingUuid) return null;
+    return rawList.find((t) => t.uuid === selectedTrackingUuid || String(t.id) === String(selectedTrackingUuid)) || null;
+  }, [selectedTrackingUuid, rawList]);
 
   // KPI Calculations
   const kpis = useMemo(() => {
@@ -645,7 +650,7 @@ export default function CabangTrackingPage() {
           { label: "Menunggu Terima", count: kpis.waitingReceive, filterVal: "MENUNGGU_DITERIMA", icon: Clock },
           { label: "Alokasi / Pasang", count: kpis.installed, filterVal: "MENUNGGU_PEMASANGAN", icon: Package },
           { label: "Verifikasi SPI", count: kpis.waitingVerification, filterVal: "MENUNGGU_VERIFIKASI", icon: ShieldCheck },
-          { label: "SLA Overdue", count: kpis.overdue, filterVal: "OVERDUE", icon: ShieldAlert },
+          { label: "Melewati Batas SLA", count: kpis.overdue, filterVal: "OVERDUE", icon: ShieldAlert },
         ].map((card) => {
           const isActive =
             card.filterVal === "all"
@@ -1149,174 +1154,352 @@ export default function CabangTrackingPage() {
 
                 {/* Modal Body with Scroll */}
                 <div className="p-5 overflow-y-auto space-y-4 flex-1">
-                  {isDetailLoading ? (
-                    <div className="py-12 text-center space-y-3">
-                      <Skeleton className="h-20 w-full rounded-xl" />
-                      <Skeleton className="h-36 w-full rounded-xl" />
-                    </div>
-                  ) : detailData ? (
-                    <>
-                      {/* Material Overview Card */}
-                      <div className="p-4 rounded-xl bg-muted/30 border border-border/80 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="font-semibold text-base text-foreground">
-                              {detailData.transactionItem?.itemName ?? detailData.item?.itemName ?? "Material"}
-                            </h3>
-                            <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                              Kode: {detailData.transactionItem?.itemCode ?? detailData.item?.itemCode ?? "—"}
-                            </p>
-                          </div>
-                          {getStatusBadge(detailData.tracking?.status || "")}
-                        </div>
+                  {(() => {
+                    const modalItem = detailData?.transactionItem || detailData?.item || selectedTrackingItem;
+                    const modalTracking = detailData?.tracking || selectedTrackingItem;
+                    const modalBranch = detailData?.branch || (selectedTrackingItem?.branchName ? { name: selectedTrackingItem.branchName } : null);
+                    const modalAllocations = detailData?.allocations || [];
+                    const modalEvents = detailData?.events || [];
+                    const modalSummary = detailData?.summary || {
+                      totalQuantity: selectedTrackingItem?.totalQuantity || selectedTrackingItem?.quantity || 0,
+                      installedQuantity: selectedTrackingItem?.installedQuantity || 0,
+                      remainingQuantity: selectedTrackingItem?.remainingQuantity || 0,
+                      isPartial: selectedTrackingItem?.isPartial || false,
+                    };
 
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t text-xs">
-                          <div>
-                            <span className="text-[11px] text-muted-foreground block">Ref:</span>
-                            <strong className="font-mono text-foreground text-xs">
-                              {detailData.transactionItem?.referenceNo ?? detailData.item?.referenceNo ?? "—"}
-                            </strong>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-muted-foreground block">Total Keluar:</span>
-                            <strong className="text-foreground text-xs">
-                              {detailData.transactionItem?.quantity ?? detailData.summary?.totalQuantity ?? "—"} unit
-                            </strong>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-muted-foreground block">Gudang Asal:</span>
-                            <strong className="text-foreground text-xs">
-                              {detailData.transactionItem?.warehouseName ?? "Gudang Pusat"}
-                            </strong>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-muted-foreground block">Cabang Tujuan:</span>
-                            <strong className="text-foreground text-xs">
-                              {detailData.branch?.name ?? "Cabang"}
-                            </strong>
-                          </div>
+                    if (isDetailLoading && !modalItem) {
+                      return (
+                        <div className="py-12 text-center space-y-3">
+                          <Skeleton className="h-20 w-full rounded-xl" />
+                          <Skeleton className="h-36 w-full rounded-xl" />
                         </div>
+                      );
+                    }
 
-                        {/* Status Penerimaan di Cabang */}
-                        {(detailData.tracking?.receivedByName || detailData.tracking?.receivedAt) && (
-                          <div className="pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-xs bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2 rounded-lg border border-emerald-200/50 dark:border-emerald-800/40">
-                            <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-medium">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span>
-                                Diambil & Diterima oleh: <strong className="text-foreground">{detailData.tracking?.receivedByName || detailData.tracking?.receivedByUsername || "Petugas Cabang"}</strong> ({detailData.branch?.name ?? "Cabang"})
-                              </span>
+                    if (!modalItem && !isDetailLoading) {
+                      return (
+                        <div className="py-12 text-center space-y-3">
+                          <p className="text-sm font-medium text-foreground">Data pelacakan tidak dapat dimuat</p>
+                          <p className="text-xs text-muted-foreground">Silakan periksa koneksi atau coba muat ulang.</p>
+                          <Button size="sm" variant="outline" onClick={() => refetchDetail()}>
+                            Muat Ulang
+                          </Button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <>
+                        {/* Material Overview Card */}
+                        <div className="p-4 rounded-xl bg-muted/30 border border-border/80 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-semibold text-base text-foreground">
+                                {modalItem?.itemName || "Material"}
+                              </h3>
+                              <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                                Kode: {modalItem?.itemCode || "—"}
+                              </p>
                             </div>
-                            {detailData.tracking?.receivedAt && (
-                              <span className="text-[11px] text-muted-foreground font-mono">
-                                {formatDate(detailData.tracking.receivedAt)}
-                              </span>
-                            )}
+                            {getStatusBadge(modalTracking?.status || "")}
                           </div>
-                        )}
-                      </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t text-xs">
+                            <div>
+                              <span className="text-[11px] text-muted-foreground block">Ref:</span>
+                              <strong className="font-mono text-foreground text-xs">
+                                {modalItem?.referenceNo || "—"}
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-[11px] text-muted-foreground block">Total Keluar:</span>
+                              <strong className="text-foreground text-xs">
+                                {modalItem?.quantity ?? modalSummary?.totalQuantity ?? "—"} unit
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-[11px] text-muted-foreground block">Gudang Asal:</span>
+                              <strong className="text-foreground text-xs">
+                                {modalItem?.warehouseName ?? "Gudang Pusat"}
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-[11px] text-muted-foreground block">Cabang Tujuan:</span>
+                              <strong className="text-foreground text-xs">
+                                {modalBranch?.name || selectedTrackingItem?.branchName || "Cabang"}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {/* Status Penerimaan di Cabang */}
+                          {(modalTracking?.receivedByName || modalTracking?.receivedAt) && (
+                            <div className="pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-xs bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2 rounded-lg border border-emerald-200/50 dark:border-emerald-800/40">
+                              <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-medium">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>
+                                  Diambil &amp; Diterima oleh: <strong className="text-foreground">{modalTracking.receivedByName || modalTracking.receivedByUsername || "Petugas Cabang"}</strong> ({modalBranch?.name || selectedTrackingItem?.branchName || "Cabang"})
+                                </span>
+                              </div>
+                              {modalTracking.receivedAt && (
+                                <span className="text-[11px] text-muted-foreground font-mono">
+                                  {formatDate(modalTracking.receivedAt)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
 
                       {/* Modal Internal Tabs */}
                       <Tabs value={detailModalTab} onValueChange={(v) => setDetailModalTab(v as any)}>
                         <TabsList className="grid grid-cols-3 w-full bg-muted/60 p-1 text-xs">
                           <TabsTrigger value="timeline">Alur Lifecycle</TabsTrigger>
                           <TabsTrigger value="allocations">
-                            Titik Alokasi ({detailData.allocations?.length || 0})
+                            Titik Alokasi ({modalAllocations.length})
                           </TabsTrigger>
-                          <TabsTrigger value="events">Audit Log ({detailData.events?.length || 0})</TabsTrigger>
+                          <TabsTrigger value="events">Audit Log ({modalEvents.length})</TabsTrigger>
                         </TabsList>
 
                         {/* ─── TAB 1: ANIMATED TIMELINE ─── */}
                         <TabsContent value="timeline" className="pt-3 space-y-4">
-                          <div className="relative pl-7 space-y-5 before:absolute before:left-3 before:top-3 before:bottom-3 before:w-0.5 before:bg-border">
-                            {STEPS.map((step, idx) => {
-                              const currentIdx = getStepIndex(detailData.tracking?.status || "");
-                              const isDone = idx < currentIdx;
-                              const isCurrent = idx === currentIdx;
+                          {(() => {
+                            const allEvidences = modalAllocations.flatMap((a: any) => a.evidence || []);
+                            const allVerifications = modalAllocations.flatMap((a: any) => a.verifications || []);
 
-                              return (
-                                <motion.div
-                                  key={step.key}
-                                  initial={{ opacity: 0, x: -8 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: idx * 0.06 }}
-                                  className="relative"
-                                >
-                                  {/* Step Circle with Gentle Pulse for Current Step */}
-                                  <div
-                                    className={`absolute -left-7 top-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                                      isDone
-                                        ? "bg-emerald-500 border-emerald-500 text-white"
-                                        : isCurrent
-                                        ? "bg-foreground border-foreground text-background ring-3 ring-foreground/20"
-                                        : "bg-background border-muted-foreground/30 text-muted-foreground/30"
-                                    }`}
-                                  >
-                                    {isDone ? (
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                    ) : isCurrent ? (
-                                      <span className="w-2 h-2 rounded-full bg-background" />
-                                    ) : (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
-                                    )}
-                                  </div>
+                            // Outbound info
+                            const outboundTime =
+                              modalItem?.releasedAt ||
+                              modalItem?.transactionDate ||
+                              modalTracking?.slaStartAt ||
+                              modalTracking?.createdAt;
+                            const outboundWarehouse = modalItem?.warehouseName || "Gudang Pusat";
+                            const outboundPerson = modalItem?.createdByName || modalItem?.createdByUsername;
+                            const outboundRef = modalItem?.referenceNo || selectedTrackingItem?.referenceNo;
 
-                                  {/* Step Details */}
-                                  <div className="p-3.5 rounded-xl border bg-card/60 space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                      <p className={`text-sm font-medium ${isCurrent ? "text-foreground font-semibold" : isDone ? "text-foreground" : "text-muted-foreground"}`}>
-                                        {step.label}
-                                      </p>
-                                      {isDone && (
-                                        <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                                          <CheckCircle2 className="w-3 h-3" /> Selesai
-                                        </span>
-                                      )}
-                                      {isCurrent && <Badge variant="secondary" className="text-[10px]">Tahap Berjalan</Badge>}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">{step.desc}</p>
+                            // Installer info
+                            const installerName =
+                              modalTracking?.technicianNames ||
+                              modalTracking?.installedByName ||
+                              modalTracking?.installedByUsername ||
+                              allEvidences.map((e: any) => e.technicianNames).find(Boolean) ||
+                              allEvidences.map((e: any) => e.capturedByName || e.capturedByUsername).find(Boolean) ||
+                              modalEvents.find((e: any) => e.eventType === "PEMASANGAN")?.userName ||
+                              "";
+                            const installDate =
+                              modalTracking?.installedAt ||
+                              allEvidences.map((e: any) => e.clientCaptureTime || e.createdAt).find(Boolean) ||
+                              modalEvents.find((e: any) => e.eventType === "PEMASANGAN")?.eventTime ||
+                              null;
 
-                                    {/* Khusus Step Diterima Cabang: Tampilkan Petugas Penerima */}
-                                    {step.key === "DITERIMA_CABANG" && (detailData.tracking?.receivedAt || isDone || detailData.tracking?.status === "DITERIMA_CABANG") && (
-                                      <div className="mt-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 text-xs space-y-1">
-                                        <div className="flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200 font-medium">
-                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                          <span>
-                                            Diterima oleh: <strong className="text-foreground">{detailData.tracking?.receivedByName || detailData.tracking?.receivedByUsername || "Petugas Cabang"}</strong> ({detailData.branch?.name ?? "Cabang"})
-                                          </span>
-                                        </div>
-                                        {detailData.tracking?.receivedAt && (
-                                          <p className="text-[11px] text-muted-foreground pl-5 font-mono">
-                                            Waktu Terima: {formatDate(detailData.tracking.receivedAt)}
-                                          </p>
+                            // Verifier info
+                            const verifierName =
+                              modalTracking?.verifiedByName ||
+                              modalTracking?.verifiedByUsername ||
+                              allVerifications.map((v: any) => v.verifiedByName || v.verifiedByUsername).find(Boolean) ||
+                              modalEvents.find((e: any) => e.eventType === "VERIFIKASI")?.userName ||
+                              "";
+                            const verifyDate =
+                              modalTracking?.verifiedAt ||
+                              allVerifications.map((v: any) => v.verifiedAt).find(Boolean) ||
+                              modalEvents.find((e: any) => e.eventType === "VERIFIKASI")?.eventTime ||
+                              null;
+                            const verifyNotes =
+                              modalTracking?.verificationNotes ||
+                              allVerifications.map((v: any) => v.notes).find(Boolean) ||
+                              "";
+
+                            return (
+                              <div className="relative pl-7 space-y-5 before:absolute before:left-3 before:top-3 before:bottom-3 before:w-0.5 before:bg-border">
+                                {STEPS.map((step, idx) => {
+                                  const currentIdx = getStepIndex(modalTracking?.status || "");
+                                  const isDone = idx < currentIdx;
+                                  const isCurrent = idx === currentIdx;
+
+                                  return (
+                                    <motion.div
+                                      key={step.key}
+                                      initial={{ opacity: 0, x: -8 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      transition={{ delay: idx * 0.06 }}
+                                      className="relative"
+                                    >
+                                      {/* Step Circle with Gentle Pulse for Current Step */}
+                                      <div
+                                        className={`absolute -left-7 top-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                                          isDone
+                                            ? "bg-emerald-500 border-emerald-500 text-white"
+                                            : isCurrent
+                                            ? "bg-foreground border-foreground text-background ring-3 ring-foreground/20"
+                                            : "bg-background border-muted-foreground/30 text-muted-foreground/30"
+                                        }`}
+                                      >
+                                        {isDone ? (
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                        ) : isCurrent ? (
+                                          <span className="w-2 h-2 rounded-full bg-background" />
+                                        ) : (
+                                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
                                         )}
                                       </div>
-                                    )}
 
-                                    {/* Jika belum diterima */}
-                                    {step.key === "DITERIMA_CABANG" && !isDone && detailData.tracking?.status === "MENUNGGU_DITERIMA" && (
-                                      <div className="mt-2 p-2 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                                        <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                                        <span>Menunggu verifikasi fisik & konfirmasi penerimaan oleh petugas {detailData.branch?.name ?? "Cabang"}</span>
+                                      {/* Step Details */}
+                                      <div className="p-3.5 rounded-xl border bg-card/60 space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                          <p className={`text-sm font-medium ${isCurrent ? "text-foreground font-semibold" : isDone ? "text-foreground" : "text-muted-foreground"}`}>
+                                            {step.label}
+                                          </p>
+                                          {isDone && (
+                                            <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                                              <CheckCircle2 className="w-3 h-3" /> Selesai
+                                            </span>
+                                          )}
+                                          {isCurrent && <Badge variant="secondary" className="text-[10px]">Tahap Berjalan</Badge>}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">{step.desc}</p>
+
+                                        {/* ── 1. Detail Keluar Gudang (Waktu keluar & asal gudang) ── */}
+                                        {step.key === "BARANG_KELUAR" && (
+                                          <div className="mt-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 text-xs space-y-1">
+                                            <div className="flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200 font-medium">
+                                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                              <span>
+                                                Dikeluarkan dari: <strong className="text-foreground">{outboundWarehouse}</strong>
+                                                {outboundPerson ? (
+                                                  <> oleh <strong className="text-foreground">{outboundPerson}</strong></>
+                                                ) : null}
+                                              </span>
+                                            </div>
+                                            {outboundTime && (
+                                              <p className="text-[11px] text-muted-foreground pl-5 font-mono">
+                                                Waktu Keluar: {formatDate(outboundTime)}
+                                              </p>
+                                            )}
+                                            {outboundRef && (
+                                              <p className="text-[11px] text-muted-foreground pl-5 font-mono">
+                                                Surat Jalan / BPB: {outboundRef}
+                                              </p>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {/* ── 2. Detail Diterima Cabang (Petugas penerima cabang) ── */}
+                                        {step.key === "DITERIMA_CABANG" && (modalTracking?.receivedAt || isDone || modalTracking?.status === "DITERIMA_CABANG") && (
+                                          <div className="mt-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 text-xs space-y-1">
+                                            <div className="flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200 font-medium">
+                                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                              <span>
+                                                Diterima oleh: <strong className="text-foreground">{modalTracking?.receivedByName || modalTracking?.receivedByUsername || "Petugas Cabang"}</strong> ({modalBranch?.name ?? "Cabang"})
+                                              </span>
+                                            </div>
+                                            {modalTracking?.receivedAt && (
+                                              <p className="text-[11px] text-muted-foreground pl-5 font-mono">
+                                                Waktu Terima: {formatDate(modalTracking.receivedAt)}
+                                              </p>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {/* Jika belum diterima */}
+                                        {step.key === "DITERIMA_CABANG" && !isDone && modalTracking?.status === "MENUNGGU_DITERIMA" && (
+                                          <div className="mt-2 p-2 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                            <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                            <span>Menunggu verifikasi fisik &amp; konfirmasi penerimaan oleh petugas {modalBranch?.name ?? "Cabang"}</span>
+                                          </div>
+                                        )}
+
+                                        {/* ── 3. Detail Alokasi Titik Fisik ── */}
+                                        {step.key === "MENUNGGU_PEMASANGAN" && modalAllocations.length > 0 && (
+                                          <div className="mt-2 p-2 rounded-lg bg-muted/40 border border-border/50 text-xs flex items-center justify-between text-muted-foreground">
+                                            <span>Kuantitas dialokasikan ke <strong>{modalAllocations.length} titik fisik</strong></span>
+                                            <span className="font-mono text-[11px] font-medium text-foreground">
+                                              {modalSummary?.installedQuantity || 0} / {modalSummary?.totalQuantity || 0} unit
+                                            </span>
+                                          </div>
+                                        )}
+
+                                        {/* ── 4. Detail Pemasangan Selesai (Dipasang oleh siapa) ── */}
+                                        {step.key === "MENUNGGU_VERIFIKASI" && (installerName || installDate || isDone || modalTracking?.status === "MENUNGGU_VERIFIKASI" || modalTracking?.status === "TERVERIFIKASI") && (
+                                          <div className="mt-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 text-xs space-y-1">
+                                            <div className="flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200 font-medium">
+                                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                              <span>
+                                                Dipasang oleh: <strong className="text-foreground">{installerName || "Petugas Teknisi Cabang"}</strong> ({modalBranch?.name ?? "Cabang"})
+                                              </span>
+                                            </div>
+                                            {installDate && (
+                                              <p className="text-[11px] text-muted-foreground pl-5 font-mono">
+                                                Waktu Selesai: {formatDate(installDate)}
+                                              </p>
+                                            )}
+                                            {allEvidences.length > 0 && allEvidences[0]?.latitude && (
+                                              <p className="text-[11px] text-muted-foreground pl-5 font-mono text-[10px]">
+                                                Geotag GPS: {Number(allEvidences[0].latitude).toFixed(6)}, {Number(allEvidences[0].longitude).toFixed(6)}
+                                              </p>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {step.key === "MENUNGGU_VERIFIKASI" && !installerName && !installDate && !isDone && modalTracking?.status !== "MENUNGGU_VERIFIKASI" && modalTracking?.status !== "TERVERIFIKASI" && (
+                                          <div className="mt-2 p-2 rounded-lg bg-muted/40 border border-border/50 text-[11px] text-muted-foreground flex items-center gap-1.5">
+                                            <Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                                            <span>Menunggu penyelesaian pemasangan dan upload bukti foto watermark oleh teknisi</span>
+                                          </div>
+                                        )}
+
+                                        {/* ── 5. Detail Terverifikasi (Siapa verifikatornya) ── */}
+                                        {step.key === "TERVERIFIKASI" && (modalTracking?.status === "TERVERIFIKASI" || verifierName || verifyDate) && (
+                                          <div className="mt-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 text-xs space-y-1">
+                                            <div className="flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200 font-medium">
+                                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                              <span>
+                                                Diverifikasi oleh: <strong className="text-foreground">{verifierName || "Auditor SPI"}</strong> (SPI Pusat)
+                                              </span>
+                                            </div>
+                                            {verifyDate && (
+                                              <p className="text-[11px] text-muted-foreground pl-5 font-mono">
+                                                Waktu Verifikasi: {formatDate(verifyDate)}
+                                              </p>
+                                            )}
+                                            {verifyNotes && (
+                                              <p className="text-[11px] text-muted-foreground pl-5 italic">
+                                                Catatan Audit: &ldquo;{verifyNotes}&rdquo;
+                                              </p>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {step.key === "TERVERIFIKASI" && modalTracking?.status === "MENUNGGU_VERIFIKASI" && !verifierName && (
+                                          <div className="mt-2 p-2 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                            <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                                            <span>Bukti foto &amp; geotagging GPS telah diunggah, menunggu audit verifikasi oleh tim SPI</span>
+                                          </div>
+                                        )}
+
+                                        {step.key === "TERVERIFIKASI" && modalTracking?.status !== "TERVERIFIKASI" && modalTracking?.status !== "MENUNGGU_VERIFIKASI" && (
+                                          <div className="mt-2 p-2 rounded-lg bg-muted/40 border border-border/50 text-[11px] text-muted-foreground flex items-center gap-1.5">
+                                            <Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                                            <span>Tahap akhir audit kesesuaian fisik dan radius GIS setelah material terpasang</span>
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
-                                  </div>
-                                </motion.div>
-                              );
-                            })}
-                          </div>
+                                    </motion.div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                         </TabsContent>
 
                         {/* ─── TAB 2: TITIK ALOKASI & EVIDENCE ─── */}
                         <TabsContent value="allocations" className="pt-3 space-y-3">
-                          {!detailData.allocations || detailData.allocations.length === 0 ? (
+                          {modalAllocations.length === 0 ? (
                             <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-lg">
                               Belum ada alokasi titik fisik yang dibuat untuk material ini.
                             </div>
                           ) : (
-                            detailData.allocations.map((alloc: any, i: number) => {
+                            modalAllocations.map((alloc: any, i: number) => {
                               const evidence = alloc.evidence?.[0];
                               const verification = alloc.verifications?.[0];
-                              const isVerified = alloc.status === "VERIFIED" || detailData.tracking?.status === "TERVERIFIKASI";
+                              const isVerified = alloc.status === "VERIFIED" || modalTracking?.status === "TERVERIFIKASI";
                               const photoBefore = evidence?.photoBeforeUrl || evidence?.photoUrl;
                               const photoAfter = evidence?.photoAfterUrl || evidence?.photoUrl;
 
@@ -1480,16 +1663,16 @@ export default function CabangTrackingPage() {
 
                         {/* ─── TAB 3: AUDIT EVENTS ─── */}
                         <TabsContent value="events" className="pt-3 space-y-1.5">
-                          {!detailData.events || detailData.events.length === 0 ? (
+                          {modalEvents.length === 0 ? (
                             <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-lg">
                               Belum ada catatan log kejadian.
                             </div>
                           ) : (
                             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                              {detailData.events.map((evt: any, i: number) => {
+                              {modalEvents.map((evt: any, i: number) => {
                                 let eventTitle = evt.eventType;
                                 if (evt.eventType === "WAREHOUSE_RELEASED") eventTitle = "Barang Keluar (Gudang Pusat)";
-                                else if (evt.eventType === "BRANCH_RECEIVED") eventTitle = `Diterima di ${detailData.branch?.name ?? "Cabang"}`;
+                                else if (evt.eventType === "BRANCH_RECEIVED") eventTitle = `Diterima di ${modalBranch?.name ?? "Cabang"}`;
                                 else if (evt.eventType === "ALLOCATION_CREATED") eventTitle = "Alokasi Titik Pemasangan";
                                 else if (evt.eventType === "EVIDENCE_SUBMITTED") eventTitle = "Bukti Pemasangan Dikirim";
                                 else if (evt.eventType === "VERIFIED") eventTitle = "Audit SPI Disetujui (Terverifikasi)";
@@ -1523,8 +1706,9 @@ export default function CabangTrackingPage() {
                           )}
                         </TabsContent>
                       </Tabs>
-                    </>
-                  ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Modal Footer */}

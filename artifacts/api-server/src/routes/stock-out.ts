@@ -251,13 +251,146 @@ router.get("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(locationsTable, eq(stockOutItemsTable.locationId, locationsTable.id))
     .where(eq(stockOutItemsTable.stockOutId, id));
 
-  res.json({
+  const formattedItems = items.map(i => ({
+    ...i,
+    unitPrice: parseFloat(String(i.unitPrice)),
+    itemName: i.itemName,
+    quantity: Number(i.quantity),
+  }));
+
+  const formattedHeader = {
     ...header,
+    referenceNumber: header.referenceNo,
+    destinationBranchName: header.destinationBranchName || header.departmentName,
     transactionDate: header.transactionDate instanceof Date ? header.transactionDate.toISOString() : new Date(header.transactionDate).toISOString(),
     createdAt: header.createdAt instanceof Date ? header.createdAt.toISOString() : new Date(header.createdAt).toISOString(),
     releasedAt: header.releasedAt instanceof Date ? header.releasedAt.toISOString() : header.releasedAt ? new Date(header.releasedAt).toISOString() : null,
-    items: items.map(i => ({ ...i, unitPrice: parseFloat(String(i.unitPrice)) })),
+  };
+
+  res.json({
+    ...formattedHeader,
+    stockOut: formattedHeader,
+    details: formattedItems,
+    items: formattedItems,
   });
+});
+
+// ─── UPDATE / EDIT STOCK OUT ───
+router.patch("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID tidak valid" }); return; }
+
+  const [header] = await db.select().from(stockOutTable).where(eq(stockOutTable.id, id));
+  if (!header) { res.status(404).json({ error: "Transaksi tidak ditemukan" }); return; }
+
+  const { destinationBranchId, branchId, departmentId, transactionDate, notes, referenceNo, referenceNumber } = req.body;
+  const updateData: any = {};
+  const bId = destinationBranchId ?? branchId;
+  if (bId !== undefined) {
+    const parsedBId = bId ? parseInt(bId) : null;
+    updateData.destinationBranchId = parsedBId;
+    if (parsedBId) {
+      const [branch] = await db.select().from(branchesTable).where(eq(branchesTable.id, parsedBId));
+      if (branch) {
+        const [matchedDept] = await db.select().from(departmentsTable).where(ilike(departmentsTable.name, `%${branch.name}%`)).limit(1);
+        if (matchedDept) updateData.departmentId = matchedDept.id;
+      }
+    }
+  } else if (departmentId !== undefined) {
+    updateData.departmentId = departmentId ? parseInt(departmentId) : null;
+  }
+
+  if (transactionDate) {
+    updateData.transactionDate = new Date(transactionDate);
+  }
+  if (notes !== undefined) {
+    updateData.notes = notes;
+  }
+  const ref = referenceNo || referenceNumber;
+  if (ref) {
+    updateData.referenceNo = ref;
+  }
+
+  await db.transaction(async (tx) => {
+    if (Object.keys(updateData).length > 0) {
+      await tx.update(stockOutTable).set(updateData).where(eq(stockOutTable.id, id));
+    }
+
+    // Update branch on tracking items if changed
+    if (updateData.destinationBranchId) {
+      const txItems = await tx.select({ id: stockOutItemsTable.id }).from(stockOutItemsTable).where(eq(stockOutItemsTable.stockOutId, id));
+      for (const item of txItems) {
+        await tx.update(materialTrackingTable)
+          .set({ branchId: updateData.destinationBranchId })
+          .where(eq(materialTrackingTable.transactionItemId, item.id));
+      }
+    }
+  });
+
+  await db.insert(auditLogsTable).values({
+    entityType: "stock_out",
+    entityId: id,
+    action: "update",
+    description: `Barang keluar ${header.referenceNo} diperbarui`,
+    userId: req.session.userId,
+  });
+
+  res.json({ message: "Transaksi berhasil diperbarui" });
+});
+
+// ─── DELETE STOCK OUT ───
+router.delete("/stock-out/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "ID tidak valid" }); return; }
+
+  const [header] = await db.select().from(stockOutTable).where(eq(stockOutTable.id, id));
+  if (!header) { res.status(404).json({ error: "Transaksi tidak ditemukan" }); return; }
+
+  // Check if any tracked items are already installed or verified
+  const trackingRecords = await db
+    .select({
+      id: materialTrackingTable.id,
+      status: materialTrackingTable.status,
+    })
+    .from(materialTrackingTable)
+    .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+    .where(eq(stockOutItemsTable.stockOutId, id));
+
+  const hasAdvancedTracking = trackingRecords.some(t =>
+    ["TERPASANG", "MENUNGGU_VERIFIKASI", "TERVERIFIKASI"].includes(t.status)
+  );
+
+  if (hasAdvancedTracking) {
+    res.status(400).json({
+      error: "Transaksi tidak dapat dihapus karena material sudah dalam proses pemasangan atau terverifikasi di lapangan."
+    });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    // 1. Delete tracking events
+    for (const t of trackingRecords) {
+      await tx.delete(materialTrackingEventsTable).where(eq(materialTrackingEventsTable.trackingId, t.id));
+    }
+    // 2. Delete tracking records
+    for (const t of trackingRecords) {
+      await tx.delete(materialTrackingTable).where(eq(materialTrackingTable.id, t.id));
+    }
+    // 3. Delete stock out items
+    await tx.delete(stockOutItemsTable).where(eq(stockOutItemsTable.stockOutId, id));
+    // 4. Delete stock out header
+    await tx.delete(stockOutTable).where(eq(stockOutTable.id, id));
+  });
+
+  await db.insert(auditLogsTable).values({
+    entityType: "stock_out",
+    entityId: id,
+    action: "delete",
+    description: `Barang keluar ${header.referenceNo} dihapus`,
+    userId: req.session.userId,
+  });
+
+  res.json({ message: "Transaksi berhasil dihapus" });
 });
 
 // ─── FINALIZE (decreases stock, generates QR, creates tracking for TRACKED items) ───

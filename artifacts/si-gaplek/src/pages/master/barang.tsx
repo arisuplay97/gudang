@@ -77,10 +77,6 @@ function getStockStatus(item: Item) {
   return { label: "Aktif", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400", dot: "bg-emerald-500" };
 }
 
-function getTrackingBadge(type: string) {
-  if (type === "TRACKED") return { label: "Tracked", icon: Radio, color: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-400" };
-  return { label: "Non-Tracked", icon: Package, color: "bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
-}
 
 /* ── CountUp Animation Hook ─────────────────────────────────── */
 function useCountUp(target: number, duration = 600) {
@@ -145,7 +141,6 @@ export default function BarangPage() {
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [filterCategory, setFilterCategory] = useState("");
-  const [filterTracking, setFilterTracking] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -177,7 +172,7 @@ export default function BarangPage() {
   }, [search]);
 
   /* Reset page when filters change */
-  useEffect(() => { setPage(1); }, [filterCategory, filterTracking, filterStatus]);
+  useEffect(() => { setPage(1); }, [filterCategory, filterStatus]);
 
   /* ── Queries ──────────────────────────────────────────────── */
   const queryParams = new URLSearchParams();
@@ -187,11 +182,10 @@ export default function BarangPage() {
   queryParams.set("sortOrder", sortOrder);
   if (debouncedSearch) queryParams.set("search", debouncedSearch);
   if (filterCategory) queryParams.set("categoryId", filterCategory);
-  if (filterTracking) queryParams.set("trackingType", filterTracking);
   if (filterStatus) queryParams.set("status", filterStatus);
 
   const { data: pageData, isLoading } = useQuery({
-    queryKey: ["items", page, limit, sortBy, sortOrder, debouncedSearch, filterCategory, filterTracking, filterStatus],
+    queryKey: ["items", page, limit, sortBy, sortOrder, debouncedSearch, filterCategory, filterStatus],
     queryFn: () => apiFetch<PaginatedResponse>(`/api/items?${queryParams.toString()}`),
   });
 
@@ -218,6 +212,7 @@ export default function BarangPage() {
         description: form.description || null,
         unitPrice: form.unitPrice ? parseFloat(form.unitPrice) : 0,
         status: form.status || "active",
+        trackingType: "TRACKED",
       };
       if (editing) {
         return apiFetch(`/api/items/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -317,7 +312,7 @@ export default function BarangPage() {
     printWindow.document.close();
   };
 
-  const activeFilterCount = [filterCategory, filterTracking, filterStatus].filter(Boolean).length;
+  const activeFilterCount = [filterCategory, filterStatus].filter(Boolean).length;
 
   const SortIcon = ({ col }: { col: string }) => {
     if (sortBy !== col) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 opacity-40" />;
@@ -363,44 +358,40 @@ export default function BarangPage() {
           label="Total Material"
           value={summary?.total ?? 0}
           icon={Package}
-          isActive={!filterStatus && !filterTracking && !filterCategory}
+          isActive={!filterStatus && !filterCategory}
           delay={0}
-          onClick={() => { setFilterStatus(""); setFilterCategory(""); setFilterTracking(""); }}
-        />
-        <KpiCard
-          label="Material Tracked"
-          value={summary?.tracked ?? 0}
-          icon={Radio}
-          isActive={filterTracking === "TRACKED"}
-          delay={0.04}
-          onClick={() => {
-            setFilterTracking(filterTracking === "TRACKED" ? "" : "TRACKED");
-            setFilterCategory("");
-            setFilterStatus("");
-          }}
-        />
-        <KpiCard
-          label="Non-Tracked"
-          value={summary?.nonTracked ?? 0}
-          icon={Package}
-          isActive={filterTracking === "NON_TRACKED"}
-          delay={0.08}
-          onClick={() => {
-            setFilterTracking(filterTracking === "NON_TRACKED" ? "" : "NON_TRACKED");
-            setFilterCategory("");
-            setFilterStatus("");
-          }}
+          onClick={() => { setFilterStatus(""); setFilterCategory(""); }}
         />
         <KpiCard
           label="Material Aktif"
           value={summary ? summary.total - (summary.inactive ?? 0) : 0}
           icon={CheckCircle2}
           isActive={filterStatus === "active"}
-          delay={0.12}
+          delay={0.04}
           onClick={() => {
             setFilterStatus(filterStatus === "active" ? "" : "active");
             setFilterCategory("");
-            setFilterTracking("");
+          }}
+        />
+        <KpiCard
+          label="Material Nonaktif"
+          value={summary?.inactive ?? 0}
+          icon={AlertCircle}
+          isActive={filterStatus === "inactive"}
+          delay={0.08}
+          onClick={() => {
+            setFilterStatus(filterStatus === "inactive" ? "" : "inactive");
+            setFilterCategory("");
+          }}
+        />
+        <KpiCard
+          label="Total Kategori"
+          value={categories?.length ?? 0}
+          icon={Tag}
+          isActive={!!filterCategory}
+          delay={0.12}
+          onClick={() => {
+            setFilterStatus("");
           }}
         />
       </div>
@@ -441,17 +432,6 @@ export default function BarangPage() {
             </SelectContent>
           </Select>
 
-          <Select value={filterTracking || "all"} onValueChange={v => setFilterTracking(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[140px] h-9 text-xs">
-              <SelectValue placeholder="Tracking" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua Type</SelectItem>
-              <SelectItem value="TRACKED">Tracked</SelectItem>
-              <SelectItem value="NON_TRACKED">Non-Tracked</SelectItem>
-            </SelectContent>
-          </Select>
-
           <Select value={filterStatus || "all"} onValueChange={v => setFilterStatus(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[130px] h-9 text-xs">
               <SelectValue placeholder="Status" />
@@ -466,7 +446,7 @@ export default function BarangPage() {
           {activeFilterCount > 0 && (
             <Button
               variant="ghost" size="sm" className="h-9 text-xs gap-1 text-muted-foreground"
-              onClick={() => { setFilterCategory(""); setFilterTracking(""); setFilterStatus(""); }}
+              onClick={() => { setFilterCategory(""); setFilterStatus(""); }}
             >
               <X className="w-3 h-3" /> Reset ({activeFilterCount})
             </Button>
@@ -553,7 +533,6 @@ export default function BarangPage() {
                     </TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider">Kategori</TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider">Satuan</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase tracking-wider">Tracking</TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider">Status</TableHead>
                     <TableHead className="text-right text-xs font-semibold uppercase tracking-wider pr-4">Aksi</TableHead>
                   </TableRow>
@@ -585,7 +564,7 @@ export default function BarangPage() {
                             </p>
                           </div>
                           {debouncedSearch || activeFilterCount > 0 ? (
-                            <Button variant="outline" size="sm" className="mt-1" onClick={() => { setSearch(""); setFilterCategory(""); setFilterTracking(""); setFilterStatus(""); }}>
+                            <Button variant="outline" size="sm" className="mt-1" onClick={() => { setSearch(""); setFilterCategory(""); setFilterStatus(""); }}>
                               Reset Filter
                             </Button>
                           ) : (
@@ -600,8 +579,6 @@ export default function BarangPage() {
                     <AnimatePresence mode="popLayout">
                       {items.map((item, idx) => {
                         const stockStatus = getStockStatus(item);
-                        const tracking = getTrackingBadge(item.trackingType);
-                        const TrackingIcon = tracking.icon;
                         return (
                           <motion.tr
                             key={item.id}
@@ -634,12 +611,6 @@ export default function BarangPage() {
                             </TableCell>
                             <TableCell className="text-sm">{item.categoryName ?? <span className="text-muted-foreground">-</span>}</TableCell>
                             <TableCell className="text-sm">{item.unitName ?? <span className="text-muted-foreground">-</span>}</TableCell>
-                            <TableCell>
-                              <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium", tracking.color)}>
-                                <TrackingIcon className="w-3 h-3" />
-                                {tracking.label}
-                              </span>
-                            </TableCell>
                             <TableCell>
                               <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium", stockStatus.color)}>
                                 <span className={cn("w-1.5 h-1.5 rounded-full", stockStatus.dot)} />
@@ -828,8 +799,6 @@ export default function BarangPage() {
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           {detailItem && (() => {
             const stockStatus = getStockStatus(detailItem);
-            const tracking = getTrackingBadge(detailItem.trackingType);
-            const TrackingIcon = tracking.icon;
             return (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -844,10 +813,6 @@ export default function BarangPage() {
                 <div className="space-y-5">
                   {/* Status badges */}
                   <div className="flex gap-2 flex-wrap">
-                    <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium", tracking.color)}>
-                      <TrackingIcon className="w-3.5 h-3.5" />
-                      {tracking.label}
-                    </span>
                     <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium", stockStatus.color)}>
                       <span className={cn("w-1.5 h-1.5 rounded-full", stockStatus.dot)} />
                       {stockStatus.label}

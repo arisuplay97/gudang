@@ -107,16 +107,98 @@ router.delete("/suppliers/:id", requireAuth, async (req, res): Promise<void> => 
   res.sendStatus(204);
 });
 
-// WAREHOUSES
+// 12 Unit Cabang Perumdam Tirta Ardhia Rinjani (Kabupaten Lombok Tengah)
+const DEFAULT_BRANCHES_DATA = [
+  { code: "CBG-PRY", name: "Cabang Praya", address: "Jl. Soekarno-Hatta, Praya, Kec. Praya", description: "Unit Pelayanan & Gudang Cabang Praya", lat: "-8.7063000", lon: "116.2704000" },
+  { code: "CBG-PRT", name: "Cabang Praya Tengah", address: "Jl. Raya Batunyala, Kec. Praya Tengah", description: "Unit Pelayanan & Gudang Cabang Praya Tengah", lat: "-8.7120000", lon: "116.3010000" },
+  { code: "CBG-PRB", name: "Cabang Praya Barat", address: "Jl. Raya Penujak, Kec. Praya Barat", description: "Unit Pelayanan & Gudang Cabang Praya Barat", lat: "-8.7512000", lon: "116.2084000" },
+  { code: "CBG-PBD", name: "Cabang Praya Barat Daya", address: "Jl. Raya Darek, Kec. Praya Barat Daya", description: "Unit Pelayanan & Gudang Cabang Praya Barat Daya", lat: "-8.7750000", lon: "116.1750000" },
+  { code: "CBG-PRM", name: "Cabang Praya Timur", address: "Jl. Raya Mujur, Kec. Praya Timur", description: "Unit Pelayanan & Gudang Cabang Praya Timur", lat: "-8.7200000", lon: "116.3400000" },
+  { code: "CBG-PJT", name: "Cabang Pujut", address: "Jl. Pariwisata Kuta, Sengkol, Kec. Pujut", description: "Unit Pelayanan & Gudang Cabang Pujut", lat: "-8.8475000", lon: "116.2818000" },
+  { code: "CBG-JGT", name: "Cabang Jonggat", address: "Jl. Raya Ubung, Puyung, Kec. Jonggat", description: "Unit Pelayanan & Gudang Cabang Jonggat", lat: "-8.6720000", lon: "116.2165000" },
+  { code: "CBG-KPG", name: "Cabang Kopang", address: "Jl. Raya Kopang, Kec. Kopang", description: "Unit Pelayanan & Gudang Cabang Kopang", lat: "-8.6416000", lon: "116.3262000" },
+  { code: "CBG-JNP", name: "Cabang Janapria", address: "Jl. Raya Janapria, Kec. Janapria", description: "Unit Pelayanan & Gudang Cabang Janapria", lat: "-8.6850000", lon: "116.3750000" },
+  { code: "CBG-PGA", name: "Cabang Pringgarata", address: "Jl. Raya Pringgarata, Kec. Pringgarata", description: "Unit Pelayanan & Gudang Cabang Pringgarata", lat: "-8.6015000", lon: "116.2230000" },
+  { code: "CBG-BKL", name: "Cabang Batukliang", address: "Jl. Raya Mantang, Kec. Batukliang", description: "Unit Pelayanan & Gudang Cabang Batukliang", lat: "-8.6180000", lon: "116.2870000" },
+  { code: "CBG-BKU", name: "Cabang Batukliang Utara", address: "Jl. Raya Teratak, Kec. Batukliang Utara", description: "Unit Pelayanan & Gudang Cabang Batukliang Utara", lat: "-8.5700000", lon: "116.3050000" },
+];
+
+let warehousesSynced = false;
+
+// WAREHOUSES & CABANG
 router.get("/warehouses", requireAuth, async (_req, res): Promise<void> => {
+  // Ensure the 12 branches exist in warehousesTable on demand
+  if (!warehousesSynced) {
+    try {
+      const existingWh = await db.select().from(warehousesTable);
+      const existingCodes = new Set(existingWh.map(w => (w.code || "").toUpperCase()));
+      const existingNames = new Set(existingWh.map(w => (w.name || "").toLowerCase()));
+
+      for (const b of DEFAULT_BRANCHES_DATA) {
+        if (!existingCodes.has(b.code.toUpperCase()) && !existingNames.has(b.name.toLowerCase())) {
+          await db.insert(warehousesTable).values({
+            code: b.code,
+            name: b.name,
+            address: b.address,
+            description: b.description,
+          });
+        }
+      }
+
+      // Also ensure branchesTable has the 12 branches
+      const existingBr = await db.select().from(branchesTable);
+      const existingBrNames = new Set(existingBr.map(br => (br.name || "").toLowerCase().trim()));
+
+      for (const b of DEFAULT_BRANCHES_DATA) {
+        if (!existingBrNames.has(b.name.toLowerCase().trim())) {
+          await db.insert(branchesTable).values({
+            name: b.name,
+            address: b.address,
+            latitude: b.lat,
+            longitude: b.lon,
+            status: "active",
+          });
+        }
+      }
+      warehousesSynced = true;
+    } catch (err) {
+      console.error("Error auto-syncing branch warehouses:", err);
+    }
+  }
+
   const rows = await db.select().from(warehousesTable).orderBy(warehousesTable.name);
-  res.json(rows.map(r => ({ id: r.id, name: r.name, code: r.code, address: r.address, description: r.description, createdAt: r.createdAt.toISOString() })));
+  res.json(rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    code: r.code,
+    address: r.address,
+    description: r.description,
+    isBranch: r.code?.startsWith("CBG") || r.name.toLowerCase().includes("cabang"),
+    createdAt: r.createdAt.toISOString()
+  })));
 });
 
 router.post("/warehouses", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateWarehouseBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.insert(warehousesTable).values(parsed.data).returning();
+
+  // If this warehouse is a branch, also sync to branchesTable
+  if (row.code?.startsWith("CBG") || row.name.toLowerCase().includes("cabang")) {
+    try {
+      const [existingBr] = await db.select().from(branchesTable).where(eq(branchesTable.name, row.name));
+      if (!existingBr) {
+        await db.insert(branchesTable).values({
+          name: row.name,
+          address: row.address ?? null,
+          status: "active",
+        });
+      }
+    } catch (e) {
+      console.warn("Sync to branchesTable skipped:", e);
+    }
+  }
+
   res.status(201).json({ id: row.id, name: row.name, code: row.code, address: row.address, description: row.description, createdAt: row.createdAt.toISOString() });
 });
 
@@ -127,6 +209,18 @@ router.patch("/warehouses/:id", requireAuth, async (req, res): Promise<void> => 
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [row] = await db.update(warehousesTable).set(parsed.data).where(eq(warehousesTable.id, params.data.id)).returning();
   if (!row) { res.status(404).json({ error: "Tidak ditemukan" }); return; }
+
+  // Sync update to branch if applicable
+  if (row.name) {
+    try {
+      await db.update(branchesTable).set({
+        address: row.address,
+      }).where(eq(branchesTable.name, row.name));
+    } catch (e) {
+      console.warn("Branch sync skipped:", e);
+    }
+  }
+
   res.json({ id: row.id, name: row.name, code: row.code, address: row.address, description: row.description, createdAt: row.createdAt.toISOString() });
 });
 

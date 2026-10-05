@@ -64,7 +64,7 @@ interface DashboardStats {
 
 function DashCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl p-5 bg-white dark:bg-card border border-[#eae8e0] dark:border-border transition-colors duration-200 ${className}`}>
+    <div className={`rounded-2xl p-5 bg-card text-card-foreground border border-border transition-colors duration-200 ${className}`}>
       {children}
     </div>
   );
@@ -116,7 +116,7 @@ export default function CabangDashboardPage() {
   const completionRate = totalMaterial > 0 ? Math.min(100, Math.round((completedMaterial / totalMaterial) * 100)) : 0;
 
   return (
-    <div className="min-h-screen bg-[#f7f6f3] dark:bg-background transition-colors duration-200">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
       <div className="p-5 md:p-8 max-w-[1600px] mx-auto space-y-5">
         {/* ── Header ── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
