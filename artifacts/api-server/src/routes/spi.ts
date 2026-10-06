@@ -14,6 +14,7 @@ import {
     stockOutTable,
     stockOutItemsTable,
     itemsTable,
+    categoriesTable,
     branchesTable,
     usersTable,
 } from "@workspace/db";
@@ -383,6 +384,13 @@ router.get("/gis/material-locations", async (req, res, next): Promise<void> => {
             targetDistrict: installationEvidenceTable.targetDistrict,
             isCrossDistrict: installationEvidenceTable.isCrossDistrict,
             crossDistrictNotes: installationEvidenceTable.crossDistrictNotes,
+            categoryName: categoriesTable.name,
+            technicianNames: installationEvidenceTable.technicianNames,
+            capturedByName: usersTable.fullName,
+            clientCaptureTime: installationEvidenceTable.clientCaptureTime,
+            evidenceCreatedAt: installationEvidenceTable.createdAt,
+            photoBeforeUrl: installationEvidenceTable.photoBeforeUrl,
+            photoAfterUrl: installationEvidenceTable.photoAfterUrl,
         })
         .from(installationEvidenceTable)
         .innerJoin(installationAllocationsTable, eq(installationEvidenceTable.allocationId, installationAllocationsTable.id))
@@ -391,6 +399,8 @@ router.get("/gis/material-locations", async (req, res, next): Promise<void> => {
         .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
         .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
         .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
+        .leftJoin(usersTable, eq(installationEvidenceTable.capturedBy, usersTable.id))
         .leftJoin(materialVerificationsTable, and(
             eq(materialVerificationsTable.evidenceId, installationEvidenceTable.id),
             eq(materialVerificationsTable.status, "TERVERIFIKASI")
@@ -408,14 +418,20 @@ router.get("/gis/material-locations", async (req, res, next): Promise<void> => {
             evidenceId: loc.evidenceId,
             evidenceUuid: loc.evidenceUuid,
             photoUrl: loc.photoUrl,
+            photoBeforeUrl: loc.photoBeforeUrl,
+            photoAfterUrl: loc.photoAfterUrl,
             itemName: loc.itemName,
             itemCode: loc.itemCode,
+            categoryName: loc.categoryName,
             quantity: loc.allocationQuantity,
             referenceNo: loc.referenceNo,
             branchId: loc.branchId,
             branchName: loc.branchName,
             verifiedAt: loc.verifiedAt,
-            installedAt: loc.installedAt,
+            installedAt: loc.installedAt || loc.clientCaptureTime || loc.evidenceCreatedAt,
+            clientCaptureTime: loc.clientCaptureTime,
+            technicianNames: loc.technicianNames,
+            capturedByName: loc.capturedByName,
             gpsAccuracy: loc.gpsAccuracy ? parseFloat(String(loc.gpsAccuracy)) : null,
             locationMismatch: Boolean(loc.locationMismatch),
             deviationMeters: loc.locationDeviationMeters ? parseFloat(String(loc.locationDeviationMeters)) : null,
