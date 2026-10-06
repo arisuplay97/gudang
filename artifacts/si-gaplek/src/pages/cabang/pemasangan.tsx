@@ -31,10 +31,8 @@ import {
   SwitchCamera,
   Grid,
   Users,
-  Upload,
   Maximize2,
   Trash2,
-  ImageIcon,
   Pencil,
 } from "lucide-react";
 
@@ -153,7 +151,6 @@ export default function CabangPemasanganPage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Petugas yang mengerjakan
   const [selectedTechIds, setSelectedTechIds] = useState<number[]>([]);
@@ -452,11 +449,10 @@ export default function CabangPemasanganPage() {
     return `${Math.round(sizeInBytes / 1024)} KB (.webp)`;
   };
 
-  // ─── Professional Minimalist Watermark Generator ───
+  // ─── Professional Minimalist Watermark Generator (Live Camera Only) ───
   const generateWatermarkedImage = (
-    source: HTMLVideoElement | HTMLImageElement,
-    stage: "BEFORE" | "AFTER",
-    isImageElement: boolean = false
+    video: HTMLVideoElement,
+    stage: "BEFORE" | "AFTER"
   ): string => {
     const targetWidth = 1280;
     const targetHeight = 720;
@@ -466,43 +462,39 @@ export default function CabangPemasanganPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return "";
 
-    const rawWidth = isImageElement
-      ? (source as HTMLImageElement).naturalWidth || 1280
-      : (source as HTMLVideoElement).videoWidth || 1280;
-    const rawHeight = isImageElement
-      ? (source as HTMLImageElement).naturalHeight || 720
-      : (source as HTMLVideoElement).videoHeight || 720;
+    const rawWidth = video.videoWidth || 1280;
+    const rawHeight = video.videoHeight || 720;
 
-    const isRotated90or270 = !isImageElement && (rotationAngle === 90 || rotationAngle === 270);
+    const isRotated90or270 = rotationAngle === 90 || rotationAngle === 270;
 
     if (isRotated90or270) {
       ctx.save();
       ctx.translate(targetWidth / 2, targetHeight / 2);
       ctx.rotate((rotationAngle * Math.PI) / 180);
-      ctx.drawImage(source, -targetHeight / 2, -targetWidth / 2, targetHeight, targetWidth);
+      ctx.drawImage(video, -targetHeight / 2, -targetWidth / 2, targetHeight, targetWidth);
       ctx.restore();
     } else {
       if (rawHeight > rawWidth) {
         const cropHeight = Math.round(rawWidth * (9 / 16));
         const cropY = Math.max(0, Math.round((rawHeight - cropHeight) / 2));
-        if (!isImageElement && rotationAngle === 180) {
+        if (rotationAngle === 180) {
           ctx.save();
           ctx.translate(targetWidth / 2, targetHeight / 2);
           ctx.rotate(Math.PI);
-          ctx.drawImage(source, 0, cropY, rawWidth, cropHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+          ctx.drawImage(video, 0, cropY, rawWidth, cropHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
           ctx.restore();
         } else {
-          ctx.drawImage(source, 0, cropY, rawWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+          ctx.drawImage(video, 0, cropY, rawWidth, cropHeight, 0, 0, targetWidth, targetHeight);
         }
       } else {
-        if (!isImageElement && rotationAngle === 180) {
+        if (rotationAngle === 180) {
           ctx.save();
           ctx.translate(targetWidth / 2, targetHeight / 2);
           ctx.rotate(Math.PI);
-          ctx.drawImage(source, 0, 0, rawWidth, rawHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+          ctx.drawImage(video, 0, 0, rawWidth, rawHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
           ctx.restore();
         } else {
-          ctx.drawImage(source, 0, 0, rawWidth, rawHeight, 0, 0, targetWidth, targetHeight);
+          ctx.drawImage(video, 0, 0, rawWidth, rawHeight, 0, 0, targetWidth, targetHeight);
         }
       }
     }
@@ -601,7 +593,7 @@ export default function CabangPemasanganPage() {
   // Capture from live camera
   const handleCapture = (stage: "BEFORE" | "AFTER") => {
     if (!videoRef.current || !selectedAllocation) return;
-    const dataUrl = generateWatermarkedImage(videoRef.current, stage, false);
+    const dataUrl = generateWatermarkedImage(videoRef.current, stage);
     if (!dataUrl) return;
 
     if (stage === "BEFORE") {
@@ -638,58 +630,6 @@ export default function CabangPemasanganPage() {
         description: "Kedua foto tersimpan. Silakan periksa sebelum mengirim.",
       });
     }
-  };
-
-  // Upload photo from file/gallery
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedAllocation) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const stage = photoStage === "BEFORE" ? "BEFORE" : "AFTER";
-        const dataUrl = generateWatermarkedImage(img, stage, true);
-        if (!dataUrl) return;
-
-        if (stage === "BEFORE") {
-          setCapturedPhotoBefore(dataUrl);
-          setPhotoStage("AFTER");
-          saveEvidenceDraft(selectedAllocation.allocationId, {
-            itemName: selectedAllocation.itemName,
-            referenceNo: selectedAllocation.referenceNo,
-            photoBeforeBase64: dataUrl,
-            photoStage: "AFTER",
-            selectedTechIds,
-            customTechNames,
-          });
-          setDraftVersion((v) => v + 1);
-          toast({
-            title: "Foto 1 (Sebelum) Berhasil",
-            description: "Foto dari file tersimpan otomatis. Lanjutkan Foto 2.",
-          });
-        } else {
-          setCapturedPhotoAfter(dataUrl);
-          setPhotoStage("REVIEW");
-          stopCamera();
-          saveEvidenceDraft(selectedAllocation.allocationId, {
-            photoAfterBase64: dataUrl,
-            photoStage: "REVIEW",
-            selectedTechIds,
-            customTechNames,
-          });
-          setDraftVersion((v) => v + 1);
-          toast({
-            title: "Foto 2 (Sesudah) Berhasil",
-            description: "Kedua foto siap diperiksa dan dikirim.",
-          });
-        }
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
   };
 
   // Submit Evidence Photos
@@ -736,14 +676,6 @@ export default function CabangPemasanganPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
-      {/* Hidden file input for photo upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileUpload}
-      />
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1147,17 +1079,9 @@ export default function CabangPemasanganPage() {
                     <div className="p-6 text-center text-white space-y-3">
                       <CameraOff className="w-10 h-10 mx-auto text-neutral-500" />
                       <p className="text-xs text-neutral-400">{cameraError}</p>
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center">
                         <Button variant="secondary" size="sm" onClick={() => startCamera()} className="text-xs">
                           Coba Lagi
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="text-xs text-white"
-                        >
-                          Pilih File Foto
                         </Button>
                       </div>
                     </div>
@@ -1247,19 +1171,8 @@ export default function CabangPemasanganPage() {
 
                 {/* Shutter & Studio Camera Controls */}
                 <div className="flex items-center justify-between px-2 pt-1">
-                  {/* Left: Upload file or flip camera */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-10 h-10 rounded-full bg-neutral-900 text-neutral-300 hover:text-white hover:bg-neutral-800"
-                      title="Unggah Foto dari Galeri / File"
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                    </Button>
-
+                  {/* Left: Flip camera */}
+                  <div className="flex items-center">
                     <Button
                       type="button"
                       variant="ghost"
