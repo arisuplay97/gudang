@@ -369,7 +369,7 @@ function MapController({
 
   useEffect(() => {
     if (focusCoords) {
-      map.flyTo(focusCoords, 16, { duration: 1.2 });
+      map.flyTo(focusCoords, Math.max(map.getZoom(), 18), { duration: 1.0 });
     }
   }, [focusCoords, map]);
 
@@ -1094,7 +1094,7 @@ FROM pdam_material_gis;`;
 
             if (coLocatedTotal > 1 && coLocatedIndex >= 0) {
               const angle = (2 * Math.PI * coLocatedIndex) / coLocatedTotal + Math.PI / 4;
-              const offsetRadius = 0.000042; // ~4-5 meters
+              const offsetRadius = 0.000095; // ~10.5 meter (leluasa terpisah, tidak saling menumpuk)
               markerPosition = [
                 coordinates[1] + offsetRadius * Math.cos(angle),
                 coordinates[0] + offsetRadius * Math.sin(angle),
@@ -1103,19 +1103,35 @@ FROM pdam_material_gis;`;
 
             return (
               <div key={`feat-${props.evidenceId}`}>
-                {/* Visual Anchor Halo when multiple accessories share coordinate */}
-                {coLocatedTotal > 1 && coLocatedIndex === 0 && (
-                  <Circle
-                    center={[coordinates[1], coordinates[0]]}
-                    radius={6}
-                    pathOptions={{
-                      color: "#94a3b8",
-                      dashArray: "3 3",
-                      fillColor: "#cbd5e1",
-                      fillOpacity: 0.15,
-                      weight: 1,
-                    }}
-                  />
+                {/* Visual Anchor Halo & Spider Line when multiple accessories share coordinate */}
+                {coLocatedTotal > 1 && (
+                  <>
+                    <Polyline
+                      positions={[
+                        [coordinates[1], coordinates[0]],
+                        markerPosition,
+                      ]}
+                      pathOptions={{
+                        color: "#94a3b8",
+                        dashArray: "2 3",
+                        weight: 1.5,
+                        opacity: 0.8,
+                      }}
+                    />
+                    {coLocatedIndex === 0 && (
+                      <Circle
+                        center={[coordinates[1], coordinates[0]]}
+                        radius={5}
+                        pathOptions={{
+                          color: "#64748b",
+                          dashArray: "2 2",
+                          fillColor: "#94a3b8",
+                          fillOpacity: 0.25,
+                          weight: 1.5,
+                        }}
+                      />
+                    )}
+                  </>
                 )}
 
                 {/* Visual Deviasi: Circle Geofence if Mismatch */}
