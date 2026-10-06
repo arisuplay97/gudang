@@ -790,7 +790,7 @@ export default function BarangKeluarPage() {
                   <SelectContent className="max-h-64">
                     {branches.map(b => (
                       <SelectItem key={b.id} value={b.id.toString()} className="text-xs">
-                        {b.name} ({b.code})
+                        {b.name}{b.code ? ` (${b.code})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1005,7 +1005,7 @@ export default function BarangKeluarPage() {
                 <SelectContent className="max-h-64">
                   {branches.map(b => (
                     <SelectItem key={b.id} value={b.id.toString()} className="text-xs">
-                      {b.name} ({b.code})
+                      {b.name}{b.code ? ` (${b.code})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

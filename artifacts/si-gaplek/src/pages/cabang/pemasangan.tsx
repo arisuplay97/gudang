@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -21,22 +21,22 @@ import {
   RotateCcw,
   Compass,
   Plus,
-  Layers,
   Clock,
   ShieldCheck,
   FolderOpen,
   CameraOff,
-  Sparkles,
   FileSpreadsheet,
   Check,
-  ArrowRight,
-  Image as ImageIcon,
   RotateCw,
   SwitchCamera,
   Grid,
   Users,
+  Upload,
+  Maximize2,
+  Trash2,
+  ImageIcon,
+  Pencil,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
 
 interface TrackingItem {
   id: number;
@@ -69,6 +69,57 @@ interface AllocationItem {
   branchName?: string;
 }
 
+// ─── Local Storage Draft Persistence ───
+const DRAFT_PREFIX = "sigaplek_evidence_draft_";
+
+interface EvidenceDraft {
+  allocationId: number;
+  itemName: string;
+  referenceNo: string;
+  photoBeforeBase64?: string;
+  photoAfterBase64?: string;
+  photoStage: "BEFORE" | "AFTER" | "REVIEW";
+  selectedTechIds?: number[];
+  customTechNames?: string;
+  savedAt: string;
+}
+
+const getEvidenceDraft = (allocId: number): EvidenceDraft | null => {
+  try {
+    const raw = localStorage.getItem(`${DRAFT_PREFIX}${allocId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveEvidenceDraft = (allocId: number, data: Partial<EvidenceDraft>) => {
+  try {
+    const existing = getEvidenceDraft(allocId) || {
+      allocationId: allocId,
+      itemName: "",
+      referenceNo: "",
+      photoStage: "BEFORE" as const,
+      savedAt: new Date().toISOString(),
+    };
+    const updated: EvidenceDraft = {
+      ...existing,
+      ...data,
+      allocationId: allocId,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(`${DRAFT_PREFIX}${allocId}`, JSON.stringify(updated));
+  } catch (err) {
+    console.warn("Storage quota exceeded or error saving draft", err);
+  }
+};
+
+const removeEvidenceDraft = (allocId: number) => {
+  try {
+    localStorage.removeItem(`${DRAFT_PREFIX}${allocId}`);
+  } catch {}
+};
+
 export default function CabangPemasanganPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -85,7 +136,7 @@ export default function CabangPemasanganPage() {
   const [plannedLon, setPlannedLon] = useState<string>("");
   const [isGettingGpsForAlloc, setIsGettingGpsForAlloc] = useState(false);
 
-  // Camera Studio State (Dual Photos: Before & After with WebP Compression)
+  // Camera Studio State (Clean Dual Photos with Auto-Save Persistence)
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState<AllocationItem | null>(null);
   const [photoStage, setPhotoStage] = useState<"BEFORE" | "AFTER" | "REVIEW">("BEFORE");
@@ -94,12 +145,15 @@ export default function CabangPemasanganPage() {
   const [cameraStreaming, setCameraStreaming] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [currentGps, setCurrentGps] = useState<{ lat: number; lon: number; accuracy: number } | null>(null);
-  const [rotationAngle, setRotationAngle] = useState<number>(0); // 0, 90, 180, 270
+  const [rotationAngle, setRotationAngle] = useState<number>(0);
   const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">("environment");
-  const [showGridLines, setShowGridLines] = useState<boolean>(true);
+  const [showGridLines, setShowGridLines] = useState<boolean>(false);
+  const [zoomPhoto, setZoomPhoto] = useState<{ url: string; title: string } | null>(null);
+  const [draftVersion, setDraftVersion] = useState<number>(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Petugas yang mengerjakan
   const [selectedTechIds, setSelectedTechIds] = useState<number[]>([]);
@@ -111,7 +165,7 @@ export default function CabangPemasanganPage() {
   });
   const technicians = techniciansData || [];
 
-  // 1. Fetch Active Trackings for Cabang (to create allocations)
+  // 1. Fetch Active Trackings for Cabang
   const { data: trackingsData, isLoading: isTrackingsLoading } = useQuery({
     queryKey: ["cabang-tracking"],
     queryFn: () => apiFetch<{ data: TrackingItem[] }>("/api/tracking"),
@@ -126,7 +180,7 @@ export default function CabangPemasanganPage() {
     );
   }, [trackingsData]);
 
-  // 2. Fetch Allocations (to submit photo evidence)
+  // 2. Fetch Allocations
   const { data: allocationsData, isLoading: isAllocationsLoading } = useQuery({
     queryKey: ["cabang-allocations"],
     queryFn: () => apiFetch<{ data: AllocationItem[] }>("/api/branch/my-allocations"),
@@ -176,6 +230,10 @@ export default function CabangPemasanganPage() {
       });
     },
     onSuccess: (data: any) => {
+      if (selectedAllocation) {
+        removeEvidenceDraft(selectedAllocation.allocationId);
+        setDraftVersion((v) => v + 1);
+      }
       toast({
         title: "Bukti Pemasangan Terkirim",
         description: data.locationMismatch
@@ -248,7 +306,7 @@ export default function CabangPemasanganPage() {
     });
   };
 
-  // ─── Camera Studio Methods ───
+  // ─── Camera Methods ───
   const startCamera = useCallback(async (facing: "environment" | "user" = cameraFacingMode) => {
     setCameraError(null);
     setCameraStreaming(false);
@@ -263,7 +321,6 @@ export default function CabangPemasanganPage() {
         throw new Error("Perangkat atau browser ini tidak mendukung akses kamera langsung.");
       }
 
-      // Prioritize horizontal 16:9 landscape resolution
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -298,7 +355,7 @@ export default function CabangPemasanganPage() {
       setCameraError(err.message || "Gagal mengaktifkan kamera.");
     }
 
-    // Also get live GPS
+    // Live GPS
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -330,12 +387,34 @@ export default function CabangPemasanganPage() {
     setCameraStreaming(false);
   }, []);
 
+  // Open modal with automatic draft restoration
   const openCameraModal = (alloc: AllocationItem) => {
     setSelectedAllocation(alloc);
-    setPhotoStage("BEFORE");
-    setCapturedPhotoBefore("");
-    setCapturedPhotoAfter("");
     setRotationAngle(0);
+
+    const draft = getEvidenceDraft(alloc.allocationId);
+    if (draft && draft.photoBeforeBase64) {
+      setCapturedPhotoBefore(draft.photoBeforeBase64);
+      if (draft.photoAfterBase64) {
+        setCapturedPhotoAfter(draft.photoAfterBase64);
+        setPhotoStage("REVIEW");
+      } else {
+        setCapturedPhotoAfter("");
+        setPhotoStage("AFTER");
+      }
+      if (draft.selectedTechIds) setSelectedTechIds(draft.selectedTechIds);
+      if (draft.customTechNames) setCustomTechNames(draft.customTechNames);
+
+      toast({
+        title: "Draf Pekerjaan Dimuat",
+        description: "Foto sebelum yang tersimpan otomatis berhasil dipulihkan.",
+      });
+    } else {
+      setCapturedPhotoBefore("");
+      setCapturedPhotoAfter("");
+      setPhotoStage("BEFORE");
+    }
+
     setCameraModalOpen(true);
   };
 
@@ -343,9 +422,20 @@ export default function CabangPemasanganPage() {
     stopCamera();
     setCameraModalOpen(false);
     setSelectedAllocation(null);
+  };
+
+  const handleDiscardDraft = () => {
+    if (!selectedAllocation) return;
+    removeEvidenceDraft(selectedAllocation.allocationId);
+    setDraftVersion((v) => v + 1);
     setCapturedPhotoBefore("");
     setCapturedPhotoAfter("");
     setPhotoStage("BEFORE");
+    toast({
+      title: "Draf Direset",
+      description: "Data draf foto untuk titik ini telah dihapus.",
+    });
+    startCamera();
   };
 
   useEffect(() => {
@@ -356,73 +446,69 @@ export default function CabangPemasanganPage() {
     return undefined;
   }, [cameraModalOpen, photoStage, startCamera]);
 
-  // Helper: Get human-readable KB size of Base64 WebP
   const getApproxKb = (b64: string) => {
     if (!b64) return "0 KB";
     const sizeInBytes = (b64.length * 3) / 4;
     return `${Math.round(sizeInBytes / 1024)} KB (.webp)`;
   };
 
-  // Capture & Draw Official Watermark on Canvas with WebP Compression (Landscape/Horizontal 16:9, max 1280px)
-  const captureAndWatermark = (stage: "BEFORE" | "AFTER") => {
-    if (!videoRef.current || !selectedAllocation) return;
-
-    const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-
-    const rawWidth = video.videoWidth || 1280;
-    const rawHeight = video.videoHeight || 720;
-    const isRotated90or270 = rotationAngle === 90 || rotationAngle === 270;
-
-    // Output target is always crisp Landscape/Horizontal (1280 x 720, 16:9 standard)
+  // ─── Professional Minimalist Watermark Generator ───
+  const generateWatermarkedImage = (
+    source: HTMLVideoElement | HTMLImageElement,
+    stage: "BEFORE" | "AFTER",
+    isImageElement: boolean = false
+  ): string => {
     const targetWidth = 1280;
     const targetHeight = 720;
+    const canvas = document.createElement("canvas");
     canvas.width = targetWidth;
     canvas.height = targetHeight;
-
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return "";
 
-    // 1. Draw camera video frame in Landscape/Horizontal orientation
+    const rawWidth = isImageElement
+      ? (source as HTMLImageElement).naturalWidth || 1280
+      : (source as HTMLVideoElement).videoWidth || 1280;
+    const rawHeight = isImageElement
+      ? (source as HTMLImageElement).naturalHeight || 720
+      : (source as HTMLVideoElement).videoHeight || 720;
+
+    const isRotated90or270 = !isImageElement && (rotationAngle === 90 || rotationAngle === 270);
+
     if (isRotated90or270) {
       ctx.save();
       ctx.translate(targetWidth / 2, targetHeight / 2);
       ctx.rotate((rotationAngle * Math.PI) / 180);
-      // When rotated 90 or 270 deg, video width maps to targetHeight, video height maps to targetWidth
-      ctx.drawImage(video, -targetHeight / 2, -targetWidth / 2, targetHeight, targetWidth);
+      ctx.drawImage(source, -targetHeight / 2, -targetWidth / 2, targetHeight, targetWidth);
       ctx.restore();
     } else {
       if (rawHeight > rawWidth) {
-        // Phone held upright (portrait), crop center 16:9 horizontal slice
         const cropHeight = Math.round(rawWidth * (9 / 16));
         const cropY = Math.max(0, Math.round((rawHeight - cropHeight) / 2));
-        if (rotationAngle === 180) {
+        if (!isImageElement && rotationAngle === 180) {
           ctx.save();
           ctx.translate(targetWidth / 2, targetHeight / 2);
           ctx.rotate(Math.PI);
-          ctx.drawImage(video, 0, cropY, rawWidth, cropHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+          ctx.drawImage(source, 0, cropY, rawWidth, cropHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
           ctx.restore();
         } else {
-          ctx.drawImage(video, 0, cropY, rawWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+          ctx.drawImage(source, 0, cropY, rawWidth, cropHeight, 0, 0, targetWidth, targetHeight);
         }
       } else {
-        // Naturally horizontal/landscape stream
-        if (rotationAngle === 180) {
+        if (!isImageElement && rotationAngle === 180) {
           ctx.save();
           ctx.translate(targetWidth / 2, targetHeight / 2);
           ctx.rotate(Math.PI);
-          ctx.drawImage(video, 0, 0, rawWidth, rawHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+          ctx.drawImage(source, 0, 0, rawWidth, rawHeight, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
           ctx.restore();
         } else {
-          ctx.drawImage(video, 0, 0, rawWidth, rawHeight, 0, 0, targetWidth, targetHeight);
+          ctx.drawImage(source, 0, 0, rawWidth, rawHeight, 0, 0, targetWidth, targetHeight);
         }
       }
     }
 
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // 2. Prepare Watermark Info
+    // Watermark Info
+    const isBefore = stage === "BEFORE";
     const dateStr = new Date().toLocaleString("id-ID", {
       timeZoneName: "short",
       year: "numeric",
@@ -437,110 +523,176 @@ export default function CabangPemasanganPage() {
     const lon = currentGps ? currentGps.lon.toFixed(6) : "Tidak Tersedia";
     const acc = currentGps ? `±${currentGps.accuracy.toFixed(1)}m` : "N/A";
     const officer = user?.fullName || user?.username || "Petugas Lapangan";
-    const branch = selectedAllocation.branchName || "Cabang PDAM";
+    const branch = selectedAllocation?.branchName || "Cabang PDAM";
+    const itemName = selectedAllocation?.itemName || "Material";
+    const qty = selectedAllocation?.quantity || 1;
+    const refNo = selectedAllocation?.referenceNo || "-";
 
-    // 3. Draw Watermark Card (Persegi di Pojok Kiri Bawah, Semi-Transparan)
-    const isBefore = stage === "BEFORE";
-    const accentColor = isBefore ? "#f59e0b" : "#10b981"; // Amber untuk Sebelum, Emerald untuk Sesudah
-    const stageBadge = isBefore ? "SEBELUM PEMASANGAN" : "SESUDAH PEMASANGAN";
-
-    const padX = 18;
-    const padY = 18;
-    const boxWidth = Math.min(width - padX * 2, 540);
-    const boxHeight = 114;
+    // Clean, modern frosted dark container (no cyber neon lines)
+    const padX = 22;
+    const padY = 22;
+    const boxWidth = Math.min(targetWidth - padX * 2, 580);
+    const boxHeight = 112;
     const boxX = padX;
-    const boxY = height - boxHeight - padY;
-    const radius = 8;
+    const boxY = targetHeight - boxHeight - padY;
+    const radius = 10;
 
-    // Card background: hitam sedikit transparan dengan border halus agar teks sangat terbaca
     ctx.save();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.70)";
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
-    ctx.lineWidth = 1.5;
-
+    ctx.fillStyle = "rgba(15, 23, 42, 0.78)";
     if (typeof ctx.roundRect === "function") {
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, boxWidth, boxHeight, radius);
       ctx.fill();
-      ctx.stroke();
     } else {
       ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
     }
 
-    // Border aksen di sisi kiri box
-    ctx.fillStyle = accentColor;
+    // Clean pill badge for Stage
+    const stageBadgeText = isBefore ? "SEBELUM PEMASANGAN" : "SESUDAH PEMASANGAN";
+    const badgeColor = isBefore ? "#d97706" : "#059669";
+    const badgeWidth = 146;
+    const badgeHeight = 22;
+    const badgeX = boxX + boxWidth - badgeWidth - 14;
+    const badgeY = boxY + 14;
+
+    ctx.fillStyle = badgeColor;
     if (typeof ctx.roundRect === "function") {
       ctx.beginPath();
-      ctx.roundRect(boxX, boxY, 4.5, boxHeight, [radius, 0, 0, radius]);
+      ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 4);
       ctx.fill();
     } else {
-      ctx.fillRect(boxX, boxY, 4.5, boxHeight);
+      ctx.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
     }
 
-    // Teks di dalam box
-    const textLeft = boxX + 16;
-    const fontSizeTitle = 12;
-    const fontSizeBody = 10.5;
-
-    let yOffset = boxY + 20;
-
-    // Baris 1: Header Instansi & Status Stage
-    ctx.font = `bold ${fontSizeTitle}px sans-serif`;
+    ctx.font = "bold 9.5px sans-serif";
     ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(stageBadgeText, badgeX + badgeWidth / 2, badgeY + 15);
+
+    // Text Lines
+    const textX = boxX + 16;
     ctx.textAlign = "left";
-    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI — SIMONA", textLeft, yOffset);
 
-    ctx.font = `bold 10px sans-serif`;
-    ctx.fillStyle = accentColor;
-    ctx.textAlign = "right";
-    ctx.fillText(`[ ${stageBadge} ]`, boxX + boxWidth - 14, yOffset);
+    // Line 1: Header Instansi
+    ctx.font = "bold 12.5px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("PERUMDAM TIRTA ARDHIA RINJANI", textX, boxY + 28);
 
-    // Baris 2: Material & jml & Ref
-    ctx.textAlign = "left";
-    ctx.font = `normal ${fontSizeBody}px sans-serif`;
-    ctx.fillStyle = "#f1f5f9";
-    yOffset += 22;
-    ctx.fillText(
-      `Material: ${selectedAllocation.itemName} (jml: ${selectedAllocation.quantity}) | Ref: ${selectedAllocation.referenceNo}`,
-      textLeft,
-      yOffset
-    );
+    // Line 2: Material & Ref
+    ctx.font = "normal 10.5px sans-serif";
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText(`Material: ${itemName} (${qty} unit) • Ref: ${refNo}`, textX, boxY + 52);
 
-    // Baris 3: Petugas & Cabang & Waktu
+    // Line 3: Petugas & Waktu
+    ctx.font = "normal 10px sans-serif";
     ctx.fillStyle = "#cbd5e1";
-    yOffset += 20;
-    ctx.fillText(`Petugas: ${officer} | Cabang: ${branch} | Waktu: ${dateStr}`, textLeft, yOffset);
+    ctx.fillText(`Petugas: ${officer} • Cabang: ${branch} • ${dateStr}`, textX, boxY + 74);
 
-    // Baris 4: Telemetri GPS (tanpa format horizontal)
-    ctx.fillStyle = "#67e8f9"; // Cyan accent untuk GPS
-    yOffset += 20;
-    ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc})`, textLeft, yOffset);
+    // Line 4: Koordinat GPS
+    ctx.font = "normal 10px sans-serif";
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(`GPS: Lat ${lat}, Lon ${lon} (Akurasi: ${acc})`, textX, boxY + 95);
 
     ctx.restore();
 
-    // 4. Export as WebP format with quality 0.78 (target size ~80-140 KB)
-    const dataUrl = canvas.toDataURL("image/webp", 0.78);
+    return canvas.toDataURL("image/webp", 0.78);
+  };
 
-    if (isBefore) {
+  // Capture from live camera
+  const handleCapture = (stage: "BEFORE" | "AFTER") => {
+    if (!videoRef.current || !selectedAllocation) return;
+    const dataUrl = generateWatermarkedImage(videoRef.current, stage, false);
+    if (!dataUrl) return;
+
+    if (stage === "BEFORE") {
       setCapturedPhotoBefore(dataUrl);
       setPhotoStage("AFTER");
+      // AUTO SAVE DRAFT TO LOCALSTORAGE
+      saveEvidenceDraft(selectedAllocation.allocationId, {
+        itemName: selectedAllocation.itemName,
+        referenceNo: selectedAllocation.referenceNo,
+        photoBeforeBase64: dataUrl,
+        photoStage: "AFTER",
+        selectedTechIds,
+        customTechNames,
+      });
+      setDraftVersion((v) => v + 1);
       toast({
         title: "Foto 1 (Sebelum) Berhasil",
-        description: "Foto bukti kondisi awal tersimpan. Lanjutkan Foto 2 (Sesudah).",
+        description: "Draf tersimpan otomatis. Lanjutkan ke Foto 2 (Sesudah).",
       });
     } else {
       setCapturedPhotoAfter(dataUrl);
       setPhotoStage("REVIEW");
       stopCamera();
+      // AUTO SAVE DRAFT TO LOCALSTORAGE
+      saveEvidenceDraft(selectedAllocation.allocationId, {
+        photoAfterBase64: dataUrl,
+        photoStage: "REVIEW",
+        selectedTechIds,
+        customTechNames,
+      });
+      setDraftVersion((v) => v + 1);
       toast({
         title: "Foto 2 (Sesudah) Berhasil",
-        description: "Kedua foto bukti fisik siap diperiksa dan dikirim.",
+        description: "Kedua foto tersimpan. Silakan periksa sebelum mengirim.",
       });
     }
   };
 
-  // Submit Dual Evidence Photos (Before & After WebP)
+  // Upload photo from file/gallery
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedAllocation) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const stage = photoStage === "BEFORE" ? "BEFORE" : "AFTER";
+        const dataUrl = generateWatermarkedImage(img, stage, true);
+        if (!dataUrl) return;
+
+        if (stage === "BEFORE") {
+          setCapturedPhotoBefore(dataUrl);
+          setPhotoStage("AFTER");
+          saveEvidenceDraft(selectedAllocation.allocationId, {
+            itemName: selectedAllocation.itemName,
+            referenceNo: selectedAllocation.referenceNo,
+            photoBeforeBase64: dataUrl,
+            photoStage: "AFTER",
+            selectedTechIds,
+            customTechNames,
+          });
+          setDraftVersion((v) => v + 1);
+          toast({
+            title: "Foto 1 (Sebelum) Berhasil",
+            description: "Foto dari file tersimpan otomatis. Lanjutkan Foto 2.",
+          });
+        } else {
+          setCapturedPhotoAfter(dataUrl);
+          setPhotoStage("REVIEW");
+          stopCamera();
+          saveEvidenceDraft(selectedAllocation.allocationId, {
+            photoAfterBase64: dataUrl,
+            photoStage: "REVIEW",
+            selectedTechIds,
+            customTechNames,
+          });
+          setDraftVersion((v) => v + 1);
+          toast({
+            title: "Foto 2 (Sesudah) Berhasil",
+            description: "Kedua foto siap diperiksa dan dikirim.",
+          });
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  // Submit Evidence Photos
   const handleSubmitEvidence = () => {
     if (!selectedAllocation || !capturedPhotoBefore || !capturedPhotoAfter) {
       toast({
@@ -551,13 +703,12 @@ export default function CabangPemasanganPage() {
       return;
     }
 
-    // Fallback GPS if not available
     const lat = currentGps?.lat ?? (selectedAllocation.plannedLatitude ? parseFloat(selectedAllocation.plannedLatitude) : -8.584);
     const lon = currentGps?.lon ?? (selectedAllocation.plannedLongitude ? parseFloat(selectedAllocation.plannedLongitude) : 116.109);
 
-    const selectedTechObjects = (techniciansData || []).filter(t => selectedTechIds.includes(t.id));
-    const selectedNames = selectedTechObjects.map(t => t.fullName);
-    const customNames = customTechNames.split(",").map(n => n.trim()).filter(Boolean);
+    const selectedTechObjects = (techniciansData || []).filter((t) => selectedTechIds.includes(t.id));
+    const selectedNames = selectedTechObjects.map((t) => t.fullName);
+    const customNames = customTechNames.split(",").map((n) => n.trim()).filter(Boolean);
     const allNames = Array.from(new Set([...selectedNames, ...customNames]));
 
     if (allNames.length === 0) {
@@ -585,6 +736,15 @@ export default function CabangPemasanganPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+      {/* Hidden file input for photo upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
+
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -643,7 +803,7 @@ export default function CabangPemasanganPage() {
           ) : (
             <div className="grid gap-3">
               {readyForAllocTrackings.map((track) => (
-                <Card key={track.id} className="p-4 shadow-sm border-border/80 hover:border-primary/40 transition-colors">
+                <Card key={track.id} className="p-4 shadow-sm border-0 bg-card hover:bg-muted/30 transition-colors">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -682,7 +842,7 @@ export default function CabangPemasanganPage() {
           <div>
             <h2 className="text-base font-semibold text-foreground">Alokasi Siap Didokumentasikan</h2>
             <p className="text-xs text-muted-foreground">
-              Pilih titik alokasi di bawah untuk mengaktifkan kamera dan mencetak watermark bukti fisik.
+              Pilih titik alokasi di bawah untuk mengambil atau melanjutkan foto dokumentasi fisik.
             </p>
           </div>
 
@@ -700,42 +860,59 @@ export default function CabangPemasanganPage() {
               </p>
             </Card>
           ) : (
-            <div className="grid sm:grid-cols-2 gap-3">
-              {pendingEvidenceAllocations.map((alloc) => (
-                <Card
-                  key={alloc.allocationId}
-                  className="p-4 shadow-sm border-border/80 hover:border-primary/50 transition-all flex flex-col justify-between"
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-sm text-foreground">{alloc.itemName}</h3>
-                      <Badge variant="secondary" className="text-[11px] font-mono">
-                        Qty: {alloc.quantity}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground font-mono">Ref: {alloc.referenceNo}</p>
-                    {alloc.plannedLatitude && alloc.plannedLongitude && (
-                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono pt-1">
-                        <MapPin className="w-3 h-3 text-primary shrink-0" />
-                        Target: {alloc.plannedLatitude}, {alloc.plannedLongitude}
-                      </div>
-                    )}
-                    {alloc.status === "REJECTED" && (
-                      <div className="p-2 rounded bg-rose-50 border border-rose-200 text-[11px] text-rose-700 mt-1">
-                        Bukti sebelumnya ditolak SPI. Harap foto ulang dengan sudut & GPS yang jelas.
-                      </div>
-                    )}
-                  </div>
+            <div className="grid sm:grid-cols-2 gap-3" key={`draft-grid-${draftVersion}`}>
+              {pendingEvidenceAllocations.map((alloc) => {
+                const draft = getEvidenceDraft(alloc.allocationId);
+                const hasDraftBefore = !!draft?.photoBeforeBase64;
+                const hasDraftAfter = !!draft?.photoAfterBase64;
 
-                  <Button
-                    onClick={() => openCameraModal(alloc)}
-                    className="mt-4 w-full gap-2 bg-primary hover:bg-primary/90 shadow-sm"
+                return (
+                  <Card
+                    key={alloc.allocationId}
+                    className="p-4 shadow-sm border-0 bg-card hover:bg-muted/30 transition-all flex flex-col justify-between"
                   >
-                    <Camera className="w-4 h-4" />
-                    Buka Kamera Dokumentasi
-                  </Button>
-                </Card>
-              ))}
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-sm text-foreground">{alloc.itemName}</h3>
+                        <Badge variant="secondary" className="text-[11px] font-mono">
+                          Qty: {alloc.quantity}
+                        </Badge>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground font-mono">Ref: {alloc.referenceNo}</p>
+
+                      {alloc.plannedLatitude && alloc.plannedLongitude && (
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono">
+                          <MapPin className="w-3 h-3 text-primary shrink-0" />
+                          Target: {alloc.plannedLatitude}, {alloc.plannedLongitude}
+                        </div>
+                      )}
+
+                      {/* Status Draf Tersimpan Otomatis */}
+                      {hasDraftBefore && (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                          <Check className="w-3 h-3 shrink-0" />
+                          <span>Draf: Foto Sebelum Tersimpan {hasDraftAfter ? "& Sesudah Siap" : ""}</span>
+                        </div>
+                      )}
+
+                      {alloc.status === "REJECTED" && (
+                        <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-[11px] text-rose-700 dark:text-rose-300">
+                          Bukti sebelumnya ditolak SPI. Harap foto ulang dengan sudut & GPS yang jelas.
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={() => openCameraModal(alloc)}
+                      className="mt-4 w-full gap-2 bg-primary hover:bg-primary/90 shadow-sm"
+                    >
+                      <Camera className="w-4 h-4" />
+                      {hasDraftBefore ? "Lanjutkan Dokumentasi (Draf)" : "Buka Kamera Dokumentasi"}
+                    </Button>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -757,7 +934,7 @@ export default function CabangPemasanganPage() {
               {completedAllocations.map((alloc) => {
                 const isVerified = alloc.status === "VERIFIED";
                 return (
-                  <Card key={alloc.allocationId} className="p-4 shadow-sm border-border/80">
+                  <Card key={alloc.allocationId} className="p-4 shadow-sm border-0 bg-card">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <div className="font-semibold text-sm text-foreground">{alloc.itemName}</div>
@@ -787,14 +964,14 @@ export default function CabangPemasanganPage() {
 
       {/* ─── MODAL BUAT ALOKASI ─── */}
       <Dialog open={allocationModalOpen} onOpenChange={setAllocationModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border-0 shadow-xl bg-card rounded-2xl">
           <DialogHeader>
             <DialogTitle>Buat Alokasi Titik Pemasangan</DialogTitle>
           </DialogHeader>
 
           {selectedTrackingForAlloc && (
             <div className="space-y-4 py-2">
-              <div className="p-3 rounded-lg bg-muted/50 border border-border/60 space-y-1">
+              <div className="p-3 rounded-xl bg-muted/40 space-y-1">
                 <p className="text-xs text-muted-foreground">Material Terpilih:</p>
                 <p className="font-semibold text-sm text-foreground">{selectedTrackingForAlloc.itemName}</p>
                 <div className="flex items-center justify-between text-xs pt-1 text-muted-foreground">
@@ -864,182 +1041,125 @@ export default function CabangPemasanganPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── LIVE CAMERA & DUAL PHOTO STUDIO MODAL ─── */}
+      {/* ─── LIVE CAMERA STUDIO & DRAFT PERSISTENCE MODAL (CLEAN & MINIMALIST) ─── */}
       <Dialog open={cameraModalOpen} onOpenChange={(o) => !o && closeCameraModal()}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden border border-border/80 shadow-2xl bg-card max-h-[94vh] flex flex-col w-[96vw]">
-          {/* Header */}
-          <DialogHeader className="p-4 pb-3 border-b bg-muted/20 shrink-0">
-            <div className="flex items-center justify-between pr-4">
+        <DialogContent className="max-w-2xl p-0 overflow-hidden border-0 shadow-2xl bg-neutral-950 text-neutral-100 rounded-2xl md:rounded-3xl max-h-[94vh] flex flex-col w-[96vw]">
+          {/* Header Bar */}
+          <div className="p-4 pb-2 bg-neutral-900/60 shrink-0 space-y-3">
+            <div className="flex items-center justify-between">
               <div>
-                <DialogTitle className="text-base flex items-center gap-2 text-foreground">
-                  <Camera className="w-4 h-4 text-primary" />
-                  Kamera Dokumentasi Fisik (Format Horizontal 16:9)
-                </DialogTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Target: <strong className="text-foreground">{selectedAllocation?.itemName}</strong> (Qty: {selectedAllocation?.quantity} unit)
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <span>Dokumentasi Pemasangan</span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-0.5 truncate max-w-xs sm:max-w-md">
+                  {selectedAllocation?.itemName} (Qty: {selectedAllocation?.quantity})
                 </p>
               </div>
-              {currentGps ? (
-                <Badge variant="outline" className="text-[10px] font-mono gap-1 text-emerald-600 border-emerald-300">
-                  <Compass className="w-3 h-3" />
-                  GPS ±{currentGps.accuracy.toFixed(0)}m
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] font-mono gap-1 text-amber-600 border-amber-300">
-                  <Compass className="w-3 h-3 animate-spin" />
-                  Mencari GPS...
-                </Badge>
-              )}
-            </div>
 
-            {/* Stepper Wizard */}
-            <div className="grid grid-cols-3 gap-2 pt-3">
-              <div
-                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition-colors ${
-                  photoStage === "BEFORE"
-                    ? "bg-amber-500/10 border-amber-500/50 text-amber-700 dark:text-amber-400"
-                    : capturedPhotoBefore
-                    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
-                    : "bg-muted/40 border-border text-muted-foreground"
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                  capturedPhotoBefore ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"
-                }`}>
-                  {capturedPhotoBefore ? <Check className="w-3 h-3" /> : "1"}
-                </span>
-                <span className="truncate">Foto Sebelum</span>
-              </div>
-
-              <div
-                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition-colors ${
-                  photoStage === "AFTER"
-                    ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
-                    : capturedPhotoAfter
-                    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
-                    : "bg-muted/40 border-border text-muted-foreground"
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                  capturedPhotoAfter ? "bg-emerald-600 text-white" : "bg-muted-foreground/30 text-foreground"
-                }`}>
-                  {capturedPhotoAfter ? <Check className="w-3 h-3" /> : "2"}
-                </span>
-                <span className="truncate">Foto Sesudah</span>
-              </div>
-
-              <div
-                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition-colors ${
-                  photoStage === "REVIEW"
-                    ? "bg-primary/10 border-primary/40 text-primary"
-                    : "bg-muted/40 border-border text-muted-foreground"
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                  photoStage === "REVIEW" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/30 text-foreground"
-                }`}>
-                  3
-                </span>
-                <span className="truncate">Review & Kirim</span>
-              </div>
-            </div>
-          </DialogHeader>
-
-          {/* Dialog Scrollable Body */}
-          <div className="p-4 space-y-4 overflow-y-auto flex-1">
-            {photoStage !== "REVIEW" ? (
-              <>
-                {/* Stage Banner */}
-                {photoStage === "BEFORE" ? (
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs flex items-center justify-between text-amber-800 dark:text-amber-300">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                      <div>
-                        <strong>Tahap 1: Foto Sebelum Pemasangan (Kondisi Awal)</strong>
-                        <p className="text-[11px] opacity-90">Arahkan kamera ke titik/pipa sebelum meteran & aksesoris dipasang.</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300 text-[10px]">
-                      WebP ~100KB
-                    </Badge>
+              {/* GPS Telemetry Pill */}
+              <div className="flex items-center gap-2">
+                {currentGps ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 text-emerald-400 text-[11px] font-mono">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span>GPS ±{currentGps.accuracy.toFixed(0)}m</span>
                   </div>
                 ) : (
-                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between text-emerald-800 dark:text-emerald-300">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      <div>
-                        <strong>Tahap 2: Foto Sesudah Pemasangan (Hasil Akhir)</strong>
-                        <p className="text-[11px] opacity-90">Arahkan ke meteran yang sudah terpasang rapi. Pastikan nomor seri & angka register terbaca tajam.</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="border-emerald-400 text-emerald-700 dark:text-emerald-300 text-[10px]">
-                      WebP ~100KB
-                    </Badge>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-950/60 text-amber-400 text-[11px] font-mono">
+                    <Compass className="w-3 h-3 animate-spin shrink-0" />
+                    <span>Mencari GPS...</span>
                   </div>
                 )}
+              </div>
+            </div>
 
-                {/* Toolbar Kendali Kamera Horizontal */}
-                <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border text-xs flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="text-[10px] font-semibold gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Format Horizontal (16:9)
-                    </Badge>
-                    {rotationAngle !== 0 && (
-                      <Badge variant="secondary" className="text-[10px] font-mono">
-                        Rotasi: {rotationAngle}°
-                      </Badge>
-                    )}
-                  </div>
+            {/* Clean Segmented Step Indicator */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-neutral-900 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoStage("BEFORE");
+                  startCamera();
+                }}
+                className={`py-1.5 px-2 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1.5 ${
+                  photoStage === "BEFORE"
+                    ? "bg-white text-neutral-950 shadow-sm"
+                    : capturedPhotoBefore
+                    ? "text-emerald-400 hover:bg-neutral-800"
+                    : "text-neutral-400 hover:bg-neutral-800"
+                }`}
+              >
+                {capturedPhotoBefore && <Check className="w-3.5 h-3.5" />}
+                <span className="truncate">1. Sebelum</span>
+              </button>
 
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setRotationAngle((prev) => (prev + 90) % 360)}
-                      className="h-7 text-[11px] gap-1 px-2.5 font-medium border-primary/30 text-primary hover:bg-primary/10"
-                      title="Putar Orientasi Kamera 90 Derajat"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      <span>Putar 90° {rotationAngle !== 0 ? `(${rotationAngle}°)` : ""}</span>
-                    </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (capturedPhotoBefore) {
+                    setPhotoStage("AFTER");
+                    startCamera();
+                  }
+                }}
+                disabled={!capturedPhotoBefore}
+                className={`py-1.5 px-2 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1.5 ${
+                  photoStage === "AFTER"
+                    ? "bg-white text-neutral-950 shadow-sm"
+                    : capturedPhotoAfter
+                    ? "text-emerald-400 hover:bg-neutral-800"
+                    : capturedPhotoBefore
+                    ? "text-neutral-300 hover:bg-neutral-800"
+                    : "text-neutral-600 cursor-not-allowed"
+                }`}
+              >
+                {capturedPhotoAfter && <Check className="w-3.5 h-3.5" />}
+                <span className="truncate">2. Sesudah</span>
+              </button>
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={toggleFacingMode}
-                      className="h-7 text-[11px] gap-1 px-2.5"
-                      title="Ganti Kamera Belakang / Depan"
-                    >
-                      <SwitchCamera className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">{cameraFacingMode === "environment" ? "Kamera Belakang" : "Kamera Depan"}</span>
-                    </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (capturedPhotoBefore && capturedPhotoAfter) {
+                    setPhotoStage("REVIEW");
+                    stopCamera();
+                  }
+                }}
+                disabled={!capturedPhotoBefore || !capturedPhotoAfter}
+                className={`py-1.5 px-2 rounded-lg text-center font-medium transition-all flex items-center justify-center gap-1.5 ${
+                  photoStage === "REVIEW"
+                    ? "bg-white text-neutral-950 shadow-sm"
+                    : capturedPhotoBefore && capturedPhotoAfter
+                    ? "text-neutral-300 hover:bg-neutral-800"
+                    : "text-neutral-600 cursor-not-allowed"
+                }`}
+              >
+                <span className="truncate">3. Konfirmasi</span>
+              </button>
+            </div>
+          </div>
 
-                    <Button
-                      type="button"
-                      variant={showGridLines ? "secondary" : "ghost"}
-                      size="sm"
-                      onClick={() => setShowGridLines(!showGridLines)}
-                      className="h-7 text-[11px] gap-1 px-2"
-                      title="Garis Level Pipa / Water Meter"
-                    >
-                      <Grid className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Level Pipa</span>
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Viewfinder Camera (16:9 Landscape Ratio) */}
-                <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black flex items-center justify-center shadow-inner">
+          {/* Body Content */}
+          <div className="p-4 overflow-y-auto flex-1 space-y-4">
+            {photoStage !== "REVIEW" ? (
+              <>
+                {/* Viewfinder Studio (Clean 16:9 Viewport) */}
+                <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg">
                   {cameraError ? (
                     <div className="p-6 text-center text-white space-y-3">
-                      <CameraOff className="w-12 h-12 mx-auto text-rose-400" />
-                      <p className="text-sm font-medium text-rose-200">{cameraError}</p>
-                      <Button variant="secondary" size="sm" onClick={() => startCamera()}>
-                        Coba Lagi
-                      </Button>
+                      <CameraOff className="w-10 h-10 mx-auto text-neutral-500" />
+                      <p className="text-xs text-neutral-400">{cameraError}</p>
+                      <div className="flex items-center justify-center gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => startCamera()} className="text-xs">
+                          Coba Lagi
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-xs text-white"
+                        >
+                          Pilih File Foto
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -1062,170 +1182,303 @@ export default function CabangPemasanganPage() {
                         className="transition-transform duration-200"
                       />
 
-                      {/* Grid Lines & Water Meter Horizontal Level Guide */}
+                      {/* Subtle Grid Lines (Optional) */}
                       {showGridLines && (
                         <div className="absolute inset-0 pointer-events-none">
-                          {/* Center Horizontal Level Line */}
-                          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-emerald-400/80 flex items-center justify-between px-4">
-                            <span className="text-[9px] font-mono bg-black/70 text-emerald-300 px-1.5 py-0.5 rounded shadow">
-                              LEVEL PIPA
-                            </span>
-                            <span className="text-[9px] font-mono bg-black/70 text-emerald-300 px-1.5 py-0.5 rounded shadow">
-                              HORIZONTAL 16:9
-                            </span>
-                          </div>
-
-                          {/* Rule of Thirds Vertical Lines */}
-                          <div className="absolute inset-y-0 left-1/3 border-l border-white/20" />
-                          <div className="absolute inset-y-0 right-1/3 border-r border-white/20" />
-                          <div className="absolute inset-x-0 top-1/3 border-t border-white/20" />
-                          <div className="absolute inset-x-0 bottom-1/3 border-b border-white/20" />
+                          <div className="absolute inset-y-0 left-1/3 w-px bg-white/15" />
+                          <div className="absolute inset-y-0 right-1/3 w-px bg-white/15" />
+                          <div className="absolute inset-x-0 top-1/3 h-px bg-white/15" />
+                          <div className="absolute inset-x-0 bottom-1/3 h-px bg-white/15" />
                         </div>
                       )}
 
-                      {/* Viewfinder Frame Guides */}
-                      <div className="absolute inset-4 border border-white/30 rounded-lg pointer-events-none flex flex-col justify-between p-2">
-                        <div className="flex justify-between">
-                          <span className="w-3.5 h-3.5 border-t-2 border-l-2 border-emerald-400" />
-                          <span className="w-3.5 h-3.5 border-t-2 border-r-2 border-emerald-400" />
+                      {/* Top Overlay Badge */}
+                      <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+                        <div className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-medium flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              photoStage === "BEFORE" ? "bg-amber-400" : "bg-emerald-400"
+                            }`}
+                          />
+                          <span>
+                            {photoStage === "BEFORE" ? "Foto 1: Kondisi Sebelum Pasang" : "Foto 2: Hasil Sesudah Pasang"}
+                          </span>
                         </div>
-                        <div className="text-center text-[10px] text-white/90 font-mono tracking-wider uppercase drop-shadow bg-black/50 backdrop-blur-xs py-0.5 px-3 rounded-full self-center border border-white/20">
-                          PERUMDAM TIRTA ARDHIA RINJANI — {photoStage === "BEFORE" ? "1. SEBELUM PASANG" : "2. SESUDAH PASANG"}
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="w-3.5 h-3.5 border-b-2 border-l-2 border-emerald-400" />
-                          <span className="w-3.5 h-3.5 border-b-2 border-r-2 border-emerald-400" />
-                        </div>
+
+                        {rotationAngle !== 0 && (
+                          <div className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] text-neutral-300 font-mono">
+                            {rotationAngle}°
+                          </div>
+                        )}
                       </div>
 
-                      {/* Format Badge Bottom Left */}
-                      <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs rounded-md px-2 py-0.5 text-[10px] text-white/90 font-mono flex items-center gap-1.5 pointer-events-none">
-                        <span>📐 Mode: Landscape Horizontal (16:9)</span>
-                        {rotationAngle !== 0 && <span>• {rotationAngle}°</span>}
-                      </div>
+                      {/* Floating Thumbnail: Foto Sebelum (jika sedang di tahap AFTER) */}
+                      {photoStage === "AFTER" && capturedPhotoBefore && (
+                        <div className="absolute bottom-3 left-3 pointer-events-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPhotoStage("BEFORE");
+                              startCamera();
+                            }}
+                            className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl bg-black/75 backdrop-blur-md text-white hover:bg-black/90 transition-all text-left shadow-lg group"
+                            title="Klik untuk melihat atau mengubah foto sebelum"
+                          >
+                            <img
+                              src={capturedPhotoBefore}
+                              alt="Foto Sebelum"
+                              className="w-12 h-8 rounded-lg object-cover"
+                            />
+                            <div>
+                              <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                                <Check className="w-3 h-3" />
+                                <span>Sebelum Tersimpan</span>
+                              </div>
+                              <span className="text-[10px] text-neutral-400 group-hover:text-white transition-colors flex items-center gap-0.5">
+                                <Pencil className="w-2.5 h-2.5" /> Ganti / Foto Ulang
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
 
-                {/* GPS Status Pill */}
-                {currentGps ? (
-                  <div className="p-2.5 rounded-lg bg-muted/40 border text-xs flex items-center justify-between text-muted-foreground font-mono">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-primary" />
-                      {currentGps.lat.toFixed(6)}, {currentGps.lon.toFixed(6)}
+                {/* Shutter & Studio Camera Controls */}
+                <div className="flex items-center justify-between px-2 pt-1">
+                  {/* Left: Upload file or flip camera */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-10 h-10 rounded-full bg-neutral-900 text-neutral-300 hover:text-white hover:bg-neutral-800"
+                      title="Unggah Foto dari Galeri / File"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={toggleFacingMode}
+                      className="w-10 h-10 rounded-full bg-neutral-900 text-neutral-300 hover:text-white hover:bg-neutral-800"
+                      title="Ganti Kamera Belakang / Depan"
+                    >
+                      <SwitchCamera className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {/* Center: Tactile Shutter Button */}
+                  <div className="flex flex-col items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleCapture(photoStage)}
+                      disabled={!cameraStreaming}
+                      className={`w-16 h-16 rounded-full border-2 border-white/80 p-1 flex items-center justify-center transition-all ${
+                        cameraStreaming
+                          ? "opacity-100 hover:scale-105 active:scale-90"
+                          : "opacity-40 cursor-not-allowed"
+                      }`}
+                    >
+                      <div
+                        className={`w-full h-full rounded-full transition-colors ${
+                          photoStage === "BEFORE" ? "bg-amber-500" : "bg-emerald-500"
+                        }`}
+                      />
+                    </button>
+                    <span className="text-[11px] text-neutral-400 font-medium">
+                      {photoStage === "BEFORE" ? "Jepret Foto 1" : "Jepret Foto 2"}
                     </span>
-                    <span>Akurasi: ±{currentGps.accuracy.toFixed(1)}m</span>
                   </div>
-                ) : (
-                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-xs flex items-center gap-2 text-amber-800 dark:text-amber-300">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>Mengunci koordinat GPS perangkat untuk watermark...</span>
+
+                  {/* Right: Rotate & Grid options */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setRotationAngle((prev) => (prev + 90) % 360)}
+                      className="w-10 h-10 rounded-full bg-neutral-900 text-neutral-300 hover:text-white hover:bg-neutral-800"
+                      title="Putar Orientasi 90°"
+                    >
+                      <RotateCw className="w-4 h-4" />
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowGridLines(!showGridLines)}
+                      className={`w-10 h-10 rounded-full transition-colors ${
+                        showGridLines
+                          ? "bg-white text-neutral-950"
+                          : "bg-neutral-900 text-neutral-300 hover:text-white hover:bg-neutral-800"
+                      }`}
+                      title="Bantuan Garis Grid"
+                    >
+                      <Grid className="w-4 h-4" />
+                    </Button>
                   </div>
-                )}
+                </div>
+
+                {/* Subtext info */}
+                <div className="flex items-center justify-between text-[11px] text-neutral-400 px-2 pt-1">
+                  <span>Draf tersimpan otomatis saat foto diambil</span>
+                  {capturedPhotoBefore && (
+                    <button
+                      type="button"
+                      onClick={handleDiscardDraft}
+                      className="text-neutral-500 hover:text-rose-400 transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" /> Hapus Draf
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
-              /* ─── REVIEW SCREEN: DUAL PHOTOS & CUSTOMER FORM ─── */
+              /* ─── REVIEW & CONFIRMATION SCREEN ─── */
               <div className="space-y-4">
-                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 text-xs flex items-center justify-between text-emerald-800 dark:text-emerald-300">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Kedua foto berhasil dikompresi ke <strong>.webp</strong> dan siap dikirim ke SPI.</span>
+                <div className="p-3 rounded-xl bg-neutral-900 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-neutral-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Kedua foto bukti fisik telah siap dan tersimpan di draf.</span>
                   </div>
-                  <Badge variant="outline" className="border-emerald-400 text-emerald-700 dark:text-emerald-300 text-[10px]">
-                    Siap Dikirim
+                  <Badge variant="outline" className="text-[10px] text-emerald-400 border-0 bg-emerald-950/40">
+                    Siap Kirim
                   </Badge>
                 </div>
 
-                {/* Side-by-Side Dual Photo Comparison */}
+                {/* Side-by-Side Dual Photos */}
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {/* Photo Before Card */}
-                  <div className="p-3 rounded-xl border bg-muted/20 space-y-2">
+                  {/* Foto 1: Sebelum */}
+                  <div className="p-3 rounded-2xl bg-neutral-900 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-foreground flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      <span className="font-semibold text-xs text-white flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
                         1. Sebelum Pemasangan
                       </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                      <span className="text-[10px] text-neutral-400 font-mono">
                         {getApproxKb(capturedPhotoBefore)}
-                      </Badge>
+                      </span>
                     </div>
-                    <div className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center">
+
+                    <div
+                      className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer group"
+                      onClick={() =>
+                        setZoomPhoto({
+                          url: capturedPhotoBefore,
+                          title: "Foto 1: Sebelum Pemasangan (Kondisi Awal)",
+                        })
+                      }
+                    >
                       <img
                         src={capturedPhotoBefore}
                         alt="Foto Sebelum Pemasangan"
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Maximize2 className="w-5 h-5 text-white" />
+                      </div>
                     </div>
+
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      className="w-full text-xs gap-1.5 h-8"
+                      className="w-full text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 h-8 gap-1.5"
                       onClick={() => {
                         setPhotoStage("BEFORE");
                         startCamera();
                       }}
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      Foto Ulang Sebelum
+                      Ganti / Foto Ulang Sebelum
                     </Button>
                   </div>
 
-                  {/* Photo After Card */}
-                  <div className="p-3 rounded-xl border bg-muted/20 space-y-2">
+                  {/* Foto 2: Sesudah */}
+                  <div className="p-3 rounded-2xl bg-neutral-900 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-foreground flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="font-semibold text-xs text-white flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
                         2. Sesudah Pemasangan
                       </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+                      <span className="text-[10px] text-neutral-400 font-mono">
                         {getApproxKb(capturedPhotoAfter)}
-                      </Badge>
+                      </span>
                     </div>
-                    <div className="relative aspect-video rounded-lg overflow-hidden border bg-black flex items-center justify-center">
+
+                    <div
+                      className="relative aspect-video rounded-xl overflow-hidden bg-black cursor-pointer group"
+                      onClick={() =>
+                        setZoomPhoto({
+                          url: capturedPhotoAfter,
+                          title: "Foto 2: Sesudah Pemasangan (Hasil Akhir)",
+                        })
+                      }
+                    >
                       <img
                         src={capturedPhotoAfter}
                         alt="Foto Sesudah Pemasangan"
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Maximize2 className="w-5 h-5 text-white" />
+                      </div>
                     </div>
+
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      className="w-full text-xs gap-1.5 h-8"
+                      className="w-full text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 h-8 gap-1.5"
                       onClick={() => {
                         setPhotoStage("AFTER");
                         startCamera();
                       }}
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      Foto Ulang Sesudah
+                      Ganti / Foto Ulang Sesudah
                     </Button>
                   </div>
                 </div>
 
                 {/* Petugas / Teknisi yang Mengerjakan */}
-                <div className="p-3.5 rounded-xl border bg-card space-y-2.5">
+                <div className="p-3.5 rounded-2xl bg-neutral-900 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-[#5b7553]" />
-                      Petugas / Teknisi yang Mengerjakan
+                    <Label className="text-xs font-semibold text-white flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-neutral-400" />
+                      Petugas / Teknisi Lapangan
                     </Label>
-                    <span className="text-[10px] text-muted-foreground font-mono">Wajib Diisi</span>
+                    <span className="text-[10px] text-neutral-400">Wajib Diisi</span>
                   </div>
 
                   {technicians.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-28 overflow-y-auto p-1.5 border rounded-lg bg-muted/20">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-28 overflow-y-auto p-1 rounded-xl bg-neutral-950">
                       {technicians.map((t) => (
-                        <label key={t.id} className="flex items-center gap-2 p-1.5 rounded text-xs cursor-pointer hover:bg-muted/40 transition-colors">
+                        <label
+                          key={t.id}
+                          className="flex items-center gap-2 p-1.5 rounded-lg text-xs cursor-pointer hover:bg-neutral-800 text-neutral-300 transition-colors"
+                        >
                           <input
                             type="checkbox"
-                            className="rounded border-input text-[#5b7553] focus:ring-[#5b7553]"
+                            className="rounded border-neutral-700 bg-neutral-800 text-emerald-500 focus:ring-0"
                             checked={selectedTechIds.includes(t.id)}
                             onChange={(e) => {
-                              if (e.target.checked) setSelectedTechIds([...selectedTechIds, t.id]);
-                              else setSelectedTechIds(selectedTechIds.filter(id => id !== t.id));
+                              const updated = e.target.checked
+                                ? [...selectedTechIds, t.id]
+                                : selectedTechIds.filter((id) => id !== t.id);
+                              setSelectedTechIds(updated);
+                              if (selectedAllocation) {
+                                saveEvidenceDraft(selectedAllocation.allocationId, {
+                                  selectedTechIds: updated,
+                                  customTechNames,
+                                });
+                              }
                             }}
                           />
                           <span className="truncate">{t.fullName}</span>
@@ -1235,74 +1488,72 @@ export default function CabangPemasanganPage() {
                   )}
 
                   <Input
-                    placeholder="Nama teknisi / tim lapangan tambahan (pisahkan dengan koma)..."
+                    placeholder="Nama teknisi / tim lapangan tambahan (pisahkan koma)..."
                     value={customTechNames}
-                    onChange={(e) => setCustomTechNames(e.target.value)}
-                    className="text-xs h-9 bg-white dark:bg-card"
+                    onChange={(e) => {
+                      setCustomTechNames(e.target.value);
+                      if (selectedAllocation) {
+                        saveEvidenceDraft(selectedAllocation.allocationId, {
+                          selectedTechIds,
+                          customTechNames: e.target.value,
+                        });
+                      }
+                    }}
+                    className="text-xs h-9 bg-neutral-950 border-0 text-white placeholder:text-neutral-500 rounded-xl"
                   />
                 </div>
               </div>
             )}
           </div>
 
-          {/* Footer Controls */}
-          <DialogFooter className="p-4 border-t bg-muted/20 gap-2 sm:gap-0 shrink-0">
-            {photoStage === "BEFORE" && (
-              <>
-                <Button variant="outline" size="sm" onClick={closeCameraModal}>
-                  Batal
-                </Button>
-                <Button
-                  onClick={() => captureAndWatermark("BEFORE")}
-                  disabled={!cameraStreaming}
-                  className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
-                >
-                  <Camera className="w-4 h-4" />
-                  Jepret Foto 1 (Sebelum Pasang)
-                </Button>
-              </>
-            )}
-
-            {photoStage === "AFTER" && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setPhotoStage("BEFORE");
-                  }}
-                  className="gap-1.5"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Ulangi Foto Sebelum
-                </Button>
-                <Button
-                  onClick={() => captureAndWatermark("AFTER")}
-                  disabled={!cameraStreaming}
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                >
-                  <Camera className="w-4 h-4" />
-                  Jepret Foto 2 (Sesudah Pasang)
-                </Button>
-              </>
-            )}
+          {/* Footer Bar */}
+          <div className="p-4 bg-neutral-900/60 shrink-0 flex items-center justify-between gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={closeCameraModal}
+              className="text-xs text-neutral-400 hover:text-white"
+            >
+              Tutup
+            </Button>
 
             {photoStage === "REVIEW" && (
-              <>
-                <Button variant="outline" size="sm" onClick={closeCameraModal}>
-                  Batal
-                </Button>
-                <Button
-                  onClick={handleSubmitEvidence}
-                  disabled={submitEvidenceMutation.isPending}
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  {submitEvidenceMutation.isPending ? "Mengunggah WebP..." : "Kirim 2 Bukti Foto ke Auditor SPI"}
-                </Button>
-              </>
+              <Button
+                onClick={handleSubmitEvidence}
+                disabled={submitEvidenceMutation.isPending}
+                className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md text-xs h-9 px-4 rounded-xl"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                {submitEvidenceMutation.isPending ? "Mengunggah..." : "Kirim Bukti ke Auditor SPI"}
+              </Button>
             )}
-          </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── IMAGE ZOOM PREVIEW LIGHTBOX ─── */}
+      <Dialog open={!!zoomPhoto} onOpenChange={(o) => !o && setZoomPhoto(null)}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-black border-0 rounded-2xl">
+          <div className="p-3 bg-neutral-900 flex items-center justify-between text-white text-xs">
+            <span>{zoomPhoto?.title}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setZoomPhoto(null)}
+              className="h-7 px-2 text-neutral-400 hover:text-white"
+            >
+              Tutup
+            </Button>
+          </div>
+          {zoomPhoto && (
+            <div className="p-2 flex items-center justify-center bg-black">
+              <img
+                src={zoomPhoto.url}
+                alt={zoomPhoto.title}
+                className="max-h-[80vh] w-auto rounded-lg object-contain"
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

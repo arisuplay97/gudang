@@ -443,7 +443,7 @@ export default function PenggunaPage() {
                   <SelectContent>
                     {branches?.map((b) => (
                       <SelectItem key={b.id} value={String(b.id)}>
-                        {b.name} ({b.code})
+                        {b.name}{b.code ? ` (${b.code})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
