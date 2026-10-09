@@ -176,8 +176,6 @@ export default function DashboardPage() {
   }
 
   const [, navigate] = useLocation();
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
-  const [searchStock, setSearchStock] = useState<string>("");
   const [chartDays, setChartDays] = useState<7 | 30>(7);
 
   // 1. Dashboard summary
@@ -215,15 +213,10 @@ export default function DashboardPage() {
     return (branchRankingsData as any)?.data || [];
   }, [branchRankingsData]);
 
-  // 5. Granular Branch Stocks
+  // 5. Branch Stocks for executive summary
   const { data: branchStocksData, isLoading: loadingBranchStocks } = useQuery({
-    queryKey: ["branch-stocks", selectedBranchId],
-    queryFn: () => {
-      const url = selectedBranchId && selectedBranchId !== "all"
-        ? `/api/branch-stocks?branchId=${selectedBranchId}`
-        : "/api/branch-stocks";
-      return apiFetch<{ data: BranchStockRow[] }>(url);
-    },
+    queryKey: ["branch-stocks", "preview-summary"],
+    queryFn: () => apiFetch<{ data: BranchStockRow[] }>("/api/branch-stocks"),
     refetchInterval: 30_000,
   });
 
@@ -261,24 +254,38 @@ export default function DashboardPage() {
     return (recentTx as any)?.data || [];
   }, [recentTx]);
 
-  // Filtered branch stock table
-  const allRows: BranchStockRow[] = useMemo(() => {
+  const allBranchStockRows: BranchStockRow[] = useMemo(() => {
     if (Array.isArray(branchStocksData)) return branchStocksData;
     return branchStocksData?.data || [];
   }, [branchStocksData]);
 
-  const filteredRows = useMemo(() => {
-    return allRows.filter((row) => {
-      const matchBranch = selectedBranchId === "all" || row.branchId === Number(selectedBranchId);
-      const matchSearch = !searchStock.trim() ||
-        row.itemName.toLowerCase().includes(searchStock.toLowerCase()) ||
-        row.itemCode.toLowerCase().includes(searchStock.toLowerCase()) ||
-        row.branchName.toLowerCase().includes(searchStock.toLowerCase());
-      return matchBranch && matchSearch;
-    });
-  }, [allRows, selectedBranchId, searchStock]);
+  // Executive summary for branch stocks
+  const branchStockSummary = useMemo(() => {
+    const totalQty = allBranchStockRows.reduce((sum, r) => sum + (r.quantity || 0), 0);
+    const uniqueItems = new Set(allBranchStockRows.map((r) => r.itemId)).size;
+    const lowCount = allBranchStockRows.filter((r) => r.quantity <= 10).length;
 
-  const totalFilteredQuantity = filteredRows.reduce((sum, r) => sum + r.quantity, 0);
+    // Aggregate by branch
+    const branchMap = new Map<number, { name: string; qty: number; count: number }>();
+    for (const row of allBranchStockRows) {
+      const existing = branchMap.get(row.branchId) || { name: row.branchName, qty: 0, count: 0 };
+      existing.qty += row.quantity;
+      existing.count += 1;
+      branchMap.set(row.branchId, existing);
+    }
+
+    const topBranchesList = Array.from(branchMap.entries())
+      .map(([id, val]) => ({ id, ...val }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 4);
+
+    return {
+      totalQty,
+      uniqueItems,
+      lowCount,
+      topBranches: topBranchesList,
+    };
+  }, [allBranchStockRows]);
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
@@ -714,136 +721,128 @@ export default function DashboardPage() {
           </DashCard>
         </motion.div>
 
-        {/* ── Row 3: Sisa Stok Aksesoris per Cabang (Main Feature Table) ── */}
+        {/* ── Row 3: Ringkasan Sisa Stok Aksesoris Cabang (Executive Preview) ── */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <DashCard className="p-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 pb-4 border-b border-border">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-border/80">
               <div>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-muted/60 text-foreground flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <Layers className="w-4 h-4" />
                   </div>
                   <h2 className="text-lg font-bold text-foreground">
-                    Sisa Stok Aksesoris per Masing-Masing Cabang
+                    Sisa Stok Aksesoris di Cabang
                   </h2>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Daftar real-time kuantitas material & aksesoris yang tersisa dan dapat digunakan di setiap cabang
+                  Ikhtisar persediaan fisik material & aksesoris yang tersisa dan siap digunakan di seluruh cabang
                 </p>
               </div>
 
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="relative w-48 sm:w-60">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Cari aksesoris atau kode..."
-                    value={searchStock}
-                    onChange={(e) => setSearchStock(e.target.value)}
-                    className="h-9 pl-8 text-xs bg-muted/30 border-border"
-                  />
-                </div>
-
-                <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                  <SelectTrigger className="h-9 text-xs w-44 bg-muted/30 border-border">
-                    <SelectValue placeholder="Pilih Cabang" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Cabang</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
+              <div className="flex items-center gap-2.5">
                 <Button
-                  variant="outline"
+                  variant="default"
                   size="sm"
-                  onClick={() => navigate("/transaksi/retur")}
-                  className="h-9 text-xs gap-1.5 border-border hover:bg-muted"
+                  onClick={() => navigate("/cabang/stok-material")}
+                  className="h-9 text-xs gap-1.5 shadow-xs font-medium"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 text-muted-foreground" /> Retur Barang
+                  Buka Modul Inventaris Cabang <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
                 </Button>
               </div>
             </div>
 
-            {/* Table */}
-            <div className="rounded-xl border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="text-xs font-semibold uppercase text-muted-foreground pl-4">Cabang</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase text-muted-foreground">Kode Material</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase text-muted-foreground">Nama Aksesoris</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase text-muted-foreground">Kategori</TableHead>
-                    <TableHead className="text-right text-xs font-semibold uppercase text-muted-foreground">Sisa Stok Cabang</TableHead>
-                    <TableHead className="text-xs font-semibold uppercase text-muted-foreground">Satuan</TableHead>
-                    <TableHead className="text-right text-xs font-semibold uppercase text-muted-foreground pr-4">Terakhir Diperbarui</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadingBranchStocks ? (
-                    Array(5).fill(0).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell colSpan={7} className="p-3">
-                          <Skeleton className="h-9 w-full rounded" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : filteredRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                        <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm font-medium">Belum ada stok aksesoris tercatat di cabang</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {searchStock || selectedBranchId !== "all"
-                            ? "Tidak ada item yang cocok dengan filter pencarian."
-                            : "Material akan otomatis tercatat saat cabang menerima surat jalan atau menyimpan sisa pemasangan."}
-                        </p>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredRows.map((row) => (
-                      <TableRow key={`${row.branchId}-${row.itemId}`} className="hover:bg-muted/30">
-                        <TableCell className="pl-4 font-medium text-xs text-foreground">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-muted text-foreground text-xs font-medium">
-                            <Building2 className="w-3 h-3 text-muted-foreground" />
-                            {row.branchName}
-                          </span>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground font-semibold">
-                          {row.itemCode}
-                        </TableCell>
-                        <TableCell className="font-medium text-sm text-foreground">
-                          {row.itemName}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {row.categoryName || "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-bold text-sm text-foreground">
-                          {formatNumber(row.quantity)}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {row.unitName || "pcs"}
-                        </TableCell>
-                        <TableCell className="text-right pr-4 text-xs text-muted-foreground">
-                          {row.updatedAt ? formatDate(row.updatedAt) : "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            {/* Quick Metrics & Distribution Preview */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Metric Cards */}
+              <div className="space-y-3">
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/60">
+                  <span className="text-xs text-muted-foreground font-medium block">Total Sisa Stok Unit</span>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-2xl font-bold font-mono text-foreground">
+                      {formatNumber(branchStockSummary.totalQty)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">unit material</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Tersedia di {branchStockSummary.topBranches.length} cabang operasional
+                  </p>
+                </div>
 
-            {/* Table Footer info */}
-            <div className="flex items-center justify-between text-xs text-muted-foreground mt-3 pt-2">
-              <p>Menampilkan {filteredRows.length} jenis aksesoris</p>
-              <p className="font-semibold text-foreground">
-                Total Sisa Aksesoris: <span className="font-mono text-foreground font-bold">{formatNumber(totalFilteredQuantity)}</span> unit
-              </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-muted/20 border border-border/50">
+                    <span className="text-[11px] text-muted-foreground block">Variasi Item</span>
+                    <span className="text-lg font-bold font-mono text-foreground mt-0.5 block">
+                      {branchStockSummary.uniqueItems} <span className="text-xs font-normal text-muted-foreground">jenis</span>
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-muted/20 border border-border/50">
+                    <span className="text-[11px] text-muted-foreground block">Stok Menipis</span>
+                    <span className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400 mt-0.5 block">
+                      {branchStockSummary.lowCount} <span className="text-xs font-normal text-muted-foreground">item</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Top Branches Distribution Meters */}
+              <div className="lg:col-span-2 rounded-xl bg-muted/20 border border-border/50 p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                      Distribusi Sisa Stok per Cabang
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Proporsi unit aktif
+                    </span>
+                  </div>
+
+                  {branchStockSummary.topBranches.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      Belum ada data persediaan cabang tercatat
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {branchStockSummary.topBranches.map((b) => {
+                        const percent = branchStockSummary.totalQty > 0
+                          ? Math.round((b.qty / branchStockSummary.totalQty) * 100)
+                          : 0;
+                        return (
+                          <div key={b.id} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-medium text-foreground flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                {b.name}
+                              </span>
+                              <span className="font-mono font-bold text-foreground">
+                                {formatNumber(b.qty)}{" "}
+                                <span className="text-[11px] font-normal text-muted-foreground">
+                                  unit ({percent}%)
+                                </span>
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full transition-all duration-300"
+                                style={{ width: `${Math.max(4, percent)}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Data real-time tersinkronisasi otomatis</span>
+                  <button
+                    onClick={() => navigate("/cabang/stok-material")}
+                    className="text-primary hover:underline font-medium inline-flex items-center gap-1"
+                  >
+                    Buka tabel lengkap & filter <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
             </div>
           </DashCard>
         </motion.div>

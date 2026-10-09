@@ -31,6 +31,7 @@ import CabangDashboardPage from "@/pages/cabang/dashboard";
 import CabangReceivePage from "@/pages/cabang/receive";
 import CabangPemasanganPage from "@/pages/cabang/pemasangan";
 import CabangTrackingPage from "@/pages/cabang/tracking";
+import StokMaterialCabangPage from "@/pages/cabang/stok-material";
 import SpiDashboardPage from "@/pages/spi/dashboard";
 import SpiVerifikasiPage from "@/pages/spi/verifikasi";
 import SpiGisPage from "@/pages/spi/gis";
@@ -98,7 +99,9 @@ function AppRouter() {
         <Route path="/laporan/nilai" component={LaporanNilaiPage} />
         <Route path="/laporan/log" component={AuditLogPage} />
 
-        {/* Cabang Routes */}
+        {/* Cabang & Inventaris Routes */}
+        <Route path="/cabang/stok-material" component={StokMaterialCabangPage} />
+        <Route path="/inventaris/cabang" component={StokMaterialCabangPage} />
         <Route path="/cabang/dashboard" component={CabangDashboardPage} />
         <Route path="/cabang/receive" component={CabangReceivePage} />
         <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />

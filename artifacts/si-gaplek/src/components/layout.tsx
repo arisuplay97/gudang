@@ -76,27 +76,32 @@ import NotificationCenter from "@/components/notification-center";
 /* ── Navigation Types & Config ── */
 interface NavItem {
   label: string;
-  href?: string;
+  href: string;
   icon: React.ElementType;
   roles: Role[];
-  children?: NavItem[];
-  group?: string;
   badge?: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
   {
-    label: "Dashboard",
-    href: "/",
-    icon: LayoutDashboard,
-    roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
+    title: "DASHBOARD",
+    items: [
+      {
+        label: "Dashboard Utama",
+        href: "/",
+        icon: LayoutDashboard,
+        roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
+      },
+    ],
   },
   {
-    label: "MASTER",
-    icon: Package,
-    roles: ["ADMIN", "GUDANG"],
-    group: "MASTER",
-    children: [
+    title: "MASTER",
+    items: [
       { label: "Material", href: "/master/barang", icon: Package, roles: ["ADMIN", "GUDANG"] },
       { label: "Kategori", href: "/master/kategori", icon: Tags, roles: ["ADMIN", "GUDANG"] },
       { label: "Satuan", href: "/master/satuan", icon: Ruler, roles: ["ADMIN", "GUDANG"] },
@@ -104,11 +109,19 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "TRANSAKSI",
-    icon: ArrowLeftRight,
-    roles: ["ADMIN", "GUDANG", "CABANG"],
-    group: "TRANSAKSI",
-    children: [
+    title: "INVENTARIS CABANG",
+    items: [
+      {
+        label: "Sisa Stok Cabang",
+        href: "/cabang/stok-material",
+        icon: Layers,
+        roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
+      },
+    ],
+  },
+  {
+    title: "TRANSAKSI",
+    items: [
       { label: "Distribusi (Keluar)", href: "/transaksi/keluar", icon: PackageMinus, roles: ["ADMIN", "GUDANG"] },
       { label: "Penerimaan (Scan QR)", href: "/cabang/receive", icon: ScanBarcode, roles: ["ADMIN", "CABANG"] },
       { label: "Pemasangan Material", href: "/cabang/pemasangan", icon: Ruler, roles: ["ADMIN", "CABANG"] },
@@ -116,20 +129,14 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "TRACKING",
-    icon: Activity,
-    roles: ["ADMIN", "GUDANG", "CABANG"],
-    group: "TRACKING",
-    children: [
+    title: "TRACKING",
+    items: [
       { label: "Material Tracking", href: "/cabang/tracking", icon: MapPin, roles: ["ADMIN", "GUDANG", "CABANG"] },
     ],
   },
   {
-    label: "AUDIT / SPI",
-    icon: ShieldCheck,
-    roles: ["ADMIN", "SPI"],
-    group: "AUDIT",
-    children: [
+    title: "AUDIT / SPI",
+    items: [
       { label: "Dashboard Audit", href: "/spi/dashboard", icon: BarChart3, roles: ["ADMIN", "SPI"] },
       { label: "Verifikasi", href: "/spi/verifikasi", icon: ScrollText, roles: ["ADMIN", "SPI"] },
       { label: "Peta Material", href: "/spi/gis", icon: MapPin, roles: ["ADMIN", "SPI"] },
@@ -137,11 +144,8 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "LAPORAN",
-    icon: FileSpreadsheet,
-    roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
-    group: "LAPORAN",
-    children: [
+    title: "LAPORAN",
+    items: [
       { label: "Stok Cabang", href: "/laporan/stok", icon: BarChart3, roles: ["ADMIN", "GUDANG", "SPI"] },
       { label: "Produktivitas Teknisi", href: "/laporan/teknisi", icon: Users, roles: ["ADMIN", "GUDANG", "CABANG", "SPI"] },
       { label: "Transaksi", href: "/laporan/transaksi", icon: FileSpreadsheet, roles: ["ADMIN", "GUDANG", "SPI"] },
@@ -151,23 +155,28 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "Tiara Assistant",
-    href: "/ai-assistant",
-    icon: Sparkles,
-    roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
-    badge: "AI",
-  },
-  {
-    label: "Pengguna",
-    href: "/pengguna",
-    icon: Users,
-    roles: ["ADMIN"],
+    title: "LAINNYA",
+    items: [
+      {
+        label: "Tiara Assistant",
+        href: "/ai-assistant",
+        icon: Sparkles,
+        roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
+        badge: "AI",
+      },
+      {
+        label: "Pengguna",
+        href: "/pengguna",
+        icon: Users,
+        roles: ["ADMIN"],
+      },
+    ],
   },
 ];
 
 /* ── Breadcrumb Route Map ── */
 const ROUTE_LABELS: Record<string, string> = {
-  "/": "Dashboard",
+  "/": "Dashboard Utama",
   "/master/barang": "Material",
   "/master/kategori": "Kategori",
   "/master/satuan": "Satuan",
@@ -175,6 +184,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "/master/gudang": "Cabang & Gudang",
   "/master/departemen": "Departemen",
   "/master/lokasi": "Lokasi Gudang",
+  "/cabang/stok-material": "Sisa Stok Cabang",
+  "/inventaris/cabang": "Sisa Stok Cabang",
   "/transaksi/masuk": "Material Masuk",
   "/transaksi/keluar": "Distribusi",
   "/transaksi/opname": "Stock Opname",
@@ -203,6 +214,7 @@ const ROUTE_LABELS: Record<string, string> = {
 
 const ROUTE_GROUPS: Record<string, string> = {
   "/master": "Master",
+  "/cabang/stok-material": "Inventaris Cabang",
   "/transaksi": "Transaksi",
   "/cabang": "Operasional",
   "/spi": "Audit SPI",
@@ -212,130 +224,38 @@ const ROUTE_GROUPS: Record<string, string> = {
 /* ── NavLink Component ── */
 function NavLink({
   item,
-  depth = 0,
   collapsed = false,
   onNavigate,
 }: {
   item: NavItem;
-  depth?: number;
   collapsed?: boolean;
   onNavigate?: () => void;
 }) {
   const [location, navigate] = useLocation();
-  const [open, setOpen] = useState(false);
   const { user } = useAuth();
-
-  // Auto-expand if child is active
-  useEffect(() => {
-    if (item.children?.some((c) => c.href && (c.href === "/" ? location === "/" : location.startsWith(c.href)))) {
-      setOpen(true);
-    }
-  }, [location, item.children]);
 
   if (!user || !item.roles.includes(user.role)) return null;
 
-  const isActive = item.href
-    ? item.href === "/" ? location === "/" : location.startsWith(item.href)
-    : item.children?.some((c) => c.href && (c.href === "/" ? location === "/" : location.startsWith(c.href)));
+  const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
 
-  if (item.children) {
-    if (collapsed && depth === 0) {
-      return (
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    "w-full flex items-center justify-center p-2.5 rounded-lg text-sm transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"
-                  )}
-                >
-                  <item.icon className="w-5 h-5 shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              {item.label}
-            </TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent side="right" align="start" className="w-48">
-            <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {item.children.map((child) => {
-              if (!user || !child.roles.includes(user.role)) return null;
-              const childActive = child.href && (child.href === "/" ? location === "/" : location.startsWith(child.href));
-              return (
-                <DropdownMenuItem key={child.href} asChild>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate(child.href!);
-                      onNavigate?.();
-                    }}
-                    className={cn("w-full flex items-center gap-2 text-sm", childActive && "font-medium text-primary")}
-                  >
-                    <child.icon className="w-4 h-4" />
-                    <span>{child.label}</span>
-                  </button>
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    }
-
-    return (
-      <div>
-
-        <button
-          onClick={() => setOpen(!open)}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-            "hover:bg-accent hover:text-accent-foreground",
-            isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"
-          )}
-        >
-          <item.icon className="w-4 h-4 shrink-0" />
-          <span className="flex-1 text-left">{item.label}</span>
-          <ChevronRight className={cn("w-4 h-4 transition-transform duration-200", open && "rotate-90")} />
-        </button>
-        <div
-          className={cn(
-            "overflow-hidden transition-all duration-200",
-            open ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
-          )}
-        >
-          <div className="ml-4 mt-1 space-y-0.5">
-            {item.children.map((child) => (
-              <NavLink key={child.href} item={child} depth={depth + 1} collapsed={collapsed} onNavigate={onNavigate} />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Leaf nav item
   const linkContent = (
     <button
       onClick={(e) => {
         e.preventDefault();
-        navigate(item.href!);
+        navigate(item.href);
         onNavigate?.();
       }}
       className={cn(
-        "w-full flex items-center gap-3 rounded-lg text-sm transition-colors",
-        "hover:bg-accent hover:text-accent-foreground",
-        collapsed && depth === 0 ? "justify-center p-2.5" : "px-3 py-2",
-        isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground"
+        "w-full flex items-center gap-3 rounded-lg text-sm transition-all duration-150 select-none",
+        collapsed ? "justify-center p-2.5" : "px-3 py-2",
+        isActive
+          ? "bg-primary/10 text-primary font-semibold shadow-2xs"
+          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground font-normal"
       )}
     >
-      <item.icon className={cn("shrink-0", collapsed && depth === 0 ? "w-5 h-5" : "w-4 h-4")} />
-      {(!collapsed || depth > 0) && <span className="flex-1 text-left">{item.label}</span>}
-      {item.badge && (!collapsed || depth > 0) && (
+      <item.icon className={cn("shrink-0 transition-colors", collapsed ? "w-5 h-5" : "w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
+      {!collapsed && <span className="flex-1 text-left truncate">{item.label}</span>}
+      {item.badge && !collapsed && (
         <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-2xs leading-none">
           {item.badge}
         </span>
@@ -343,7 +263,7 @@ function NavLink({
     </button>
   );
 
-  if (collapsed && depth === 0) {
+  if (collapsed) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -400,9 +320,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const items: { label: string; href: string }[] = [];
 
     // Find group
-    const firstSegment = `/${parts[0]}`;
-    if (ROUTE_GROUPS[firstSegment]) {
-      items.push({ label: ROUTE_GROUPS[firstSegment], href: firstSegment });
+    if (location === "/cabang/stok-material" || location === "/inventaris/cabang") {
+      items.push({ label: "Inventaris Cabang", href: "/cabang/stok-material" });
+    } else {
+      const firstSegment = `/${parts[0]}`;
+      if (ROUTE_GROUPS[firstSegment]) {
+        items.push({ label: ROUTE_GROUPS[firstSegment], href: firstSegment });
+      }
     }
 
     // Full path label
@@ -448,15 +372,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <nav className={cn("flex-1 overflow-y-auto space-y-0.5", isCollapsed ? "p-2" : "p-3")}>
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.label}
-            item={item}
-            collapsed={isCollapsed}
-            onNavigate={() => setSidebarOpen(false)}
-          />
-        ))}
+      <nav className={cn("flex-1 overflow-y-auto space-y-3", isCollapsed ? "p-2" : "px-3 py-2.5")}>
+        {NAV_SECTIONS.map((section, sIdx) => {
+          const visibleItems = section.items.filter((item) => user && item.roles.includes(user.role));
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={section.title} className="space-y-1">
+              {!isCollapsed ? (
+                <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/75 select-none">
+                  {section.title}
+                </div>
+              ) : (
+                sIdx > 0 && <div className="my-1.5 border-t border-border/50 mx-1.5" />
+              )}
+
+              <div className="space-y-0.5">
+                {visibleItems.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    collapsed={isCollapsed}
+                    onNavigate={() => setSidebarOpen(false)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </nav>
     </div>
   );
