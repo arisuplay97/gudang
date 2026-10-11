@@ -25,6 +25,7 @@ import {
   Package,
   RotateCcw,
 } from "lucide-react";
+import { MobileBranchHome } from "./mobile-branch-home";
 
 interface ShipmentItem {
   trackingId: number;
@@ -117,7 +118,13 @@ export default function CabangDashboardPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
-      <div className="p-5 md:p-8 max-w-[1600px] mx-auto space-y-5">
+      {/* ── Mobile PWA Home Experience (Khusus Layar HP / PWA ala Image 1 Screen 1) ── */}
+      <div className="block md:hidden p-4 max-w-lg mx-auto">
+        <MobileBranchHome />
+      </div>
+
+      {/* ── Desktop Admin Experience (Full Multi-col KPI & Tables) ── */}
+      <div className="hidden md:block p-5 md:p-8 max-w-[1600px] mx-auto space-y-5">
         {/* ── Header ── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

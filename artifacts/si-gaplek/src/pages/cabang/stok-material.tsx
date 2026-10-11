@@ -648,14 +648,14 @@ export default function StokMaterialCabangPage() {
             MOBILE PWA EXPERIENCE (Smartphone View ala Linear/iOS)
            ══════════════════════════════════════════════════ */}
         <div className="block md:hidden pb-10 space-y-4 max-w-lg mx-auto">
-          {/* Greeting & Logistics Header Card */}
-          <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs space-y-2">
+          {/* Stock Header Card */}
+          <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
                 {activeBranchName}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" />
                 Live Sync
               </span>
@@ -663,10 +663,10 @@ export default function StokMaterialCabangPage() {
 
             <div className="pt-0.5">
               <h2 className="text-xl font-bold tracking-tight text-foreground">
-                {greetingText}, {user?.fullName?.split(" ")[0] || "Petugas"}
+                Sisa Stok Aksesoris
               </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Monitoring persediaan fisik & kartu stok cabang
+              <p className="text-xs text-muted-foreground">
+                Monitoring kuantitas fisik & batas safety stock
               </p>
             </div>
           </div>

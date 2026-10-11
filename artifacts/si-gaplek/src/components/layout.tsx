@@ -314,6 +314,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     .join("")
     .toUpperCase();
 
+  const greetingText = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 11) return "Selamat Pagi";
+    if (hour < 15) return "Selamat Siang";
+    if (hour < 18) return "Selamat Sore";
+    return "Selamat Malam";
+  }, []);
+
   /* ── Breadcrumb computation ── */
   const breadcrumbItems = useMemo(() => {
     if (location === "/") return [{ label: "Dashboard", href: "/" }];
@@ -417,8 +425,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <SidebarContent isCollapsed={collapsed} />
       </aside>
 
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
+      {/* Mobile sidebar overlay (Non-Cabang) */}
+      {sidebarOpen && user.role !== "CABANG" && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
           <aside className="relative z-10 w-64 bg-white dark:bg-card border-r border-border/80 flex flex-col">
@@ -431,15 +439,67 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* ── TOPBAR ── */}
         <header className="flex items-center gap-3 h-14 px-4 border-b border-border/80 bg-white dark:bg-card z-30 shrink-0">
-          {/* Left: sidebar toggle + breadcrumb */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden shrink-0"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
+          {/* Mobile Native Header ala Image 1 (Khusus Layar HP / PWA - 0% Hamburger, 0% Desktop Sidebar) */}
+          <div className="flex lg:hidden items-center justify-between w-full">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Avatar className="w-8 h-8 rounded-xl border border-border/80 shrink-0">
+                <AvatarFallback className="text-xs font-bold bg-sky-600 text-white rounded-xl">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block truncate">
+                  {user.branchName || roleLabel(user.role)}
+                </span>
+                <h1 className="text-sm font-bold text-foreground truncate leading-tight">
+                  {greetingText}, {user.fullName?.split(" ")[0]}
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <NotificationCenter />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 rounded-xl hover:bg-muted">
+                    <Settings className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 rounded-2xl shadow-xl p-1.5">
+                  <DropdownMenuLabel className="text-xs">
+                    <p className="font-semibold">{user.fullName}</p>
+                    <p className="text-[10px] text-muted-foreground">@{user.username} • {user.branchName || roleLabel(user.role)}</p>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setIsDark(!isDark)} className="text-xs cursor-pointer">
+                    {isDark ? <Sun className="w-3.5 h-3.5 mr-2 text-amber-500" /> : <Moon className="w-3.5 h-3.5 mr-2" />}
+                    {isDark ? "Mode Terang" : "Mode Gelap"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/pengaturan?tab=profil")} className="text-xs cursor-pointer">
+                    <User className="w-3.5 h-3.5 mr-2" />
+                    Profil Saya
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="text-xs text-rose-600 cursor-pointer font-medium">
+                    <LogOut className="w-3.5 h-3.5 mr-2" />
+                    Keluar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {/* Desktop Topbar (Hidden on Mobile) */}
+          <div className="hidden lg:flex items-center gap-3 w-full">
+            {/* Left: sidebar toggle + breadcrumb */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden shrink-0"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
 
           <Breadcrumb className="hidden sm:flex">
             <BreadcrumbList>
@@ -582,6 +642,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto relative pb-28 sm:pb-0">
