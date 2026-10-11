@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,6 +124,7 @@ export default function CabangPemasanganPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   const [activeTab, setActiveTab] = useState<string>("allocations");
   const [allocationModalOpen, setAllocationModalOpen] = useState(false);
@@ -675,40 +677,278 @@ export default function CabangPemasanganPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+    <div className={isMobile ? "p-3 space-y-4 max-w-lg mx-auto" : "p-4 md:p-8 max-w-4xl mx-auto space-y-6"}>
+      {isMobile ? (
+        /* ─── MOBILE NATIVE VIEW ─── */
+        <div className="space-y-4 pb-24">
+          {/* Mobile Hero Header */}
+          <div className="p-4 rounded-3xl bg-linear-to-br from-card via-card to-muted/40 border border-border/60 shadow-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold tracking-wider uppercase text-primary px-2.5 py-0.5 rounded-full bg-primary/10">
+                Pemasangan & Evidence
+              </span>
+              <span className="text-[11px] font-mono text-muted-foreground">
+                {user?.branchName || "Cabang"}
+              </span>
+            </div>
+            <h1 className="text-xl font-black text-foreground tracking-tight">Dokumentasi Lapangan</h1>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Catat alokasi titik fisik dan ambil bukti foto dengan stempel GPS & watermark resmi SPI.
+            </p>
+          </div>
 
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Pemasangan & Dokumentasi</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Kelola alokasi titik pemasangan material dan unggah bukti fisik dengan watermark resmi.
-          </p>
+          {/* Segmented Stage Switcher */}
+          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-muted/60 border border-border/40 text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab("allocations")}
+              className={`py-2 px-1 rounded-xl font-medium transition-all flex flex-col items-center gap-0.5 ${
+                activeTab === "allocations"
+                  ? "bg-card text-foreground font-bold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-[11px]">1. Siap Pasang</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
+                {readyForAllocTrackings.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("camera")}
+              className={`py-2 px-1 rounded-xl font-medium transition-all flex flex-col items-center gap-0.5 ${
+                activeTab === "camera"
+                  ? "bg-card text-foreground font-bold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-[11px]">2. Ambil Foto</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
+                {pendingEvidenceAllocations.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("history")}
+              className={`py-2 px-1 rounded-xl font-medium transition-all flex flex-col items-center gap-0.5 ${
+                activeTab === "history"
+                  ? "bg-card text-foreground font-bold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-[11px]">3. Riwayat</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
+                {completedAllocations.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Tab 1 Content: Material Ready to Allocate */}
+          {activeTab === "allocations" && (
+            <div className="space-y-3">
+              {isTrackingsLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-24 w-full rounded-2xl" />
+                  <Skeleton className="h-24 w-full rounded-2xl" />
+                </div>
+              ) : readyForAllocTrackings.length === 0 ? (
+                <div className="p-8 text-center rounded-3xl bg-card border border-border/60 text-muted-foreground space-y-2">
+                  <FolderOpen className="w-8 h-8 mx-auto text-muted-foreground/30" />
+                  <p className="text-xs font-semibold text-foreground">Tidak Ada Material Siap Alokasi</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Semua material yang diterima sudah dialokasikan ke titik kerja atau belum ada pengiriman diterima.
+                  </p>
+                </div>
+              ) : (
+                readyForAllocTrackings.map((track) => (
+                  <div
+                    key={track.id}
+                    className="p-4 rounded-3xl bg-card border border-border/60 shadow-2xs space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <h3 className="font-bold text-sm text-foreground">{track.itemName}</h3>
+                        <p className="text-[11px] font-mono text-muted-foreground">Ref: {track.referenceNo}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] font-mono px-2 py-0.5 rounded-lg">
+                        {track.itemCode}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 py-2 px-3 rounded-2xl bg-muted/40 text-center text-xs">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Total SJ</p>
+                        <p className="font-bold text-foreground text-sm">{track.totalQuantity}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Terpasang</p>
+                        <p className="font-bold text-muted-foreground text-sm">{track.installedQuantity}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Sisa Siap</p>
+                        <p className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{track.remainingQuantity}</p>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={() => openAllocationDialog(track)}
+                      className="w-full h-10 rounded-2xl text-xs font-bold bg-primary text-primary-foreground gap-1.5 shadow-xs"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Tetapkan Titik Pasang ({track.remainingQuantity} Tersedia)
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Tab 2 Content: Pending Evidence */}
+          {activeTab === "camera" && (
+            <div className="space-y-3" key={`draft-grid-mobile-${draftVersion}`}>
+              {isAllocationsLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-24 w-full rounded-2xl" />
+                  <Skeleton className="h-24 w-full rounded-2xl" />
+                </div>
+              ) : pendingEvidenceAllocations.length === 0 ? (
+                <div className="p-8 text-center rounded-3xl bg-card border border-border/60 text-muted-foreground space-y-2">
+                  <Camera className="w-8 h-8 mx-auto text-muted-foreground/30" />
+                  <p className="text-xs font-semibold text-foreground">Semua Titik Sudah Didokumentasikan</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Silakan buat alokasi titik baru dari tab "1. Siap Pasang" jika ada material yang baru dikerjakan.
+                  </p>
+                </div>
+              ) : (
+                pendingEvidenceAllocations.map((alloc) => {
+                  const draft = getEvidenceDraft(alloc.allocationId);
+                  const hasDraftBefore = !!draft?.photoBeforeBase64;
+                  const hasDraftAfter = !!draft?.photoAfterBase64;
+
+                  return (
+                    <div
+                      key={alloc.allocationId}
+                      className="p-4 rounded-3xl bg-card border border-border/60 shadow-2xs space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-0.5">
+                          <h3 className="font-bold text-sm text-foreground">{alloc.itemName}</h3>
+                          <p className="text-[11px] font-mono text-muted-foreground">Ref: {alloc.referenceNo}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 rounded-lg">
+                          Qty: {alloc.quantity}
+                        </Badge>
+                      </div>
+
+                      {alloc.plannedLatitude && alloc.plannedLongitude && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted/40 text-[11px] font-mono text-muted-foreground">
+                          <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>Target: {alloc.plannedLatitude}, {alloc.plannedLongitude}</span>
+                        </div>
+                      )}
+
+                      {hasDraftBefore && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">
+                          <Check className="w-3.5 h-3.5 shrink-0" />
+                          <span>Draf Foto Sebelum Tersimpan {hasDraftAfter ? "& Sesudah Siap" : ""}</span>
+                        </div>
+                      )}
+
+                      {alloc.status === "REJECTED" && (
+                        <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-500">
+                          Bukti ditolak oleh auditor SPI. Ambil ulang foto dengan sudut & watermark GPS jelas.
+                        </div>
+                      )}
+
+                      <Button
+                        onClick={() => openCameraModal(alloc)}
+                        className="w-full h-11 rounded-2xl text-xs font-bold bg-primary text-primary-foreground gap-2 shadow-xs"
+                      >
+                        <Camera className="w-4 h-4" />
+                        {hasDraftBefore ? "Lanjutkan Dokumentasi (Draf)" : "Ambil Foto Watermark GPS"}
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* Tab 3 Content: History */}
+          {activeTab === "history" && (
+            <div className="space-y-2.5">
+              {completedAllocations.length === 0 ? (
+                <div className="p-8 text-center rounded-3xl bg-card border border-border/60 text-muted-foreground space-y-2">
+                  <ShieldCheck className="w-8 h-8 mx-auto text-muted-foreground/30" />
+                  <p className="text-xs font-semibold text-foreground">Belum Ada Bukti Selesai</p>
+                </div>
+              ) : (
+                completedAllocations.map((alloc) => {
+                  const isVerified = alloc.status === "VERIFIED";
+                  return (
+                    <div
+                      key={alloc.allocationId}
+                      className="p-3.5 rounded-2xl bg-card border border-border/60 shadow-2xs flex items-center justify-between gap-3"
+                    >
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="font-bold text-xs text-foreground truncate">{alloc.itemName}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          Ref: {alloc.referenceNo} • Qty: {alloc.quantity}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={isVerified ? "default" : "secondary"}
+                        className={`text-[10px] font-semibold shrink-0 gap-1 rounded-full ${
+                          isVerified
+                            ? "bg-emerald-600 text-white"
+                            : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                        }`}
+                      >
+                        {isVerified ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        {isVerified ? "TERVERIFIKASI" : "MENUNGGU SPI"}
+                      </Badge>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 self-start sm:self-auto text-xs"
-          onClick={() => setLocation("/laporan/pemasangan-aksesoris")}
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-          Format Laporan Pemasangan (Excel)
-        </Button>
-      </motion.div>
+      ) : (
+        /* ─── DESKTOP VIEW ─── */
+        <>
+          {/* Header */}
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">Pemasangan & Dokumentasi</h1>
+              <p className="text-muted-foreground text-sm mt-0.5">
+                Kelola alokasi titik pemasangan material dan unggah bukti fisik dengan watermark resmi.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 self-start sm:self-auto text-xs"
+              onClick={() => setLocation("/laporan/pemasangan-aksesoris")}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              Format Laporan Pemasangan (Excel)
+            </Button>
+          </motion.div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-3 w-full max-w-md bg-muted/60 p-1">
-          <TabsTrigger value="allocations" className="text-xs font-medium">
-            1. Alokasi Titik
-          </TabsTrigger>
-          <TabsTrigger value="camera" className="text-xs font-medium">
-            2. Foto Pemasangan
-          </TabsTrigger>
-          <TabsTrigger value="history" className="text-xs font-medium">
-            3. Riwayat
-          </TabsTrigger>
-        </TabsList>
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="grid grid-cols-3 w-full max-w-md bg-muted/60 p-1">
+              <TabsTrigger value="allocations" className="text-xs font-medium">
+                1. Alokasi Titik
+              </TabsTrigger>
+              <TabsTrigger value="camera" className="text-xs font-medium">
+                2. Foto Pemasangan
+              </TabsTrigger>
+              <TabsTrigger value="history" className="text-xs font-medium">
+                3. Riwayat
+              </TabsTrigger>
+            </TabsList>
 
         {/* ─── TAB 1: ALOKASI TITIK ─── */}
         <TabsContent value="allocations" className="space-y-4">
@@ -893,6 +1133,8 @@ export default function CabangPemasanganPage() {
           )}
         </TabsContent>
       </Tabs>
+      </>
+      )}
 
       {/* ─── MODAL BUAT ALOKASI ─── */}
       <Dialog open={allocationModalOpen} onOpenChange={setAllocationModalOpen}>

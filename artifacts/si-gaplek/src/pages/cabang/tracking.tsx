@@ -4,6 +4,9 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileTrackingView } from "@/components/mobile/mobile-tracking-view";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -307,6 +310,8 @@ const STEPS = [
 
 export default function CabangTrackingPage() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const isMobile = useIsMobile();
 
   // Mode view switcher with persistence
   const [viewMode, setViewMode] = useState<"list" | "table" | "board" | "map">(() => {
@@ -367,10 +372,20 @@ export default function CabangTrackingPage() {
   });
 
   const rawList: TrackingItem[] = useMemo(() => {
-    if (Array.isArray(trackingResponse?.data)) return trackingResponse.data;
-    if (Array.isArray(trackingResponse)) return trackingResponse as any;
-    return [];
-  }, [trackingResponse]);
+    let list: TrackingItem[] = [];
+    if (Array.isArray(trackingResponse?.data)) list = trackingResponse.data;
+    else if (Array.isArray(trackingResponse)) list = trackingResponse as any;
+
+    // Strict Branch Lockdown: CABANG users can ONLY see their own branch!
+    if (user?.role === "CABANG") {
+      list = list.filter((item) => {
+        if (user.branchId && item.branchId && item.branchId !== user.branchId) return false;
+        if (user.branchName && item.branchName && !item.branchName.toLowerCase().includes(user.branchName.toLowerCase())) return false;
+        return true;
+      });
+    }
+    return list;
+  }, [trackingResponse, user]);
 
   const selectedTrackingItem = useMemo(() => {
     if (!selectedTrackingUuid) return null;
@@ -601,6 +616,10 @@ export default function CabangTrackingPage() {
     document.body.removeChild(link);
   };
 
+  if (isMobile) {
+    return <MobileTrackingView items={filteredList} isLoading={isLoading} />;
+  }
+
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* ─── Top Header & View Switcher ─── */}
@@ -746,34 +765,48 @@ export default function CabangTrackingPage() {
             </SelectContent>
           </Select>
 
-          {/* 5. Filter Cabang */}
-          <div className="flex items-center gap-1.5">
-            <Select value={branchFilter} onValueChange={setBranchFilter}>
-              <SelectTrigger className="bg-background h-8 text-xs flex-1">
-                <SelectValue placeholder="Cabang" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Cabang</SelectItem>
-                {branchList.map((b: any) => (
-                  <SelectItem key={b.id} value={b.id.toString()}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* 5. Filter Cabang (Hanya untuk Admin / Gudang Pusat, Cabang dikunci ke wilayahnya) */}
+          {user?.role !== "CABANG" ? (
+            <div className="flex items-center gap-1.5">
+              <Select value={branchFilter} onValueChange={setBranchFilter}>
+                <SelectTrigger className="bg-background h-8 text-xs flex-1">
+                  <SelectValue placeholder="Cabang" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Cabang</SelectItem>
+                  {branchList.map((b: any) => (
+                    <SelectItem key={b.id} value={b.id.toString()}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            {hasActiveFilters && (
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                  onClick={resetFilters}
+                  title="Reset Filter"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+          ) : (
+            hasActiveFilters && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground justify-start"
                 onClick={resetFilters}
                 title="Reset Filter"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Filter
               </Button>
-            )}
-          </div>
+            )
+          )}
         </div>
       </div>
 

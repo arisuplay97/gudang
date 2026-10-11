@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ function DashCard({ children, className = "" }: { children: React.ReactNode; cla
 
 export default function CabangReceivePage() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -297,6 +299,146 @@ export default function CabangReceivePage() {
   // Calculate items breakdown for active shipment
   const itemsList = activeShipment?.items || [];
   const totalItemQty = itemsList.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) || activeShipment?.totalUnits || 0;
+
+  if (isMobile) {
+    return (
+      <div className="space-y-4 px-4 pt-2 pb-10">
+        {/* Search & Camera Bar */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Cari SPK / Surat Jalan..."
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              className="pl-10 h-11 text-xs rounded-2xl bg-card border-border/80 shadow-xs font-mono"
+            />
+          </div>
+          <Button
+            onClick={() => setScannerOpen(true)}
+            className="h-11 px-4 rounded-2xl bg-primary text-primary-foreground text-xs font-bold gap-1.5 shadow-xs shrink-0"
+          >
+            <Camera className="w-4 h-4" />
+            Scan QR
+          </Button>
+        </div>
+
+        {/* Status Filter Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+          {[
+            { id: "ALL", label: `Semua (${shipments.length})` },
+            { id: "PENDING", label: `Menunggu (${shipments.filter((s) => !s.isFullyReceived).length})` },
+            { id: "COMPLETED", label: `Selesai (${shipments.filter((s) => s.isFullyReceived).length})` },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setStatusFilter(tab.id as any)}
+              className={`px-3.5 py-1.5 rounded-full font-semibold transition-all shrink-0 text-xs ${
+                statusFilter === tab.id
+                  ? "bg-foreground text-background shadow-xs"
+                  : "bg-card border border-border/70 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Shipment Cards List */}
+        {loadingShipments ? (
+          <div className="space-y-2.5">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-28 rounded-3xl bg-card/60 border border-border/40 animate-pulse" />
+            ))}
+          </div>
+        ) : filteredShipments.length === 0 ? (
+          <div className="p-8 rounded-3xl bg-card border border-dashed border-border text-center space-y-2">
+            <Truck className="w-8 h-8 mx-auto text-muted-foreground/40" />
+            <p className="text-xs font-bold text-foreground">Tidak Ada Surat Jalan</p>
+            <p className="text-[11px] text-muted-foreground">
+              Semua surat jalan telah diterima atau tidak cocok dengan pencarian.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredShipments.map((s) => {
+              const isReceived = s.isFullyReceived;
+              return (
+                <div
+                  key={s.id}
+                  className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs space-y-3 hover:border-primary/50 transition-all"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-bold text-foreground truncate">
+                      #{s.referenceNo}
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${
+                        isReceived
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                          : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                      }`}
+                    >
+                      {isReceived ? "✓ Selesai" : "● Menunggu"}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <p className="flex items-center gap-1.5 text-foreground font-medium">
+                      <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                      {s.warehouseName || "Gudang Utama"} → {s.destinationBranchName || user?.branchName || "Cabang"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {s.transactionDate ? formatDate(s.transactionDate) : "-"} • {s.totalUnits} Unit Material
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-2 border-t border-border/40 flex items-center gap-2">
+                    {!isReceived ? (
+                      <Button
+                        size="sm"
+                        disabled={receiveShipmentMutation.isPending}
+                        onClick={() =>
+                          receiveShipmentMutation.mutate({ qrToken: s.qrToken || s.referenceNo })
+                        }
+                        className="flex-1 h-9 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 shadow-xs"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Konfirmasi Diterima
+                      </Button>
+                    ) : (
+                      <div className="flex-1 text-center py-1 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                        ✓ Telah Diterima Resmi di Cabang
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setActiveShipmentId(s.id);
+                        setShowUnitsDetail(true);
+                      }}
+                      className="h-9 px-3 rounded-xl text-xs font-semibold"
+                    >
+                      Rincian
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Barcode Scanner Modal */}
+        <BarcodeScanner
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onDetected={handleCodeDetected}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-200">

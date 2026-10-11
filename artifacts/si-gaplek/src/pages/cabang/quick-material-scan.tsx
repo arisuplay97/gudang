@@ -14,10 +14,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
+  Camera,
   ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BarcodeScanner } from "@/components/barcode-scanner";
 import { cn } from "@/lib/utils";
 
 interface QuickScanData {
@@ -55,18 +58,23 @@ interface QuickScanData {
 
 export default function QuickMaterialScanPage() {
   const [, navigate] = useLocation();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<QuickScanData | null>(null);
 
-  // Parse query params
-  const searchParams = new URLSearchParams(window.location.search);
-  const code = searchParams.get("code") || "";
+  // Parse query params safely
+  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const initialCode = searchParams.get("code") || "";
   const branchId = searchParams.get("branch") || "";
 
-  const fetchData = async () => {
-    if (!code) {
-      setError("Kode material tidak ditemukan pada URL pemindaian.");
+  const [currentCode, setCurrentCode] = useState(initialCode);
+  const [scannerActive, setScannerActive] = useState(!initialCode);
+  const [inputCode, setInputCode] = useState(initialCode);
+
+  const fetchData = async (targetCode?: string) => {
+    const activeCode = targetCode || currentCode;
+    if (!activeCode) {
+      setScannerActive(true);
       setLoading(false);
       return;
     }
@@ -74,26 +82,34 @@ export default function QuickMaterialScanPage() {
     try {
       setLoading(true);
       setError(null);
-      const url = `/api/branch-stocks/quick-scan?code=${encodeURIComponent(code)}${
+      const url = `/api/branch-stocks/quick-scan?code=${encodeURIComponent(activeCode)}${
         branchId ? `&branchId=${branchId}` : ""
       }`;
       const res = await fetch(url);
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || "Material tidak ditemukan");
+        throw new Error(errJson.error || "Material tidak ditemukan dalam database.");
       }
       const json = await res.json();
       setData(json);
+      setCurrentCode(activeCode);
+      setScannerActive(false);
     } catch (err: any) {
       setError(err.message || "Gagal memuat informasi material");
+      setScannerActive(true);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, [code, branchId]);
+    if (initialCode) {
+      fetchData(initialCode);
+    } else {
+      setLoading(false);
+      setScannerActive(true);
+    }
+  }, [initialCode, branchId]);
 
   const stock = data?.stock;
   const item = data?.item;
@@ -130,29 +146,67 @@ export default function QuickMaterialScanPage() {
           </Button>
         </div>
 
+        {/* Scanner Active State */}
+        {scannerActive && !loading && (
+          <div className="space-y-4 pt-2">
+            <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
+              <div className="text-center space-y-1">
+                <h2 className="text-sm font-bold text-white flex items-center justify-center gap-1.5">
+                  <Camera className="w-4 h-4 text-sky-400" />
+                  Pindai Barcode Material
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Arahkan kamera ke label barcode material untuk cek sisa fisik di cabang
+                </p>
+              </div>
+
+              {/* Camera Scanner Viewport */}
+              <div className="rounded-2xl overflow-hidden bg-black border border-slate-800 min-h-[220px] relative">
+                <BarcodeScanner
+                  open={scannerActive}
+                  onClose={() => {}}
+                  onDetected={(scanned) => {
+                    setInputCode(scanned);
+                    fetchData(scanned);
+                  }}
+                />
+              </div>
+
+              {/* Manual input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (inputCode.trim()) fetchData(inputCode.trim());
+                }}
+                className="space-y-2 pt-2"
+              >
+                <div className="flex gap-2">
+                  <Input
+                    value={inputCode}
+                    onChange={(e) => setInputCode(e.target.value)}
+                    placeholder="Ketik kode (misal: MAT-001)..."
+                    className="h-10 text-xs bg-slate-950 border-slate-800 font-mono text-white rounded-xl"
+                  />
+                  <Button type="submit" size="sm" className="h-10 px-4 rounded-xl text-xs bg-sky-600 hover:bg-sky-500 text-white font-semibold">
+                    Cek
+                  </Button>
+                </div>
+              </form>
+            </div>
+
+            {error && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-center">
+                <p className="text-xs text-rose-300 font-medium">{error}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Loading State */}
         {loading && (
           <div className="space-y-3 pt-4">
             <Skeleton className="h-44 w-full rounded-2xl bg-slate-900 border border-slate-800" />
             <Skeleton className="h-28 w-full rounded-2xl bg-slate-900 border border-slate-800" />
-          </div>
-        )}
-
-        {/* Error State */}
-        {!loading && error && (
-          <div className="p-6 rounded-2xl bg-slate-900 border border-rose-500/30 text-center space-y-3 my-8">
-            <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <h2 className="text-base font-bold text-rose-300">Material Tidak Ditemukan</h2>
-            <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
-            <Button
-              onClick={() => navigate("/cabang/stok-material")}
-              size="sm"
-              className="mt-2 bg-slate-800 hover:bg-slate-700 text-xs text-white"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> Buka Daftar Stok Cabang
-            </Button>
           </div>
         )}
 

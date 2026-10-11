@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useId } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ export function BarcodeScanner({
     onDetected,
     continuous = false,
 }: BarcodeScannerProps) {
+    const rawId = useId();
+    const elementId = `barcode-scanner-view-${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
     const [state, setState] = useState<ScanState>("init");
     const [errorMsg, setErrorMsg] = useState("");
     const [lastBarcode, setLastBarcode] = useState("");
@@ -31,11 +33,21 @@ export function BarcodeScanner({
         setState("init");
         setErrorMsg("");
 
-        const elementId = "barcode-scanner-view";
         const el = document.getElementById(elementId);
         if (!el) return;
 
         try {
+            // Clean up any existing instance first
+            if (scannerRef.current) {
+                try {
+                    await scannerRef.current.stop();
+                } catch {}
+                try {
+                    scannerRef.current.clear();
+                } catch {}
+                scannerRef.current = null;
+            }
+
             const scanner = new Html5Qrcode(elementId);
             scannerRef.current = scanner;
 
@@ -173,7 +185,7 @@ export function BarcodeScanner({
 
                     {/* Scanner viewport */}
                     <div className="relative bg-black" style={{ minHeight: 280 }}>
-                        <div id="barcode-scanner-view" ref={containerRef} className="w-full" />
+                        <div id={elementId} ref={containerRef} className="w-full" />
 
                         {/* Scanning line animation */}
                         {state === "scanning" && (

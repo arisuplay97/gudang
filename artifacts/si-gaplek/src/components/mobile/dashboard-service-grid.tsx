@@ -94,7 +94,7 @@ export function DashboardServiceGrid() {
       {/* ── Bottom Subtext / Branding (Matches Reference Image) ── */}
       <div className="text-center pt-1 pb-2 space-y-1">
         <p className="text-[11px] text-muted-foreground font-medium">
-          Aplikasi Pergudangan · Perumdam Tirta Ardhia Rinjani
+          Aplikasi Monitoring Aksesoris · Perumdam Tirta Ardhia Rinjani
         </p>
         <p className="text-[12px] font-bold text-foreground">
           Inovasi Digital - Tim IT Sekretariat

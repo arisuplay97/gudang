@@ -1,9 +1,4 @@
-/**
- * MobileBranchHome — Home screen for CABANG PWA.
- * Clean SaaS dashboard inspired by Folio/Linear mobile.
- * NO quick-action grid (handled by tab bar), NO FAB, NO redundancy.
- */
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
@@ -17,9 +12,20 @@ import {
   ScanBarcode,
   Clock,
   ChevronRight,
-  ArrowRight,
+  Search,
+  Bell,
+  Camera,
+  RotateCcw,
+  Truck,
+  Plus,
+  ArrowUpRight,
+  Layers,
+  MapPin,
+  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
-import { DashboardServiceGrid } from "@/components/mobile/dashboard-service-grid";
+import NotificationCenter from "@/components/notification-center";
+import { MobileCameraModal } from "@/components/mobile/mobile-camera-modal";
 
 interface BranchStockRow {
   id: number;
@@ -61,6 +67,7 @@ interface Shipment {
 export function MobileBranchHome() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   // Queries
   const { data: branchStocksData } = useQuery<{ data: BranchStockRow[] } | BranchStockRow[]>({
@@ -117,250 +124,360 @@ export function MobileBranchHome() {
 
   const pendingShipments = shipments.filter((s) => s.receiptStatus !== "COMPLETED");
 
+  const initials = user?.fullName
+    ? user.fullName
+        .split(" ")
+        .map((n) => n[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "CB";
+
+  const firstName = user?.fullName?.split(" ")[0] || "Petugas";
+  const branchName = user?.branchName || "Cabang Praya";
+
+  // Mock field technician team for the "Recipient" avatar row
+  const technicians = [
+    { name: "Ahmad", role: "Teknisi Senior", avatar: "A" },
+    { name: "Supardi", role: "Pemasangan", avatar: "S" },
+    { name: "Hadi", role: "Pipa Distribusi", avatar: "H" },
+    { name: "Yudi", role: "Meter Air", avatar: "Y" },
+    { name: "Fauzi", role: "Lapangan", avatar: "F" },
+  ];
+
   return (
-    <div className="space-y-4 pb-2">
-      {/* ── Branch Header Context ── */}
-      <div className="flex items-center justify-between pt-0.5 pb-1">
-        <div>
-          <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-            UNIT LAYANAN CABANG
-          </p>
-          <h2 className="text-base font-extrabold text-foreground tracking-tight">
-            {user?.branchName || "Cabang Praya (Lombok Tengah)"}
-          </h2>
-        </div>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Aktif
-        </span>
-      </div>
+    <div className="space-y-5 pb-6">
+      {/* ── 1. HERO GRADIENT HEADER (ala Fintech App Image 2) ── */}
+      <div className="relative bg-gradient-to-b from-blue-700 via-indigo-600 to-sky-500 text-white rounded-b-[36px] pt-4 pb-7 px-5 shadow-xl overflow-hidden">
+        {/* Subtle background glow effect */}
+        <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="absolute top-1/2 -left-20 w-48 h-48 rounded-full bg-sky-400/20 blur-2xl pointer-events-none" />
 
-      {/* ── MAIN SHORTCUT CARD (6 Icons ala Reference Image) ── */}
-      <DashboardServiceGrid />
+        {/* Top User Greeting Row */}
+        <div className="relative flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center font-bold text-sm shadow-inner text-white">
+              {initials}
+            </div>
+            <div>
+              <p className="text-[11px] font-medium text-white/80 leading-none">
+                Selamat Datang,
+              </p>
+              <h1 className="text-lg font-extrabold text-white tracking-tight leading-snug mt-0.5">
+                {firstName}
+              </h1>
+            </div>
+          </div>
 
-      {/* ── KPI Metrics: 2×2 Grid ── */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Total Sisa Fisik */}
-        <button
-          onClick={() => navigate("/cabang/stok-material")}
-          className="text-left p-4 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2 active:scale-[0.97] transition-transform"
-        >
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center">
-            <Boxes className="w-[18px] h-[18px] text-amber-600 dark:text-amber-400" />
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground font-medium">
-              Total Sisa Fisik
-            </p>
-            <p className="font-mono text-[22px] font-bold text-foreground leading-none mt-0.5 tracking-tight">
-              {formatNumber(stockStats.totalUnits)}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">unit di cabang</p>
-          </div>
-        </button>
-
-        {/* Stok Aman */}
-        <button
-          onClick={() => navigate("/cabang/stok-material")}
-          className="text-left p-4 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2 active:scale-[0.97] transition-transform"
-        >
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-            <PackageCheck className="w-[18px] h-[18px] text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground font-medium">
-              Stok Aman
-            </p>
-            <p className="font-mono text-[22px] font-bold text-foreground leading-none mt-0.5 tracking-tight">
-              {stockStats.safeCount}
-            </p>
-            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-              {stockStats.safePercent}% dari total
-            </p>
-          </div>
-        </button>
-
-        {/* Di Bawah Minimum */}
-        <button
-          onClick={() => navigate("/cabang/stok-material")}
-          className="text-left p-4 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2 active:scale-[0.97] transition-transform"
-        >
-          <div
-            className={cn(
-              "w-9 h-9 rounded-xl flex items-center justify-center",
-              stockStats.lowCount > 0 ? "bg-rose-500/10" : "bg-muted/60"
-            )}
-          >
-            <ShieldAlert
-              className={cn(
-                "w-[18px] h-[18px]",
-                stockStats.lowCount > 0
-                  ? "text-rose-600 dark:text-rose-400"
-                  : "text-muted-foreground"
-              )}
-            />
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground font-medium">
-              Di Bawah Minimum
-            </p>
-            <p
-              className={cn(
-                "font-mono text-[22px] font-bold leading-none mt-0.5 tracking-tight",
-                stockStats.lowCount > 0
-                  ? "text-rose-600 dark:text-rose-400"
-                  : "text-foreground"
-              )}
+          {/* Right Action Icons (Frosted Glass circles ala Image 2) */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/cabang/stok-material")}
+              className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/25 active:scale-95 transition-all shadow-xs"
+              title="Cari Material"
             >
-              {stockStats.lowCount}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {stockStats.lowCount > 0 ? "perlu order" : "semua aman"}
-            </p>
+              <Search className="w-4 h-4" />
+            </button>
+            <div className="text-white [&_button]:bg-white/15 [&_button]:backdrop-blur-md [&_button]:border-white/20 [&_button]:text-white [&_button]:hover:bg-white/25 [&_button]:w-10 [&_button]:h-10 [&_button]:rounded-full [&_button]:shadow-xs">
+              <NotificationCenter />
+            </div>
           </div>
-        </button>
+        </div>
 
-        {/* Terpasang Bulan Ini */}
-        <button
-          onClick={() => navigate("/cabang/pemasangan")}
-          className="text-left p-4 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2 active:scale-[0.97] transition-transform"
-        >
-          <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center">
-            <Wrench className="w-[18px] h-[18px] text-sky-600 dark:text-sky-400" />
+        {/* Total Balance / Stock Card (Frosted Glass ala Image 2) */}
+        <div className="relative bg-white/20 backdrop-blur-xl border border-white/30 rounded-3xl p-5 shadow-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-white/90 tracking-wide">
+              Total Stok Fisik Cabang
+            </span>
+            {/* Currency/Branch Pill (ala USD pill in Image 2) */}
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-[11px] font-semibold text-white shadow-xs">
+              <MapPin className="w-3 h-3 text-sky-200" />
+              <span className="truncate max-w-[120px]">{branchName}</span>
+              <span className="text-[9px] opacity-75">▾</span>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground font-medium">
-              Terpasang
-            </p>
-            <p className="font-mono text-[22px] font-bold text-foreground leading-none mt-0.5 tracking-tight">
-              {statsData?.installedUnitsCount ?? 0}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">bulan ini</p>
+
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="font-mono text-3xl sm:text-4xl font-black tracking-tight text-white drop-shadow-xs">
+              {formatNumber(stockStats.totalUnits)}
+            </span>
+            <span className="text-sm font-semibold text-white/80">Unit Fisik</span>
           </div>
-        </button>
+
+          {/* Stock Health Micro Status */}
+          <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between text-xs text-white/90">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{stockStats.safeCount} Item Stok Aman ({stockStats.safePercent}%)</span>
+            </div>
+            {stockStats.lowCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-amber-400/30 text-amber-100 text-[10px] font-bold border border-amber-300/40">
+                {stockStats.lowCount} Menipis
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ── Stock Health Bar ── */}
-      <div className="p-4 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[13px] font-semibold text-foreground">Kesehatan Stok</p>
+      {/* ── 2. NEW CLEAN QUICK SHORTCUTS (Clean Fintech ala Image 2) ── */}
+      <div className="px-5">
+        <div className="grid grid-cols-4 gap-2.5">
+          {/* Cek Stok */}
           <button
             onClick={() => navigate("/cabang/stok-material")}
-            className="text-[11px] font-semibold text-primary flex items-center gap-0.5"
+            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
           >
-            Detail <ChevronRight className="w-3.5 h-3.5" />
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+              <Boxes className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-semibold text-foreground leading-tight">
+              Cek Stok
+            </span>
+          </button>
+
+          {/* Terima Barang */}
+          <button
+            onClick={() => navigate("/cabang/receive")}
+            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+              <PackageCheck className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-semibold text-foreground leading-tight">
+              Terima SJ
+            </span>
+          </button>
+
+          {/* Lacak Kiriman */}
+          <button
+            onClick={() => navigate("/cabang/tracking")}
+            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+              <Truck className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-semibold text-foreground leading-tight">
+              Lacak
+            </span>
+          </button>
+
+          {/* Scan Barcode */}
+          <button
+            onClick={() => setCameraOpen(true)}
+            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+              <Camera className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-semibold text-foreground leading-tight">
+              Scan QR
+            </span>
           </button>
         </div>
 
-        {/* Segmented Bar */}
-        <div className="flex gap-0.5 h-2 w-full rounded-full overflow-hidden bg-muted/40">
-          {stockStats.safeCount > 0 && (
-            <div
-              className="h-full bg-emerald-500 rounded-full transition-all"
-              style={{
-                width: `${(stockStats.safeCount / (stockStats.totalItems || 1)) * 100}%`,
-              }}
-            />
-          )}
-          {stockStats.lowCount > 0 && (
-            <div
-              className="h-full bg-amber-500 rounded-full transition-all"
-              style={{
-                width: `${(stockStats.lowCount / (stockStats.totalItems || 1)) * 100}%`,
-              }}
-            />
-          )}
-          {stockStats.outCount > 0 && (
-            <div
-              className="h-full bg-rose-500 rounded-full transition-all"
-              style={{
-                width: `${(stockStats.outCount / (stockStats.totalItems || 1)) * 100}%`,
-              }}
-            />
-          )}
-        </div>
+        {/* Secondary Action Row: Catat Pasang & Retur */}
+        <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+          <button
+            onClick={() => navigate("/cabang/pemasangan")}
+            className="flex items-center gap-3 p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-left"
+          >
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+              <Wrench className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-foreground truncate">Catat Pasang</p>
+              <p className="text-[10px] text-muted-foreground truncate">Lapor meter teknisi</p>
+            </div>
+          </button>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            Aman {stockStats.safeCount}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
-            Menipis {stockStats.lowCount}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-rose-500" />
-            Habis {stockStats.outCount}
-          </span>
+          <button
+            onClick={() => navigate("/transaksi/retur")}
+            className="flex items-center gap-3 p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-left"
+          >
+            <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <RotateCcw className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-foreground truncate">Retur Material</p>
+              <p className="text-[10px] text-muted-foreground truncate">Kembalikan ke pusat</p>
+            </div>
+          </button>
         </div>
       </div>
 
-      {/* ── Active Shipments ── */}
-      <div className="space-y-2.5">
+      {/* ── 3. MONTHLY USAGE PROGRESS (ala "Spent this month" Image 2) ── */}
+      <div className="px-5">
+        <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-foreground">
+              Pemakaian Aksesoris Bulan Ini
+            </span>
+            <span className="font-mono font-bold text-foreground">
+              {statsData?.installedUnitsCount ?? 0} Unit Terpasang
+            </span>
+          </div>
+
+          {/* Progress Bar (ala Image 2 green bar) */}
+          <div className="h-2.5 w-full rounded-full bg-muted/60 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
+              style={{
+                width: `${Math.min(
+                  Math.round(((statsData?.installedUnitsCount ?? 12) / 100) * 100),
+                  100
+                )}%`,
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>
+              {Math.min(
+                Math.round(((statsData?.installedUnitsCount ?? 12) / 100) * 100),
+                100
+              )}% dari target alokasi bulanan
+            </span>
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">100% Target</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 4. TIM LAPANGAN CABANG (ala "Recipient" Image 2) ── */}
+      <div className="px-5 space-y-2.5">
         <div className="flex items-center justify-between">
-          <p className="text-[13px] font-semibold text-foreground">Pengiriman Aktif</p>
+          <p className="text-xs font-bold text-foreground">Tim Lapangan Cabang</p>
+          <button
+            onClick={() => navigate("/cabang/pemasangan")}
+            className="text-[11px] font-semibold text-primary hover:underline"
+          >
+            Lihat Semua
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+          {/* Add Installation Action Button */}
+          <button
+            onClick={() => navigate("/cabang/pemasangan")}
+            className="flex flex-col items-center gap-1.5 shrink-0 active:scale-95 transition-transform"
+          >
+            <div className="w-13 h-13 rounded-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors bg-muted/30">
+              <Plus className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-medium text-muted-foreground">Pasang</span>
+          </button>
+
+          {/* Technician Avatars */}
+          {technicians.map((t) => (
+            <div
+              key={t.name}
+              className="flex flex-col items-center gap-1.5 shrink-0"
+            >
+              <div className="w-13 h-13 rounded-full bg-gradient-to-tr from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-border/80 flex items-center justify-center font-bold text-sm text-foreground shadow-xs">
+                {t.avatar}
+              </div>
+              <span className="text-[10px] font-semibold text-foreground max-w-[56px] truncate text-center">
+                {t.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 5. AKTIVITAS & PENGIRIMAN TERKINI (ala "Transaction" Image 2) ── */}
+      <div className="px-5 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold text-foreground">Pengiriman & Mutasi</p>
           {pendingShipments.length > 0 && (
             <button
-              onClick={() => navigate("/cabang/receive")}
-              className="text-[11px] font-semibold text-primary flex items-center gap-0.5"
+              onClick={() => navigate("/cabang/tracking")}
+              className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-0.5"
             >
-              Lihat semua <ChevronRight className="w-3.5 h-3.5" />
+              Lihat Semua <ChevronRight className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        {pendingShipments.length === 0 ? (
-          <div className="p-8 rounded-2xl bg-card border border-dashed border-border/70 text-center space-y-1.5">
-            <Clock className="w-7 h-7 mx-auto text-muted-foreground/30" />
-            <p className="text-[13px] font-medium text-foreground">
-              Tidak Ada Pengiriman Aktif
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Semua surat jalan telah diterima.
-            </p>
+        {shipments.length === 0 ? (
+          <div className="p-6 rounded-3xl bg-card border border-border/70 text-center space-y-1.5">
+            <Clock className="w-6 h-6 mx-auto text-muted-foreground/40" />
+            <p className="text-xs font-semibold text-foreground">Tidak Ada Mutasi Baru</p>
+            <p className="text-[11px] text-muted-foreground">Semua surat jalan telah diterima.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {pendingShipments.slice(0, 3).map((s) => (
-              <button
-                key={s.id}
-                onClick={() => navigate("/cabang/receive")}
-                className="w-full text-left p-3.5 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center gap-3 active:scale-[0.99] transition-transform"
-              >
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
-                  <ScanBarcode className="w-[18px] h-[18px] text-sky-600 dark:text-sky-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-mono text-[13px] font-bold text-foreground truncate">
-                    {s.referenceNo}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {s.transactionDate ? formatDate(s.transactionDate) : "-"} •{" "}
-                    {s.totalUnits} unit
-                  </p>
-                </div>
-                <span
-                  className={cn(
-                    "shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md border",
-                    s.receiptStatus === "COMPLETED"
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
-                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
-                  )}
+            {shipments.slice(0, 4).map((s) => {
+              const isDone = s.receiptStatus === "COMPLETED";
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => navigate(`/cabang/receive?shipment=${s.referenceNo}`)}
+                  className="w-full text-left p-3.5 rounded-2xl bg-card border border-border/70 shadow-xs flex items-center gap-3 hover:border-primary/40 active:scale-[0.99] transition-all"
                 >
-                  {s.receiptStatus === "COMPLETED"
-                    ? "Selesai"
-                    : s.receiptStatus === "PARTIAL"
-                    ? "Sebagian"
-                    : "Menunggu"}
-                </span>
-              </button>
-            ))}
+                  <div
+                    className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                      isDone
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                    )}
+                  >
+                    {isDone ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <Truck className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-xs font-bold text-foreground truncate">
+                      {s.referenceNo}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {s.transactionDate ? formatDate(s.transactionDate) : "Hari ini"} • Gudang Utama
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p
+                      className={cn(
+                        "text-xs font-mono font-bold leading-tight",
+                        isDone ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"
+                      )}
+                    >
+                      +{s.totalUnits} Unit
+                    </p>
+                    <span
+                      className={cn(
+                        "inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full mt-0.5",
+                        isDone
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          : "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                      )}
+                    >
+                      {isDone ? "Diterima" : "Dalam Pengiriman"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
 
+      {/* ── 6. OFFICIAL FOOTER BRANDING (Requested text change) ── */}
+      <div className="text-center pt-3 pb-2 space-y-1 px-5">
+        <p className="text-[11px] text-muted-foreground font-medium">
+          Aplikasi Monitoring Aksesoris · Perumdam Tirta Ardhia Rinjani
+        </p>
+        <p className="text-[12px] font-bold text-foreground">
+          Inovasi Digital - Tim IT Sekretariat
+        </p>
+      </div>
+
+      {/* Universal Camera Scanner Modal */}
+      <MobileCameraModal
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+      />
     </div>
   );
 }
