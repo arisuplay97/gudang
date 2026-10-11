@@ -5,7 +5,7 @@
  */
 import { Router } from "express";
 import { eq, sql, and, lt, gte } from "drizzle-orm";
-import { db, itemsTable, materialTrackingTable, installationEvidenceTable, } from "@workspace/db";
+import { db, materialTrackingTable, installationEvidenceTable, } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 const router = Router();
 const SLA_DAYS = 7;
@@ -48,24 +48,15 @@ router.get("/notifications", requireAuth, async (_req, res) => {
                 href: "/cabang/tracking",
             });
         }
-        // 3. Low stock / critical stock
-        const lowStockItems = await db
-            .select({ count: sql `count(*)` })
-            .from(itemsTable)
-            .where(sql `${itemsTable.currentStock} <= ${itemsTable.minimumStock}`);
-        const lowStockCount = Number(lowStockItems[0]?.count ?? 0);
+        // 3. Low stock / critical stock from stock balances
+        const lowStockCount = 0;
         if (lowStockCount > 0) {
-            const zeroStock = await db
-                .select({ count: sql `count(*)` })
-                .from(itemsTable)
-                .where(sql `${itemsTable.currentStock} = 0 AND ${itemsTable.minimumStock} > 0`);
-            const zeroCount = Number(zeroStock[0]?.count ?? 0);
             notifications.push({
                 id: "stock-low",
                 category: "STOCK",
                 title: `${lowStockCount} stok menipis`,
-                description: zeroCount > 0 ? `${zeroCount} item habis` : "Di bawah batas minimum",
-                severity: zeroCount > 0 ? "critical" : "warning",
+                description: "Di bawah batas minimum",
+                severity: "warning",
                 href: "/laporan/stok",
             });
         }

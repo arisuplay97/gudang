@@ -138,7 +138,7 @@ export default function QuickMaterialScanPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={fetchData}
+            onClick={() => fetchData()}
             disabled={loading}
             className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
           >

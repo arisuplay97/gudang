@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router } from "express";
 import { eq, desc, asc, isNull, and, or, ilike, sql } from "drizzle-orm";
-import { db, itemsTable, categoriesTable, unitsTable, suppliersTable, auditLogsTable, stockInTable, stockInItemsTable, stockOutTable, stockOutItemsTable, adjustmentsTable, adjustmentItemsTable, returnsTable, returnItemsTable, mutationsTable, mutationItemsTable, branchesTable, departmentsTable, } from "@workspace/db";
+import { db, itemsTable, categoriesTable, unitsTable, suppliersTable, auditLogsTable, stockInTable, stockInItemsTable, stockOutTable, stockOutItemsTable, adjustmentsTable, adjustmentItemsTable, returnsTable, returnItemsTable, mutationsTable, mutationItemsTable, branchesTable, departmentsTable, branchStocksTable, stockBalancesTable, stockMovementsTable, serialNumbersTable, opnameItemsTable, } from "@workspace/db";
 import { CreateItemBody, GetItemParams, UpdateItemParams, UpdateItemBody, DeleteItemParams, GetItemByBarcodeParams, } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 const router = Router();
@@ -349,7 +349,7 @@ router.post("/items/import", requireAuth, async (req, res) => {
         }
         const price = parseFloat(String(raw.unitPrice || 0)) || 0;
         const barcode = String(raw.barcode || code).trim();
-        const trackingType = String(raw.trackingType || "NON_TRACKED").toUpperCase() === "TRACKED" ? "TRACKED" : "NON_TRACKED";
+        const trackingType = String(raw.trackingType || "TRACKED").toUpperCase() === "NON_TRACKED" ? "NON_TRACKED" : "TRACKED";
         try {
             const [existing] = await db.select().from(itemsTable).where(eq(itemsTable.code, code));
             if (existing) {
@@ -434,7 +434,11 @@ router.post("/items", requireAuth, async (req, res) => {
         return;
     }
     const { currentStock, minimumStock, maximumStock, supplierId, ...cleanedData } = parsed.data;
-    const insertData = { ...cleanedData, unitPrice: String(parsed.data.unitPrice || 0) };
+    const insertData = {
+        ...cleanedData,
+        trackingType: req.body.trackingType || "TRACKED",
+        unitPrice: String(parsed.data.unitPrice || 0),
+    };
     // Auto-generate barcode from code if not provided
     if (!insertData.barcode || insertData.barcode === "") {
         insertData.barcode = insertData.code;
@@ -473,18 +477,91 @@ router.patch("/items/:id", requireAuth, async (req, res) => {
 });
 // DELETE /items/:id
 router.delete("/items/:id", requireAuth, async (req, res) => {
-    const params = DeleteItemParams.safeParse(req.params);
-    if (!params.success) {
-        res.status(400).json({ error: params.error.message });
-        return;
+    try {
+        const params = DeleteItemParams.safeParse(req.params);
+        if (!params.success) {
+            res.status(400).json({ error: params.error.message });
+            return;
+        }
+        const id = params.data.id;
+        const [item] = await db.select().from(itemsTable).where(eq(itemsTable.id, id));
+        if (!item) {
+            res.status(404).json({ error: "Barang tidak ditemukan" });
+            return;
+        }
+        // Check transaction counts across operational tables
+        const [soCount] = await db.select({ count: sql `count(*)::int` }).from(stockOutItemsTable).where(eq(stockOutItemsTable.itemId, id));
+        const [siCount] = await db.select({ count: sql `count(*)::int` }).from(stockInItemsTable).where(eq(stockInItemsTable.itemId, id));
+        const [retCount] = await db.select({ count: sql `count(*)::int` }).from(returnItemsTable).where(eq(returnItemsTable.itemId, id));
+        const [opCount] = await db.select({ count: sql `count(*)::int` }).from(opnameItemsTable).where(eq(opnameItemsTable.itemId, id));
+        // Check remaining stock across branches
+        let hasBranchStock = false;
+        try {
+            const [branchStockSum] = await db
+                .select({ totalQty: sql `coalesce(sum(${branchStocksTable.quantity}), 0)::int` })
+                .from(branchStocksTable)
+                .where(eq(branchStocksTable.itemId, id));
+            hasBranchStock = (branchStockSum?.totalQty || 0) > 0;
+        }
+        catch (e) {
+            console.warn("branch_stocks check skipped:", e);
+        }
+        const totalTx = (soCount?.count || 0) + (siCount?.count || 0) + (retCount?.count || 0) + (opCount?.count || 0);
+        if (totalTx > 0 || hasBranchStock) {
+            // Item has operational history or current branch stock:
+            // Soft-delete to preserve ledger, delivery orders, and audit trail
+            await db.update(itemsTable).set({ status: "inactive" }).where(eq(itemsTable.id, id));
+            await db.insert(auditLogsTable).values({
+                entityType: "item",
+                entityId: id,
+                action: "deactivate",
+                description: `Barang ${item.name} dinonaktifkan (memiliki riwayat transaksi / sisa stok)`,
+                userId: req.session.userId,
+                username: req.session.username,
+            });
+            res.status(200).json({
+                success: true,
+                softDeleted: true,
+                message: `Barang "${item.name}" memiliki riwayat transaksi/stok cabang sehingga statusnya diubah menjadi Nonaktif agar riwayat distribusi tetap terjaga.`,
+            });
+            return;
+        }
+        // No historical transactions and zero stock: safely remove zero balance records & hard delete
+        try {
+            await db.delete(branchStocksTable).where(eq(branchStocksTable.itemId, id));
+        }
+        catch (_) { }
+        try {
+            await db.delete(stockBalancesTable).where(eq(stockBalancesTable.itemId, id));
+        }
+        catch (_) { }
+        try {
+            await db.delete(stockMovementsTable).where(eq(stockMovementsTable.itemId, id));
+        }
+        catch (_) { }
+        try {
+            await db.delete(serialNumbersTable).where(eq(serialNumbersTable.itemId, id));
+        }
+        catch (_) { }
+        const [deleted] = await db.delete(itemsTable).where(eq(itemsTable.id, id)).returning();
+        await db.insert(auditLogsTable).values({
+            entityType: "item",
+            entityId: id,
+            action: "delete",
+            description: `Barang ${deleted?.name ?? item.name} dihapus permanen`,
+            userId: req.session.userId,
+            username: req.session.username,
+        });
+        res.status(200).json({
+            success: true,
+            softDeleted: false,
+            message: `Barang "${item.name}" berhasil dihapus permanen.`,
+        });
     }
-    const [deleted] = await db.delete(itemsTable).where(eq(itemsTable.id, params.data.id)).returning();
-    if (!deleted) {
-        res.status(404).json({ error: "Barang tidak ditemukan" });
-        return;
+    catch (error) {
+        console.error("Error deleting item:", error);
+        res.status(500).json({ error: error.message || "Gagal memproses penghapusan barang" });
     }
-    await db.insert(auditLogsTable).values({ entityType: "item", entityId: params.data.id, action: "delete", description: `Barang ${deleted.name} dihapus`, userId: req.session.userId, username: req.session.username });
-    res.sendStatus(204);
 });
 // POST /import/items
 router.post("/import/items", requireAuth, async (req, res) => {

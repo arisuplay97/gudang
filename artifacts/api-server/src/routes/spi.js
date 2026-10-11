@@ -4,8 +4,9 @@
  */
 import { Router } from "express";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db, materialTrackingTable, materialTrackingEventsTable, materialVerificationsTable, installationAllocationsTable, installationEvidenceTable, stockOutTable, stockOutItemsTable, itemsTable, branchesTable, usersTable, } from "@workspace/db";
+import { db, materialTrackingTable, materialTrackingEventsTable, materialVerificationsTable, installationAllocationsTable, installationEvidenceTable, stockOutTable, stockOutItemsTable, itemsTable, categoriesTable, branchesTable, usersTable, branchStocksTable, } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
+import { recordBranchStockMovement } from "./branch-stocks";
 const router = Router();
 // ─── SPI DASHBOARD DATA (Section 32) ───
 router.get("/spi/dashboard", requireAuth, requireRole("SPI", "ADMIN"), async (req, res) => {
@@ -287,13 +288,50 @@ router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"
             }).where(eq(installationAllocationsTable.id, evidence.allocationId));
         }
         else {
-            // DITOLAK — revert to MENUNGGU_PEMASANGAN
+            // DITOLAK — revert to MENUNGGU_PEMASANGAN & Rollback stok cabang
             await tx.update(materialTrackingTable).set({
                 status: "MENUNGGU_PEMASANGAN",
             }).where(eq(materialTrackingTable.id, tracking.id));
             await tx.update(installationAllocationsTable).set({
                 status: "REJECTED",
             }).where(eq(installationAllocationsTable.id, evidence.allocationId));
+            // Kembalikan saldo fisik stok cabang karena pemasangan dibatalkan/ditolak
+            const [allocItem] = await tx
+                .select({
+                itemId: stockOutItemsTable.itemId,
+                quantity: installationAllocationsTable.quantity,
+            })
+                .from(installationAllocationsTable)
+                .innerJoin(materialTrackingTable, eq(installationAllocationsTable.trackingId, materialTrackingTable.id))
+                .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+                .where(eq(installationAllocationsTable.id, evidence.allocationId));
+            if (allocItem && allocItem.itemId) {
+                const qtyRollback = Number(allocItem.quantity) || 1;
+                const [existingStock] = await tx.select().from(branchStocksTable)
+                    .where(and(eq(branchStocksTable.branchId, tracking.branchId), eq(branchStocksTable.itemId, allocItem.itemId)));
+                const balanceBefore = existingStock ? Number(existingStock.quantity) : 0;
+                const balanceAfter = balanceBefore + qtyRollback;
+                await tx.update(branchStocksTable)
+                    .set({
+                    quantity: sql `${branchStocksTable.quantity} + ${qtyRollback}`,
+                    updatedAt: new Date(),
+                })
+                    .where(and(eq(branchStocksTable.branchId, tracking.branchId), eq(branchStocksTable.itemId, allocItem.itemId)));
+                await recordBranchStockMovement(tx, {
+                    branchId: tracking.branchId,
+                    itemId: allocItem.itemId,
+                    movementType: "REJECTION_ROLLBACK",
+                    direction: "in",
+                    quantity: qtyRollback,
+                    balanceBefore,
+                    balanceAfter,
+                    referenceType: "verification",
+                    referenceId: verification.id,
+                    referenceNo: tracking.uuid,
+                    userId: req.session.userId,
+                    notes: `Rollback stok cabang akibat verifikasi pemasangan ditolak SPI (${notes || "Tidak memenuhi standar"})`,
+                });
+            }
         }
         // Record event
         await tx.insert(materialTrackingEventsTable).values({
@@ -347,6 +385,13 @@ router.get("/gis/material-locations", async (req, res, next) => {
         targetDistrict: installationEvidenceTable.targetDistrict,
         isCrossDistrict: installationEvidenceTable.isCrossDistrict,
         crossDistrictNotes: installationEvidenceTable.crossDistrictNotes,
+        categoryName: categoriesTable.name,
+        technicianNames: installationEvidenceTable.technicianNames,
+        capturedByName: usersTable.fullName,
+        clientCaptureTime: installationEvidenceTable.clientCaptureTime,
+        evidenceCreatedAt: installationEvidenceTable.createdAt,
+        photoBeforeUrl: installationEvidenceTable.photoBeforeUrl,
+        photoAfterUrl: installationEvidenceTable.photoAfterUrl,
     })
         .from(installationEvidenceTable)
         .innerJoin(installationAllocationsTable, eq(installationEvidenceTable.allocationId, installationAllocationsTable.id))
@@ -355,6 +400,8 @@ router.get("/gis/material-locations", async (req, res, next) => {
         .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
         .innerJoin(itemsTable, eq(stockOutItemsTable.itemId, itemsTable.id))
         .innerJoin(stockOutTable, eq(stockOutItemsTable.stockOutId, stockOutTable.id))
+        .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
+        .leftJoin(usersTable, eq(installationEvidenceTable.capturedBy, usersTable.id))
         .leftJoin(materialVerificationsTable, and(eq(materialVerificationsTable.evidenceId, installationEvidenceTable.id), eq(materialVerificationsTable.status, "TERVERIFIKASI")))
         .where(eq(installationEvidenceTable.status, "TERVERIFIKASI"));
     // Convert to GeoJSON FeatureCollection
@@ -368,14 +415,20 @@ router.get("/gis/material-locations", async (req, res, next) => {
             evidenceId: loc.evidenceId,
             evidenceUuid: loc.evidenceUuid,
             photoUrl: loc.photoUrl,
+            photoBeforeUrl: loc.photoBeforeUrl,
+            photoAfterUrl: loc.photoAfterUrl,
             itemName: loc.itemName,
             itemCode: loc.itemCode,
+            categoryName: loc.categoryName,
             quantity: loc.allocationQuantity,
             referenceNo: loc.referenceNo,
             branchId: loc.branchId,
             branchName: loc.branchName,
             verifiedAt: loc.verifiedAt,
-            installedAt: loc.installedAt,
+            installedAt: loc.installedAt || loc.clientCaptureTime || loc.evidenceCreatedAt,
+            clientCaptureTime: loc.clientCaptureTime,
+            technicianNames: loc.technicianNames,
+            capturedByName: loc.capturedByName,
             gpsAccuracy: loc.gpsAccuracy ? parseFloat(String(loc.gpsAccuracy)) : null,
             locationMismatch: Boolean(loc.locationMismatch),
             deviationMeters: loc.locationDeviationMeters ? parseFloat(String(loc.locationDeviationMeters)) : null,

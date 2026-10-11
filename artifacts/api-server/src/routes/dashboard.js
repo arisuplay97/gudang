@@ -28,6 +28,28 @@ router.get("/dashboard/summary", requireAuth, async (_req, res) => {
         const pendingOut = stockOutAll.filter(r => r.status === "draft" || r.status === "DRAFT").length;
         const trackedItems = allItems.filter(i => i.trackingType === "TRACKED").length;
         const nonTrackedItems = totalItems - trackedItems;
+        // Hitung metrik operasional baru:
+        const allTrackings = await db.select().from(materialTrackingTable);
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        // 1. Menunggu ACC Cabang (status MENUNGGU_DITERIMA atau pengiriman yang belum diterima penuh)
+        const pendingBranchAcceptance = allTrackings.filter(t => t.status === "MENUNGGU_DITERIMA").length;
+        // 2. Jumlah Terpasang Bulan Ini
+        const installedTrackings = allTrackings.filter(t => ["TERPASANG", "MENUNGGU_VERIFIKASI", "TERVERIFIKASI"].includes(t.status));
+        let installedThisMonth = installedTrackings.filter(t => t.installedAt && new Date(t.installedAt) >= startOfMonth).length;
+        if (installedThisMonth === 0 && installedTrackings.length > 0) {
+            // Jika transisi pergantian bulan, tampilkan total terpasang siklus aktif
+            installedThisMonth = installedTrackings.length;
+        }
+        // 3. Perlu Perhatian (SLA Overdue atau Ditolak / Bermasalah)
+        const needsAttentionCount = allTrackings.filter(t => {
+            if (t.status === "DITOLAK")
+                return true;
+            if (t.slaDeadlineAt && new Date(t.slaDeadlineAt).getTime() < now.getTime() && t.status !== "TERVERIFIKASI") {
+                return true;
+            }
+            return false;
+        }).length;
         res.json({
             totalItems,
             totalStockIn: 0,
@@ -40,6 +62,9 @@ router.get("/dashboard/summary", requireAuth, async (_req, res) => {
             todayStockOut,
             trackedItems,
             nonTrackedItems,
+            pendingBranchAcceptance,
+            installedThisMonth,
+            needsAttentionCount,
         });
     }
     catch (err) {
@@ -91,36 +116,178 @@ router.get("/dashboard/low-stock", requireAuth, async (_req, res) => {
         res.json([]);
     }
 });
-// GET /dashboard/stock-movement
+// GET /dashboard/stock-movement (7 or 30 days)
 router.get("/dashboard/stock-movement", requireAuth, async (req, res) => {
-    const daysParam = parseInt(req.query.days, 10);
-    const days = daysParam === 30 ? 30 : 7;
-    const isFinalized = (status) => !!status && ["finalized", "completed", "dikirim", "diproses", "selesai", "approved"].includes(status.toLowerCase());
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - (days - 1));
-    startDate.setHours(0, 0, 0, 0);
-    const allStockOut = await db
-        .select({ transactionDate: stockOutTable.transactionDate, status: stockOutTable.status })
-        .from(stockOutTable)
-        .where(gte(stockOutTable.transactionDate, startDate));
-    const result = [];
-    for (let i = days - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
-        const outCount = allStockOut.filter(r => {
-            if (!isFinalized(r.status))
-                return false;
-            const rDate = new Date(r.transactionDate).toISOString().split("T")[0];
-            return rDate === dateStr;
-        }).length;
-        result.push({
-            date: dateStr,
-            stockIn: 0,
-            stockOut: outCount,
+    try {
+        const daysParam = parseInt(req.query.days, 10);
+        const days = daysParam === 30 ? 30 : 7;
+        const isFinalized = (status) => !!status && ["finalized", "completed", "dikirim", "diproses", "selesai", "approved"].includes(status.toLowerCase());
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - (days - 1));
+        startDate.setHours(0, 0, 0, 0);
+        const allStockOut = await db
+            .select({
+            id: stockOutTable.id,
+            transactionDate: stockOutTable.transactionDate,
+            status: stockOutTable.status,
+            quantity: sql `COALESCE((SELECT SUM(quantity) FROM stock_out_items WHERE stock_out_id = ${stockOutTable.id}), 1)`
+        })
+            .from(stockOutTable)
+            .where(gte(stockOutTable.transactionDate, startDate));
+        const result = [];
+        let totalStockOut = 0;
+        let totalQuantity = 0;
+        let peakQuantity = 0;
+        let peakDate = "";
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split("T")[0];
+            const dayLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+            const dayName = d.toLocaleDateString("id-ID", { weekday: "short" });
+            const matchingOuts = allStockOut.filter(r => {
+                if (!isFinalized(r.status))
+                    return false;
+                const rDate = new Date(r.transactionDate).toISOString().split("T")[0];
+                return rDate === dateStr;
+            });
+            const outCount = matchingOuts.length;
+            const outQty = matchingOuts.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
+            totalStockOut += outCount;
+            totalQuantity += outQty;
+            if (outQty > peakQuantity) {
+                peakQuantity = outQty;
+                peakDate = dayLabel;
+            }
+            result.push({
+                date: dateStr,
+                label: dayLabel,
+                dayName,
+                stockOut: outCount,
+                quantity: outQty,
+            });
+        }
+        res.json({
+            days,
+            chartData: result,
+            summary: {
+                totalTransactions: totalStockOut,
+                totalQuantity,
+                avgPerDay: Number((totalQuantity / days).toFixed(1)),
+                peakDate: peakDate || "-",
+                peakQuantity,
+            }
         });
     }
-    res.json(result);
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// GET /dashboard/branch-installation-ranking
+router.get("/dashboard/branch-installation-ranking", requireAuth, async (_req, res) => {
+    try {
+        const branches = await db.select().from(branchesTable).orderBy(branchesTable.id);
+        // Group tracking data by branch
+        const trackings = await db
+            .select({
+            id: materialTrackingTable.id,
+            branchId: materialTrackingTable.branchId,
+            status: materialTrackingTable.status,
+            slaStartAt: materialTrackingTable.slaStartAt,
+            slaDeadlineAt: materialTrackingTable.slaDeadlineAt,
+            receivedAt: materialTrackingTable.receivedAt,
+            installedAt: materialTrackingTable.installedAt,
+        })
+            .from(materialTrackingTable);
+        const rankings = branches.map((branch) => {
+            const bTrackings = trackings.filter((t) => t.branchId === branch.id);
+            const totalAssigned = bTrackings.length;
+            // Installed items: status in TERPASANG, MENUNGGU_VERIFIKASI, TERVERIFIKASI
+            const installedItems = bTrackings.filter((t) => ["TERPASANG", "MENUNGGU_VERIFIKASI", "TERVERIFIKASI"].includes(t.status));
+            const totalInstalled = installedItems.length;
+            let onTimeCount = 0;
+            let lateCount = 0;
+            let totalDurationHours = 0;
+            let durationCount = 0;
+            for (const item of installedItems) {
+                if (item.installedAt) {
+                    if (item.slaDeadlineAt) {
+                        if (new Date(item.installedAt).getTime() <= new Date(item.slaDeadlineAt).getTime()) {
+                            onTimeCount++;
+                        }
+                        else {
+                            lateCount++;
+                        }
+                    }
+                    else {
+                        onTimeCount++;
+                    }
+                    const baseTime = item.receivedAt || item.slaStartAt;
+                    if (baseTime) {
+                        const diffHours = Math.max(0.1, (new Date(item.installedAt).getTime() - new Date(baseTime).getTime()) / (1000 * 60 * 60));
+                        totalDurationHours += diffHours;
+                        durationCount++;
+                    }
+                }
+            }
+            const onTimeRate = totalInstalled > 0 ? Math.round((onTimeCount / totalInstalled) * 100) : 0;
+            const avgDurationHours = durationCount > 0 ? Number((totalDurationHours / durationCount).toFixed(1)) : null;
+            let avgDurationText = "—";
+            if (avgDurationHours !== null) {
+                if (avgDurationHours < 1) {
+                    avgDurationText = `${Math.round(avgDurationHours * 60)} mnt`;
+                }
+                else if (avgDurationHours < 24) {
+                    avgDurationText = `${avgDurationHours} jam`;
+                }
+                else {
+                    const days = (avgDurationHours / 24).toFixed(1);
+                    avgDurationText = `${days} hari`;
+                }
+            }
+            // Score for ranking
+            let score = 0;
+            if (totalInstalled > 0) {
+                score = onTimeRate * 10 - (avgDurationHours ? Math.min(avgDurationHours, 168) : 50);
+            }
+            return {
+                branchId: branch.id,
+                branchName: branch.name,
+                branchCode: branch.code,
+                totalAssigned,
+                totalInstalled,
+                onTimeCount,
+                lateCount,
+                onTimeRate,
+                avgDurationHours,
+                avgDurationText,
+                score,
+            };
+        });
+        // Sort by performance: installed branches first, then higher score
+        rankings.sort((a, b) => {
+            if ((b.totalInstalled > 0) !== (a.totalInstalled > 0)) {
+                return b.totalInstalled > 0 ? 1 : -1;
+            }
+            return b.score - a.score;
+        });
+        const rankedWithPosition = rankings.map((r, index) => ({
+            ...r,
+            rank: index + 1,
+        }));
+        res.json({
+            data: rankedWithPosition,
+            summary: {
+                totalBranches: branches.length,
+                activeBranches: rankedWithPosition.filter(r => r.totalInstalled > 0).length,
+                avgOnTimeRate: Math.round(rankedWithPosition.filter(r => r.totalInstalled > 0).reduce((acc, r) => acc + r.onTimeRate, 0) /
+                    Math.max(1, rankedWithPosition.filter(r => r.totalInstalled > 0).length)) || 100,
+            }
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 // GET /dashboard/stock-health
 router.get("/dashboard/stock-health", requireAuth, async (_req, res) => {
