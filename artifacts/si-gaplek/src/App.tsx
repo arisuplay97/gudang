@@ -4,6 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import Layout from "@/components/layout";
+import { MobileShell } from "@/components/mobile/mobile-shell";
+import { useIsMobile } from "@/hooks/use-mobile";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
 import BarangPage from "@/pages/master/barang";
@@ -40,6 +42,7 @@ import AiAssistantPage from "@/pages/ai-assistant";
 import PengaturanPage from "@/pages/pengaturan";
 import GlobalSearch from "@/components/global-search";
 import ErrorBoundary from "@/components/error-boundary";
+import { MobileBranchHome } from "@/pages/cabang/mobile-branch-home";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -53,8 +56,14 @@ const queryClient = new QueryClient({
 
 import QuickMaterialScanPage from "@/pages/cabang/quick-material-scan";
 
+/* ── Mobile CABANG Home — displayed inside MobileShell at "/" ── */
+function MobileCabangDashboard() {
+  return <MobileBranchHome />;
+}
+
 function AppRouter() {
   const { user, loading } = useAuth();
+  const isMobile = useIsMobile();
 
   if (loading) {
     return (
@@ -65,6 +74,9 @@ function AppRouter() {
   }
 
   // Public quick scan routes (dapat diakses langsung via kamera HP teknisi di rak gudang)
+  // CABANG on mobile → completely separate native shell (no sidebar, no desktop chrome)
+  const useMobileShell = user?.role === "CABANG" && isMobile;
+
   return (
     <Switch>
       <Route path="/scan/material" component={QuickMaterialScanPage} />
@@ -75,6 +87,24 @@ function AppRouter() {
           <Route path="/login" component={LoginPage} />
           <Route><Redirect to="/login" /></Route>
         </Switch>
+      ) : useMobileShell ? (
+        <MobileShell>
+          <Switch>
+            <Route path="/" component={MobileCabangDashboard} />
+            <Route path="/cabang/stok-material" component={StokMaterialCabangPage} />
+            <Route path="/cabang/receive" component={CabangReceivePage} />
+            <Route path="/cabang/tracking" component={CabangTrackingPage} />
+            <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
+            <Route path="/cabang/dashboard"><Redirect to="/" /></Route>
+            <Route path="/transaksi/retur" component={ReturPage} />
+            <Route path="/laporan/teknisi" component={LaporanTeknisiPage} />
+            <Route path="/laporan/pemasangan-aksesoris" component={LaporanPemasanganAksesorisPage} />
+            <Route path="/pengaturan" component={PengaturanPage} />
+            <Route path="/profil" component={PengaturanPage} />
+            <Route path="/login"><Redirect to="/" /></Route>
+            <Route><Redirect to="/" /></Route>
+          </Switch>
+        </MobileShell>
       ) : (
         <Layout>
           <GlobalSearch />

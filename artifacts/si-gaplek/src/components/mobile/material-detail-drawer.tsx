@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 import {
   Building2,
   SlidersHorizontal,
@@ -67,8 +68,10 @@ export function MaterialDetailDrawer({
   onNavigatePemasangan,
   onNavigateRetur,
 }: MaterialDetailDrawerProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"detail" | "ledger">("detail");
   const [editMinVal, setEditMinVal] = useState<number>(item?.minimumStock ?? 5);
+  const canEditThreshold = user?.role === "ADMIN" || user?.role === "GUDANG";
 
   if (!item) return null;
 
@@ -239,7 +242,8 @@ export function MaterialDetailDrawer({
                 )}
               </div>
 
-              {/* Safety Stock Threshold Configurator */}
+              {/* Safety Stock Threshold Configurator (Admin/Gudang only) */}
+              {canEditThreshold && (
               <div className="p-3.5 rounded-2xl bg-sky-500/5 border border-sky-500/20 space-y-2">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <SlidersHorizontal className="w-3.5 h-3.5 text-sky-600" />
@@ -268,6 +272,7 @@ export function MaterialDetailDrawer({
                   </Button>
                 </div>
               </div>
+              )}
             </div>
           )}
 
