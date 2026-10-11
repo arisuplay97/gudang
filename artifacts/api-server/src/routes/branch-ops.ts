@@ -25,6 +25,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
 import { auditCrossDistrictEvidence } from "../lib/geo-districts";
+import { recordBranchStockMovement } from "./branch-stocks";
 
 const router: IRouter = Router();
 
@@ -325,6 +326,8 @@ router.post("/branch/receive-unit", requireAuth, requireRole("CABANG", "ADMIN"),
                 eq(branchStocksTable.branchId, userBranchId),
                 eq(branchStocksTable.itemId, tracking.itemId)
             ));
+        const balanceBefore = existingStock ? Number(existingStock.quantity) : 0;
+        const balanceAfter = balanceBefore + 1;
         if (existingStock) {
             await tx.update(branchStocksTable)
                 .set({ quantity: sql`${branchStocksTable.quantity} + 1`, updatedAt: new Date() })
@@ -336,6 +339,22 @@ router.post("/branch/receive-unit", requireAuth, requireRole("CABANG", "ADMIN"),
                 quantity: 1,
             });
         }
+
+        // Catat ke kartu stok cabang (ledger)
+        await recordBranchStockMovement(tx, {
+            branchId: userBranchId,
+            itemId: tracking.itemId,
+            movementType: "RECEIPT",
+            direction: "in",
+            quantity: 1,
+            balanceBefore,
+            balanceAfter,
+            referenceType: "stock_out",
+            referenceId: tracking.stockOutId,
+            referenceNo: tracking.uuid,
+            userId: req.session.userId,
+            notes: `Penerimaan fisik unit material ${tracking.itemName} (${tracking.uuid})`,
+        });
 
         res.json({
             message: `Unit "${tracking.itemName}" berhasil diterima di cabang!`,
@@ -515,6 +534,8 @@ router.post("/branch/receive", requireAuth, requireRole("CABANG", "ADMIN"), asyn
                         eq(branchStocksTable.branchId, userBranchId),
                         eq(branchStocksTable.itemId, itm.itemId)
                     ));
+                const balanceBefore = existingStock ? Number(existingStock.quantity) : 0;
+                const balanceAfter = balanceBefore + qty;
                 if (existingStock) {
                     await tx.update(branchStocksTable)
                         .set({ quantity: sql`${branchStocksTable.quantity} + ${qty}`, updatedAt: new Date() })
@@ -526,6 +547,22 @@ router.post("/branch/receive", requireAuth, requireRole("CABANG", "ADMIN"), asyn
                         quantity: qty,
                     });
                 }
+
+                // Catat ke kartu stok cabang (ledger)
+                await recordBranchStockMovement(tx, {
+                    branchId: userBranchId,
+                    itemId: itm.itemId,
+                    movementType: "RECEIPT",
+                    direction: "in",
+                    quantity: qty,
+                    balanceBefore,
+                    balanceAfter,
+                    referenceType: "stock_out",
+                    referenceId: transaction.id,
+                    referenceNo: transaction.referenceNo,
+                    userId: req.session.userId,
+                    notes: `Penerimaan Surat Jalan ${transaction.referenceNo} (${itm.itemName})`,
+                });
             }
         }
 
@@ -742,6 +779,14 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
 
     if (allocItem && allocItem.itemId) {
         const qtyInstalled = Number(allocItem.quantity) || 1;
+        const [existingStock] = await db.select().from(branchStocksTable)
+            .where(and(
+                eq(branchStocksTable.branchId, tracking.branchId),
+                eq(branchStocksTable.itemId, allocItem.itemId)
+            ));
+        const balanceBefore = existingStock ? Number(existingStock.quantity) : 0;
+        const balanceAfter = Math.max(0, balanceBefore - qtyInstalled);
+
         await db.update(branchStocksTable)
             .set({
                 quantity: sql`GREATEST(0, ${branchStocksTable.quantity} - ${qtyInstalled})`,
@@ -751,6 +796,22 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
                 eq(branchStocksTable.branchId, tracking.branchId),
                 eq(branchStocksTable.itemId, allocItem.itemId)
             ));
+
+        // Catat ke kartu stok cabang (ledger)
+        await recordBranchStockMovement(db, {
+            branchId: tracking.branchId,
+            itemId: allocItem.itemId,
+            movementType: "INSTALLATION",
+            direction: "out",
+            quantity: qtyInstalled,
+            balanceBefore,
+            balanceAfter,
+            referenceType: "evidence",
+            referenceId: evidence.id,
+            referenceNo: tracking.uuid,
+            userId: req.session.userId,
+            notes: `Pemasangan material unit ${tracking.uuid} oleh teknisi ${technicianNames || "-"}`,
+        });
     }
 
     // Update tracking status with exact photo installation time

@@ -51,6 +51,8 @@ const queryClient = new QueryClient({
   },
 });
 
+import QuickMaterialScanPage from "@/pages/cabang/quick-material-scan";
+
 function AppRouter() {
   const { user, loading } = useAuth();
 
@@ -62,20 +64,22 @@ function AppRouter() {
     );
   }
 
-  if (!user) {
-    return (
-      <Switch>
-        <Route path="/login" component={LoginPage} />
-        <Route><Redirect to="/login" /></Route>
-      </Switch>
-    );
-  }
-
+  // Public quick scan routes (dapat diakses langsung via kamera HP teknisi di rak gudang)
   return (
-    <Layout>
-      <GlobalSearch />
-      <Switch>
-        <Route path="/" component={DashboardPage} />
+    <Switch>
+      <Route path="/scan/material" component={QuickMaterialScanPage} />
+      <Route path="/cabang/quick-material" component={QuickMaterialScanPage} />
+
+      {!user ? (
+        <Switch>
+          <Route path="/login" component={LoginPage} />
+          <Route><Redirect to="/login" /></Route>
+        </Switch>
+      ) : (
+        <Layout>
+          <GlobalSearch />
+          <Switch>
+            <Route path="/" component={DashboardPage} />
         {/* Gudang Routes - Master */}
         <Route path="/master/barang" component={BarangPage} />
         <Route path="/master/gudang" component={GudangPage} />
@@ -125,6 +129,8 @@ function AppRouter() {
         <Route component={NotFound} />
       </Switch>
     </Layout>
+      )}
+    </Switch>
   );
 }
 

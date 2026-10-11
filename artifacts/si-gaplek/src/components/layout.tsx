@@ -161,7 +161,7 @@ const NAV_SECTIONS: NavSection[] = [
         label: "Tiara Assistant",
         href: "/ai-assistant",
         icon: Sparkles,
-        roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
+        roles: ["ADMIN"],
         badge: "AI",
       },
       {
@@ -583,10 +583,70 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </DropdownMenu>
         </header>
 
-        <main className="flex-1 overflow-y-auto relative">
+        <main className="flex-1 overflow-y-auto relative pb-16 sm:pb-0">
           {children}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar (Khusus Smartphone & PWA) */}
+      <MobileBottomNav />
     </div>
+  );
+}
+
+/* ── Mobile Bottom Navigation Bar (PWA & Mobile View) ── */
+function MobileBottomNav() {
+  const [location, navigate] = useLocation();
+  const { user } = useAuth();
+  if (!user) return null;
+
+  let items: { label: string; href: string; icon: React.ElementType }[] = [];
+
+  if (user.role === "CABANG") {
+    items = [
+      { label: "Beranda", href: "/", icon: LayoutDashboard },
+      { label: "Stok", href: "/cabang/stok-material", icon: Layers },
+      { label: "Terima", href: "/cabang/receive", icon: ScanBarcode },
+      { label: "Pasang", href: "/cabang/pemasangan", icon: Wrench },
+      { label: "Lacak", href: "/cabang/tracking", icon: MapPin },
+    ];
+  } else if (user.role === "SPI") {
+    items = [
+      { label: "Audit", href: "/spi/dashboard", icon: BarChart3 },
+      { label: "Verifikasi", href: "/spi/verifikasi", icon: ScrollText },
+      { label: "Peta GIS", href: "/spi/gis", icon: MapPin },
+      { label: "Stok Cabang", href: "/cabang/stok-material", icon: Layers },
+    ];
+  } else {
+    items = [
+      { label: "Beranda", href: "/", icon: LayoutDashboard },
+      { label: "Material", href: "/master/barang", icon: Package },
+      { label: "Distribusi", href: "/transaksi/keluar", icon: PackageMinus },
+      { label: "Stok Cabang", href: "/cabang/stok-material", icon: Layers },
+    ];
+  }
+
+  return (
+    <nav className="sm:hidden fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-md border-t border-border/80 flex items-center justify-around px-1 py-1.5 shadow-lg safe-bottom">
+      {items.map((it) => {
+        const isActive = it.href === "/" ? location === "/" : location.startsWith(it.href);
+        const Icon = it.icon;
+        return (
+          <button
+            key={it.href}
+            onClick={() => navigate(it.href)}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg transition-colors select-none",
+              isActive
+                ? "text-sky-600 dark:text-sky-400 font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Icon className={cn("w-5 h-5", isActive ? "stroke-[2.25]" : "stroke-[1.75]")} />
+            <span className="text-[10px] mt-0.5 tracking-tight leading-none">{it.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }

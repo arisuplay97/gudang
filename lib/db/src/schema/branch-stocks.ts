@@ -9,6 +9,8 @@ export const branchStocksTable = pgTable("branch_stocks", {
   branchId: integer("branch_id").notNull().references(() => branchesTable.id),
   itemId: integer("item_id").notNull().references(() => itemsTable.id),
   quantity: integer("quantity").notNull().default(0),
+  minimumStock: integer("minimum_stock").notNull().default(5),
+  maximumStock: integer("maximum_stock").default(100),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

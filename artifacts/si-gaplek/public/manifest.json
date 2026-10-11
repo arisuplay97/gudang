@@ -1,0 +1,56 @@
+{
+  "name": "SIMONA - Sistem Informasi Logistik PDAM",
+  "short_name": "SIMONA",
+  "description": "Sistem Informasi Manajemen Operasional & Logistik Perumdam Tirta Ardhia Rinjani",
+  "start_url": "/?mode=pwa",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0284c7",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "lang": "id",
+  "dir": "ltr",
+  "shortcuts": [
+    {
+      "name": "Stok Material Cabang",
+      "short_name": "Stok Cabang",
+      "description": "Cek sisa fisik material & safety stock cabang",
+      "url": "/cabang/stok-material?mode=pwa",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Penerimaan Surat Jalan",
+      "short_name": "Terima Barang",
+      "description": "Konfirmasi barang masuk dari pusat",
+      "url": "/cabang/receive?mode=pwa",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pemasangan Fisik",
+      "short_name": "Pemasangan",
+      "description": "Catat pemasangan aksesoris oleh teknisi",
+      "url": "/cabang/pemasangan?mode=pwa",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}

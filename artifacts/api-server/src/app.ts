@@ -27,6 +27,27 @@ pool.query(`
   ALTER TABLE installation_evidence ADD COLUMN IF NOT EXISTS cross_district_notes TEXT;
   ALTER TABLE stock_out_items ADD COLUMN IF NOT EXISTS received_at TIMESTAMP WITH TIME ZONE;
   ALTER TABLE stock_out_items ADD COLUMN IF NOT EXISTS received_by INTEGER;
+  ALTER TABLE branch_stocks ADD COLUMN IF NOT EXISTS minimum_stock INTEGER NOT NULL DEFAULT 5;
+  ALTER TABLE branch_stocks ADD COLUMN IF NOT EXISTS maximum_stock INTEGER DEFAULT 100;
+  CREATE TABLE IF NOT EXISTS branch_stock_movements (
+    id SERIAL PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    item_id INTEGER NOT NULL REFERENCES items(id),
+    movement_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    movement_type VARCHAR(50) NOT NULL,
+    direction VARCHAR(10) NOT NULL,
+    quantity INTEGER NOT NULL,
+    balance_before INTEGER NOT NULL DEFAULT 0,
+    balance_after INTEGER NOT NULL DEFAULT 0,
+    reference_type VARCHAR(50),
+    reference_id INTEGER,
+    reference_no VARCHAR(100),
+    user_id INTEGER REFERENCES users(id),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_bsm_branch_item ON branch_stock_movements(branch_id, item_id);
+  CREATE INDEX IF NOT EXISTS idx_bsm_date ON branch_stock_movements(movement_date);
 `).catch(err => console.error("Auto migration warning:", err?.message || err));
 
 const app = express() as any;

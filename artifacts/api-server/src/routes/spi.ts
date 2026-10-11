@@ -17,8 +17,10 @@ import {
     categoriesTable,
     branchesTable,
     usersTable,
+    branchStocksTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
+import { recordBranchStockMovement } from "./branch-stocks";
 
 const router: IRouter = Router();
 
@@ -317,7 +319,7 @@ router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"
                 status: "VERIFIED",
             }).where(eq(installationAllocationsTable.id, evidence.allocationId));
         } else {
-            // DITOLAK — revert to MENUNGGU_PEMASANGAN
+            // DITOLAK — revert to MENUNGGU_PEMASANGAN & Rollback stok cabang
             await tx.update(materialTrackingTable).set({
                 status: "MENUNGGU_PEMASANGAN",
             }).where(eq(materialTrackingTable.id, tracking.id));
@@ -325,6 +327,53 @@ router.post("/spi/verify/:evidenceUuid", requireAuth, requireRole("SPI", "ADMIN"
             await tx.update(installationAllocationsTable).set({
                 status: "REJECTED",
             }).where(eq(installationAllocationsTable.id, evidence.allocationId));
+
+            // Kembalikan saldo fisik stok cabang karena pemasangan dibatalkan/ditolak
+            const [allocItem] = await tx
+                .select({
+                    itemId: stockOutItemsTable.itemId,
+                    quantity: installationAllocationsTable.quantity,
+                })
+                .from(installationAllocationsTable)
+                .innerJoin(materialTrackingTable, eq(installationAllocationsTable.trackingId, materialTrackingTable.id))
+                .innerJoin(stockOutItemsTable, eq(materialTrackingTable.transactionItemId, stockOutItemsTable.id))
+                .where(eq(installationAllocationsTable.id, evidence.allocationId));
+
+            if (allocItem && allocItem.itemId) {
+                const qtyRollback = Number(allocItem.quantity) || 1;
+                const [existingStock] = await tx.select().from(branchStocksTable)
+                    .where(and(
+                        eq(branchStocksTable.branchId, tracking.branchId),
+                        eq(branchStocksTable.itemId, allocItem.itemId)
+                    ));
+                const balanceBefore = existingStock ? Number(existingStock.quantity) : 0;
+                const balanceAfter = balanceBefore + qtyRollback;
+
+                await tx.update(branchStocksTable)
+                    .set({
+                        quantity: sql`${branchStocksTable.quantity} + ${qtyRollback}`,
+                        updatedAt: new Date(),
+                    })
+                    .where(and(
+                        eq(branchStocksTable.branchId, tracking.branchId),
+                        eq(branchStocksTable.itemId, allocItem.itemId)
+                    ));
+
+                await recordBranchStockMovement(tx, {
+                    branchId: tracking.branchId,
+                    itemId: allocItem.itemId,
+                    movementType: "REJECTION_ROLLBACK",
+                    direction: "in",
+                    quantity: qtyRollback,
+                    balanceBefore,
+                    balanceAfter,
+                    referenceType: "verification",
+                    referenceId: verification.id,
+                    referenceNo: tracking.uuid,
+                    userId: req.session.userId,
+                    notes: `Rollback stok cabang akibat verifikasi pemasangan ditolak SPI (${notes || "Tidak memenuhi standar"})`,
+                });
+            }
         }
 
         // Record event

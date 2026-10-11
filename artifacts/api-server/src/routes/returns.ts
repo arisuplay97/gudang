@@ -3,6 +3,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db, returnsTable, returnItemsTable, itemsTable, auditLogsTable, branchStocksTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
+import { recordBranchStockMovement } from "./branch-stocks";
 
 const router: IRouter = Router();
 
@@ -78,15 +79,39 @@ router.post("/returns", requireAuth, async (req, res): Promise<void> => {
     // Jika retur dikirim dari cabang ke pusat, kurangi stok cabang yang bersangkutan
     const returnBranchId = req.body.branchId || req.session.branchId;
     if (returnBranchId) {
+      const bId = parseInt(returnBranchId);
+      const [existingStock] = await db.select().from(branchStocksTable)
+        .where(and(
+          eq(branchStocksTable.branchId, bId),
+          eq(branchStocksTable.itemId, item.itemId)
+        ));
+      const balanceBefore = existingStock ? Number(existingStock.quantity) : 0;
+      const balanceAfter = Math.max(0, balanceBefore - item.quantity);
+
       await db.update(branchStocksTable)
         .set({
           quantity: sql`GREATEST(0, ${branchStocksTable.quantity} - ${item.quantity})`,
           updatedAt: new Date(),
         })
         .where(and(
-          eq(branchStocksTable.branchId, parseInt(returnBranchId)),
+          eq(branchStocksTable.branchId, bId),
           eq(branchStocksTable.itemId, item.itemId)
         ));
+
+      await recordBranchStockMovement(db, {
+        branchId: bId,
+        itemId: item.itemId,
+        movementType: "RETURN",
+        direction: "out",
+        quantity: item.quantity,
+        balanceBefore,
+        balanceAfter,
+        referenceType: "return",
+        referenceId: retur.id,
+        referenceNo: refNo,
+        userId: req.session.userId,
+        notes: `Retur barang cabang ke gudang pusat (${refNo}) - Kondisi: ${item.condition ?? "good"}`,
+      });
     }
   }
 
