@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ArrowRight,
 } from "lucide-react";
+import { DashboardServiceGrid } from "@/components/mobile/dashboard-service-grid";
 
 interface BranchStockRow {
   id: number;
@@ -117,16 +118,25 @@ export function MobileBranchHome() {
   const pendingShipments = shipments.filter((s) => s.receiptStatus !== "COMPLETED");
 
   return (
-    <div className="space-y-5 pb-2">
-      {/* ── Branch Name Badge ── */}
-      {user?.branchName && (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            {user.branchName}
-          </span>
-          <span className="flex-1 h-px bg-border/60" />
+    <div className="space-y-4 pb-2">
+      {/* ── Branch Header Context ── */}
+      <div className="flex items-center justify-between pt-0.5 pb-1">
+        <div>
+          <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+            UNIT LAYANAN CABANG
+          </p>
+          <h2 className="text-base font-extrabold text-foreground tracking-tight">
+            {user?.branchName || "Cabang Praya (Lombok Tengah)"}
+          </h2>
         </div>
-      )}
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Aktif
+        </span>
+      </div>
+
+      {/* ── MAIN SHORTCUT CARD (6 Icons ala Reference Image) ── */}
+      <DashboardServiceGrid />
 
       {/* ── KPI Metrics: 2×2 Grid ── */}
       <div className="grid grid-cols-2 gap-3">
@@ -351,56 +361,6 @@ export function MobileBranchHome() {
         )}
       </div>
 
-      {/* ── Quick Links ── */}
-      <div className="space-y-2.5">
-        <p className="text-[13px] font-semibold text-foreground">Menu Lainnya</p>
-        <div className="space-y-1.5">
-          <button
-            onClick={() => navigate("/cabang/pemasangan")}
-            className="w-full text-left p-3.5 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center gap-3 active:scale-[0.99] transition-transform"
-          >
-            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
-              <Wrench className="w-[18px] h-[18px] text-violet-600 dark:text-violet-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-foreground">Catat Pemasangan</p>
-              <p className="text-[11px] text-muted-foreground">
-                Bukti foto & data teknisi
-              </p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-          </button>
-
-          <button
-            onClick={() => navigate("/transaksi/retur")}
-            className="w-full text-left p-3.5 rounded-2xl bg-card border border-border/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center gap-3 active:scale-[0.99] transition-transform"
-          >
-            <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center shrink-0">
-              <svg
-                className="w-[18px] h-[18px] text-rose-600 dark:text-rose-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-                <path d="M21 21v-5h-5" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-foreground">Retur Material</p>
-              <p className="text-[11px] text-muted-foreground">
-                Kembalikan ke gudang pusat
-              </p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

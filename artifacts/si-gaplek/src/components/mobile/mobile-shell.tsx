@@ -94,6 +94,27 @@ export function MobileShell({ children }: MobileShellProps) {
     return "Selamat Malam";
   }, []);
 
+  const formattedDate = useMemo(() => {
+    try {
+      const now = new Date();
+      return new Intl.DateTimeFormat("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+      }).format(now).toUpperCase();
+    } catch {
+      return "HARI INI";
+    }
+  }, []);
+
+  const displayName = useMemo(() => {
+    if (!user?.fullName) return "Petugas";
+    if (user.fullName.toLowerCase().includes("cabang utara")) return "Operator";
+    return user.fullName.split(" ")[0];
+  }, [user]);
+
+  const branchDisplayName = user?.branchName || "Cabang Praya";
+
   const isHome = location === "/";
   const isSubPage =
     location === "/cabang/pemasangan" || location === "/transaksi/retur";
@@ -104,16 +125,45 @@ export function MobileShell({ children }: MobileShellProps) {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden select-none">
-      {/* ── TOP HEADER ── */}
+      {/* ── TOP HEADER (Apple App Store Style) ── */}
       {isHome ? (
-        /* Home Header: Avatar + Greeting + Actions */
-        <header className="shrink-0 px-5 pt-3 pb-2.5 bg-background">
+        <header className="shrink-0 px-5 pt-3.5 pb-2.5 bg-background/90 backdrop-blur-2xl border-b border-border/40 sticky top-0 z-30 transition-all">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
+            {/* Left: App Store Date & Agency Pill */}
+            <div className="space-y-0.5 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                  {formattedDate}
+                </span>
+                <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                <span className="text-[10px] font-semibold text-primary truncate max-w-[140px]">
+                  {branchDisplayName}
+                </span>
+              </div>
+              <h1 className="text-xl font-black text-foreground tracking-tight leading-none">
+                SIMONA
+              </h1>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <NotificationCenter />
+              <button
+                onClick={() => setIsDark(!isDark)}
+                aria-label="Toggle theme"
+                className="w-9 h-9 rounded-2xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/70 active:scale-95 transition-all"
+              >
+                {isDark ? (
+                  <Sun className="w-4 h-4 text-amber-500" />
+                ) : (
+                  <Moon className="w-4 h-4 text-slate-600" />
+                )}
+              </button>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="shrink-0 focus:outline-none">
-                    <Avatar className="w-10 h-10 rounded-2xl border-2 border-primary/20 shadow-sm">
+                  <button className="shrink-0 focus:outline-none active:scale-95 transition-transform ml-0.5">
+                    <Avatar className="w-9 h-9 rounded-2xl ring-2 ring-primary/20 shadow-xs">
                       <AvatarFallback className="text-xs font-bold bg-primary text-primary-foreground rounded-2xl">
                         {initials}
                       </AvatarFallback>
@@ -121,19 +171,26 @@ export function MobileShell({ children }: MobileShellProps) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                  align="start"
-                  className="w-52 rounded-2xl shadow-xl p-1.5"
+                  align="end"
+                  className="w-56 rounded-2xl shadow-xl p-1.5"
                 >
                   <DropdownMenuLabel className="text-xs">
-                    <p className="font-semibold">{user.fullName}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      @{user.username} • {user.branchName || roleLabel(user.role)}
+                    <p className="font-semibold text-foreground">{user.fullName}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 font-normal">
+                      @{user.username} • {branchDisplayName} ({roleLabel(user.role)})
                     </p>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
+                    onClick={() => navigate("/pengaturan?tab=profil")}
+                    className="text-xs cursor-pointer rounded-xl"
+                  >
+                    <User className="w-3.5 h-3.5 mr-2" />
+                    Profil Pengguna
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => setIsDark(!isDark)}
-                    className="text-xs cursor-pointer"
+                    className="text-xs cursor-pointer rounded-xl"
                   >
                     {isDark ? (
                       <Sun className="w-3.5 h-3.5 mr-2 text-amber-500" />
@@ -142,48 +199,22 @@ export function MobileShell({ children }: MobileShellProps) {
                     )}
                     {isDark ? "Mode Terang" : "Mode Gelap"}
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => navigate("/pengaturan?tab=profil")}
-                    className="text-xs cursor-pointer"
-                  >
-                    <User className="w-3.5 h-3.5 mr-2" />
-                    Profil Saya
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={logout}
-                    className="text-xs text-rose-600 cursor-pointer font-medium"
+                    className="text-xs text-rose-600 cursor-pointer font-medium rounded-xl"
                   >
                     <LogOut className="w-3.5 h-3.5 mr-2" />
-                    Keluar
+                    Keluar Sesi
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium text-muted-foreground leading-none">
-                  {greetingText},
-                </p>
-                <h1 className="text-base font-bold text-foreground leading-snug truncate">
-                  {user.fullName?.split(" ")[0]}
-                </h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 shrink-0">
-              <NotificationCenter />
-              <button
-                onClick={() => navigate("/pengaturan?tab=profil")}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
-              >
-                <Settings className="w-[18px] h-[18px]" />
-              </button>
             </div>
           </div>
         </header>
       ) : (
         /* Sub-Page Header: Back Arrow + Title */
-        <header className="shrink-0 h-12 px-4 flex items-center gap-3 bg-background border-b border-border/60">
+        <header className="shrink-0 h-12 px-4 flex items-center gap-3 bg-background/90 backdrop-blur-2xl border-b border-border/60 sticky top-0 z-30">
           <button
             onClick={() => {
               if (isSubPage) {
@@ -192,14 +223,13 @@ export function MobileShell({ children }: MobileShellProps) {
                 navigate("/");
               }
             }}
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-foreground hover:bg-muted transition-colors shrink-0"
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-foreground hover:bg-muted active:scale-95 transition-all shrink-0"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-[15px] font-semibold text-foreground truncate">
+          <h1 className="text-[15px] font-bold text-foreground truncate flex-1">
             {pageTitle}
           </h1>
-          <div className="flex-1" />
           <NotificationCenter />
         </header>
       )}
