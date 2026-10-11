@@ -55,8 +55,11 @@ import {
   PackageCheck,
   QrCode,
   Flame,
+  ScanBarcode,
 } from "lucide-react";
 import { LabelQrPrintDialog, type LabelItem } from "@/components/label-qr-print-dialog";
+import { MaterialCardMobile } from "@/components/mobile/material-card-mobile";
+import { MaterialDetailDrawer } from "@/components/mobile/material-detail-drawer";
 
 /* ── Interfaces ── */
 interface BranchStockRow {
@@ -310,6 +313,7 @@ export default function StokMaterialCabangPage() {
   const [detailItem, setDetailItem] = useState<BranchStockRow | null>(null);
   const [activeModalTab, setActiveModalTab] = useState<"detail" | "ledger">("detail");
   const [editMinStockValue, setEditMinStockValue] = useState<number>(5);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // QR Code Bin Card print state
   const [qrPrintOpen, setQrPrintOpen] = useState(false);
@@ -389,7 +393,7 @@ export default function StokMaterialCabangPage() {
       }
       return apiFetch<LedgerResponse>(`/api/branch-stocks/${detailItem.branchId}/${detailItem.itemId}/ledger`);
     },
-    enabled: !!detailItem && activeModalTab === "ledger",
+    enabled: !!detailItem && (activeModalTab === "ledger" || mobileDrawerOpen),
   });
 
   // Mutation: Update Batas Minimum Stok Dinamis
@@ -621,6 +625,14 @@ export default function StokMaterialCabangPage() {
     statusFilter !== "all" ||
     searchTerm.trim() !== "";
 
+  const greetingText = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 11) return "Selamat Pagi";
+    if (hour < 15) return "Selamat Siang";
+    if (hour < 18) return "Selamat Sore";
+    return "Selamat Malam";
+  }, []);
+
   const handleResetFilters = () => {
     if (user?.role !== "CABANG") setSelectedBranchId("all");
     setSelectedCategory("all");
@@ -630,14 +642,310 @@ export default function StokMaterialCabangPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
-      <div className="p-5 md:p-8 max-w-[1600px] mx-auto space-y-6">
+      <div className="p-4 sm:p-5 md:p-8 max-w-[1600px] mx-auto space-y-5 md:space-y-6">
 
-        {/* ── Page Header ── */}
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row md:items-center justify-between gap-4"
-        >
+        {/* ══════════════════════════════════════════════════
+            MOBILE PWA EXPERIENCE (Smartphone View ala Linear/iOS)
+           ══════════════════════════════════════════════════ */}
+        <div className="block md:hidden pb-10 space-y-4 max-w-lg mx-auto">
+          {/* Greeting & Logistics Header Card */}
+          <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                {activeBranchName}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" />
+                Live Sync
+              </span>
+            </div>
+
+            <div className="pt-0.5">
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                {greetingText}, {user?.fullName?.split(" ")[0] || "Petugas"}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Monitoring persediaan fisik & kartu stok cabang
+              </p>
+            </div>
+          </div>
+
+          {/* 2x2 Metric Cards (Gaya Linear / Figma) */}
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* Card 1: Total Fisik */}
+            <div className="p-3.5 rounded-2xl bg-card border border-border/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Boxes className="w-4 h-4 stroke-[2]" />
+                </div>
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                  Siap Pakai
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                  Total Sisa Fisik
+                </span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="font-mono text-xl font-bold tracking-tight text-foreground">
+                    {formatNumber(stats.totalUnits)}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-medium">unit</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Siap Pasang */}
+            <div className="p-3.5 rounded-2xl bg-card border border-border/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <PackageCheck className="w-4 h-4 stroke-[2]" />
+                </div>
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                  Optimal
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                  Stok Aman
+                </span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="font-mono text-xl font-bold tracking-tight text-foreground">
+                    {allRows.filter((r) => r.quantity > (r.minimumStock ?? 5)).length}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-medium">item</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Menipis / Kritis */}
+            <div className="p-3.5 rounded-2xl bg-card border border-border/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4 stroke-[2]" />
+                </div>
+                <span
+                  className={cn(
+                    "text-[10px] font-semibold px-1.5 py-0.5 rounded-md border",
+                    stats.lowStockCount > 0
+                      ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/25"
+                      : "bg-muted text-muted-foreground border-border/50"
+                  )}
+                >
+                  {stats.lowStockCount > 0 ? "Perlu Re-Order" : "Aman"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                  Kritis / Menipis
+                </span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span
+                    className={cn(
+                      "font-mono text-xl font-bold tracking-tight",
+                      stats.lowStockCount > 0 ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+                    )}
+                  >
+                    {stats.lowStockCount}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-medium">item</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 4: Variasi Item */}
+            <div className="p-3.5 rounded-2xl bg-card border border-border/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                  <Layers className="w-4 h-4 stroke-[2]" />
+                </div>
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
+                  Katalog
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                  Jenis Aksesoris
+                </span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="font-mono text-xl font-bold tracking-tight text-foreground">
+                    {stats.uniqueItems}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-medium">jenis</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Action Squircles Row (Gaya Image 2) */}
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => navigate("/cabang/receive")}
+              className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-card border border-border/80 hover:border-border active:scale-95 transition-all text-center"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-2xs">
+                <ScanBarcode className="w-5 h-5 stroke-[2]" />
+              </div>
+              <span className="text-[11px] font-semibold text-foreground leading-tight">Terima SJ</span>
+            </button>
+
+            <button
+              onClick={() => navigate("/cabang/pemasangan")}
+              className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-card border border-border/80 hover:border-border active:scale-95 transition-all text-center"
+            >
+              <div className="w-10 h-10 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shadow-2xs">
+                <Wrench className="w-5 h-5 stroke-[2]" />
+              </div>
+              <span className="text-[11px] font-semibold text-foreground leading-tight">Catat Pasang</span>
+            </button>
+
+            <button
+              onClick={handleOpenBulkQrLabels}
+              className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-card border border-border/80 hover:border-border active:scale-95 transition-all text-center"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-2xs">
+                <QrCode className="w-5 h-5 stroke-[2]" />
+              </div>
+              <span className="text-[11px] font-semibold text-foreground leading-tight">Label Rak</span>
+            </button>
+
+            <button
+              onClick={handleExportBeritaAcaraPdf}
+              className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-card border border-border/80 hover:border-border active:scale-95 transition-all text-center"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs">
+                <FileText className="w-5 h-5 stroke-[2]" />
+              </div>
+              <span className="text-[11px] font-semibold text-foreground leading-tight">Cetak BA</span>
+            </button>
+          </div>
+
+          {/* Search Bar & Status Filter Chips */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
+              <Input
+                placeholder="Cari kode, nama aksesoris..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 pl-9 pr-8 text-xs rounded-xl bg-card border-border/80 shadow-2xs placeholder:text-muted-foreground/60"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+              <button
+                onClick={() => setStatusFilter("all")}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border",
+                  statusFilter === "all"
+                    ? "bg-foreground text-background border-foreground font-semibold shadow-xs"
+                    : "bg-card text-muted-foreground border-border/70 hover:text-foreground"
+                )}
+              >
+                Semua ({allRows.length})
+              </button>
+              <button
+                onClick={() => setStatusFilter("safe")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border",
+                  statusFilter === "safe"
+                    ? "bg-emerald-600 text-white border-emerald-600 font-semibold shadow-xs"
+                    : "bg-card text-muted-foreground border-border/70 hover:text-foreground"
+                )}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Aman ({allRows.filter((r) => r.quantity > (r.minimumStock ?? 5)).length})
+              </button>
+              <button
+                onClick={() => setStatusFilter("low")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border",
+                  statusFilter === "low"
+                    ? "bg-amber-600 text-white border-amber-600 font-semibold shadow-xs"
+                    : "bg-card text-muted-foreground border-border/70 hover:text-foreground"
+                )}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Menipis ({allRows.filter((r) => r.quantity > 0 && r.quantity <= (r.minimumStock ?? 5)).length})
+              </button>
+              <button
+                onClick={() => setStatusFilter("out")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border",
+                  statusFilter === "out"
+                    ? "bg-rose-600 text-white border-rose-600 font-semibold shadow-xs"
+                    : "bg-card text-muted-foreground border-border/70 hover:text-foreground"
+                )}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                Habis ({allRows.filter((r) => r.quantity === 0).length})
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Material Card List */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-0.5">
+              <span className="font-semibold text-foreground">Daftar Material Fisik</span>
+              <span>{filteredRows.length} item ditemukan</span>
+            </div>
+
+            {loadingStocks ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-32 rounded-2xl bg-muted/40 animate-pulse border border-border/50" />
+                ))}
+              </div>
+            ) : filteredRows.length === 0 ? (
+              <div className="p-8 text-center rounded-2xl bg-card border border-dashed border-border text-xs text-muted-foreground space-y-2">
+                <Package className="w-8 h-8 mx-auto text-muted-foreground/40 stroke-[1.5]" />
+                <p className="font-semibold text-foreground">Tidak Ada Material Ditemukan</p>
+                <p className="text-[11px]">Coba sesuaikan kata kunci pencarian atau filter status ketersediaan.</p>
+              </div>
+            ) : (
+              filteredRows.map((row) => (
+                <MaterialCardMobile
+                  key={row.id}
+                  item={row}
+                  onClick={() => {
+                    setDetailItem(row);
+                    setMobileDrawerOpen(true);
+                  }}
+                  onOpenLedger={(e) => {
+                    e.stopPropagation();
+                    setDetailItem(row);
+                    setActiveModalTab("ledger");
+                    setMobileDrawerOpen(true);
+                  }}
+                  onOpenQr={(e) => {
+                    e.stopPropagation();
+                    handleOpenSingleQrLabel(row);
+                  }}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════
+            DESKTOP ADMIN EXPERIENCE (Full Table & Toolbar)
+           ══════════════════════════════════════════════════ */}
+        <div className="hidden md:block space-y-6">
+          {/* ── Page Header ── */}
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col md:flex-row md:items-center justify-between gap-4"
+          >
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
@@ -1202,9 +1510,10 @@ export default function StokMaterialCabangPage() {
             </div>
           </div>
         </motion.div>
+        </div>
 
-        {/* ── Detail & Kartu Stok (Ledger) Modal Dialog ── */}
-        <Dialog open={!!detailItem} onOpenChange={(open) => !open && setDetailItem(null)}>
+        {/* ── Detail & Kartu Stok (Ledger) Modal Dialog (Desktop) ── */}
+        <Dialog open={!!detailItem && !mobileDrawerOpen} onOpenChange={(open) => !open && setDetailItem(null)}>
           <DialogContent className="sm:max-w-3xl rounded-2xl border border-border/80 bg-card p-6 max-h-[90vh] overflow-y-auto">
             <DialogHeader className="space-y-1">
               <div className="flex items-center justify-between">
@@ -1603,6 +1912,25 @@ export default function StokMaterialCabangPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Mobile iOS-style Bottom Sheet Drawer (Kartu Stok & Timeline Mutasi ala Referensi) */}
+        <MaterialDetailDrawer
+          item={detailItem}
+          open={mobileDrawerOpen}
+          onClose={() => {
+            setMobileDrawerOpen(false);
+            setDetailItem(null);
+          }}
+          ledgerRows={ledgerData?.movements || []}
+          loadingLedger={loadingLedger}
+          onUpdateThreshold={(id, minStock) => {
+            updateThresholdMutation.mutate({ id, minimumStock: minStock });
+          }}
+          isUpdatingThreshold={updateThresholdMutation.isPending}
+          onOpenQr={(item) => handleOpenSingleQrLabel(item as any)}
+          onNavigatePemasangan={() => navigate("/cabang/pemasangan")}
+          onNavigateRetur={() => navigate("/transaksi/retur")}
+        />
 
         {/* Modal Cetak Label QR Stiker Rak / Bin Card */}
         <LabelQrPrintDialog
