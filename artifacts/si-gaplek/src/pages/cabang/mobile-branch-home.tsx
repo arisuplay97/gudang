@@ -26,6 +26,17 @@ import {
 } from "lucide-react";
 import NotificationCenter from "@/components/notification-center";
 import { MobileCameraModal } from "@/components/mobile/mobile-camera-modal";
+import {
+  IconCekStok,
+  IconTerimaBarang,
+  IconLacakKiriman,
+  IconScanBarcode,
+  IconCatatPasang,
+  IconReturMaterial,
+  IconTimTeknisi,
+  IconPetaGis,
+  IconBantuanCS,
+} from "@/components/mobile/mobile-feature-icons";
 
 interface BranchStockRow {
   id: number;
@@ -147,166 +158,207 @@ export function MobileBranchHome() {
 
   return (
     <div className="space-y-5 pb-6">
-      {/* ── 1. HERO GRADIENT HEADER (ala Fintech App Image 2) ── */}
-      <div className="relative bg-gradient-to-b from-blue-700 via-indigo-600 to-sky-500 text-white rounded-b-[36px] pt-4 pb-7 px-5 shadow-xl overflow-hidden">
-        {/* Subtle background glow effect */}
-        <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-        <div className="absolute top-1/2 -left-20 w-48 h-48 rounded-full bg-sky-400/20 blur-2xl pointer-events-none" />
-
-        {/* Top User Greeting Row */}
-        <div className="relative flex items-center justify-between mb-5">
+      {/* ── 1. CLEAN GROUNDED APP HEADER (Zero Gradient AI Slop) ── */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 px-5 pt-5 pb-5 space-y-4">
+        {/* Top Identity Row */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center font-bold text-sm shadow-inner text-white">
+            <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-slate-800 border border-blue-200/80 dark:border-slate-700 flex items-center justify-center font-bold text-sm text-blue-700 dark:text-blue-400 shadow-2xs">
               {initials}
             </div>
             <div>
-              <p className="text-[11px] font-medium text-white/80 leading-none">
-                Selamat Datang,
-              </p>
-              <h1 className="text-lg font-extrabold text-white tracking-tight leading-snug mt-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                  SIMONA CABANG
+                </span>
+                <span className="px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                  {branchName}
+                </span>
+              </div>
+              <h1 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight leading-snug">
                 {firstName}
               </h1>
             </div>
           </div>
 
-          {/* Right Action Icons (Frosted Glass circles ala Image 2) */}
+          {/* Clean Action Icons */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/cabang/stok-material")}
-              className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/25 active:scale-95 transition-all shadow-xs"
+              className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all"
               title="Cari Material"
             >
-              <Search className="w-4 h-4" />
+              <Search className="w-4.5 h-4.5" />
             </button>
-            <div className="text-white [&_button]:bg-white/15 [&_button]:backdrop-blur-md [&_button]:border-white/20 [&_button]:text-white [&_button]:hover:bg-white/25 [&_button]:w-10 [&_button]:h-10 [&_button]:rounded-full [&_button]:shadow-xs">
+            <div className="[&_button]:w-10 [&_button]:h-10 [&_button]:rounded-2xl [&_button]:bg-slate-100 dark:[&_button]:bg-slate-800 [&_button]:border [&_button]:border-slate-200/80 dark:[&_button]:border-slate-700 [&_button]:text-slate-600 dark:[&_button]:text-slate-300">
               <NotificationCenter />
             </div>
           </div>
         </div>
 
-        {/* Total Balance / Stock Card (Frosted Glass ala Image 2) */}
-        <div className="relative bg-white/20 backdrop-blur-xl border border-white/30 rounded-3xl p-5 shadow-2xl">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-white/90 tracking-wide">
-              Total Stok Fisik Cabang
-            </span>
-            {/* Currency/Branch Pill (ala USD pill in Image 2) */}
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-[11px] font-semibold text-white shadow-xs">
-              <MapPin className="w-3 h-3 text-sky-200" />
-              <span className="truncate max-w-[120px]">{branchName}</span>
-              <span className="text-[9px] opacity-75">▾</span>
+        {/* Solid Executive Physical Stock Card */}
+        <div className="bg-slate-900 dark:bg-slate-800 text-white rounded-3xl p-5 shadow-xs border border-slate-800/80 dark:border-slate-700/80 space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-400 font-medium">Stok Aksesoris Tersedia</span>
+            <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800 dark:bg-slate-700/80 text-slate-300 font-mono text-[11px] font-semibold border border-slate-700/60">
+              <MapPin className="w-3 h-3 text-sky-400" />
+              <span>{branchName}</span>
             </div>
           </div>
 
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-mono text-3xl sm:text-4xl font-black tracking-tight text-white drop-shadow-xs">
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
               {formatNumber(stockStats.totalUnits)}
             </span>
-            <span className="text-sm font-semibold text-white/80">Unit Fisik</span>
+            <span className="text-xs text-slate-400 font-medium">Unit Fisik di Cabang</span>
           </div>
 
-          {/* Stock Health Micro Status */}
-          <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between text-xs text-white/90">
+          {/* Micro metrics bar */}
+          <div className="pt-3 border-t border-slate-800/80 dark:border-slate-700/60 flex items-center justify-between text-[11px] text-slate-300">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>{stockStats.safeCount} Item Stok Aman ({stockStats.safePercent}%)</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>{stockStats.safeCount} Item Aman ({stockStats.safePercent}%)</span>
             </div>
-            {stockStats.lowCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-400/30 text-amber-100 text-[10px] font-bold border border-amber-300/40">
-                {stockStats.lowCount} Menipis
-              </span>
+            {stockStats.lowCount > 0 ? (
+              <span className="text-amber-400 font-semibold">⚠ {stockStats.lowCount} Menipis</span>
+            ) : (
+              <span className="text-slate-400 font-normal">Stok Terjaga</span>
             )}
+            <span className="text-sky-400 font-medium">{pendingShipments.length} SJ Aktif</span>
           </div>
         </div>
       </div>
 
-      {/* ── 2. NEW CLEAN QUICK SHORTCUTS (Clean Fintech ala Image 2) ── */}
-      <div className="px-5">
-        <div className="grid grid-cols-4 gap-2.5">
-          {/* Cek Stok */}
+      {/* ── 2. FEATURE SHORTCUTS GRID (3x3 Squircle Cards matching reference image) ── */}
+      <div className="px-5 space-y-2.5">
+        <div className="flex items-center justify-between px-0.5">
+          <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+            LAYANAN UTAMA
+          </p>
+          <span className="text-[11px] font-medium text-slate-400">9 Modul</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+          {/* 1. Cek Stok */}
           <button
             onClick={() => navigate("/cabang/stok-material")}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
           >
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <Boxes className="w-5 h-5" />
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconCekStok className="w-10 h-10" />
             </div>
-            <span className="text-[11px] font-semibold text-foreground leading-tight">
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
               Cek Stok
             </span>
           </button>
 
-          {/* Terima Barang */}
+          {/* 2. Terima SJ */}
           <button
             onClick={() => navigate("/cabang/receive")}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
           >
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <PackageCheck className="w-5 h-5" />
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconTerimaBarang className="w-10 h-10" />
             </div>
-            <span className="text-[11px] font-semibold text-foreground leading-tight">
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
               Terima SJ
             </span>
           </button>
 
-          {/* Lacak Kiriman */}
+          {/* 3. Lacak Kiriman */}
           <button
             onClick={() => navigate("/cabang/tracking")}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
           >
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <Truck className="w-5 h-5" />
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconLacakKiriman className="w-10 h-10" />
             </div>
-            <span className="text-[11px] font-semibold text-foreground leading-tight">
-              Lacak
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              Lacak Kiriman
             </span>
           </button>
 
-          {/* Scan Barcode */}
+          {/* 4. Scan Barcode */}
           <button
             onClick={() => setCameraOpen(true)}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-center group"
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
           >
-            <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-              <Camera className="w-5 h-5" />
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconScanBarcode className="w-10 h-10" />
             </div>
-            <span className="text-[11px] font-semibold text-foreground leading-tight">
-              Scan QR
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              Scan Barcode
             </span>
           </button>
-        </div>
 
-        {/* Secondary Action Row: Catat Pasang & Retur */}
-        <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+          {/* 5. Catat Pasang */}
           <button
             onClick={() => navigate("/cabang/pemasangan")}
-            className="flex items-center gap-3 p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-left"
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
           >
-            <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-              <Wrench className="w-4 h-4" />
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconCatatPasang className="w-10 h-10" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-foreground truncate">Catat Pasang</p>
-              <p className="text-[10px] text-muted-foreground truncate">Lapor meter teknisi</p>
-            </div>
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              Catat Pasang
+            </span>
           </button>
 
+          {/* 6. Retur Material */}
           <button
             onClick={() => navigate("/transaksi/retur")}
-            className="flex items-center gap-3 p-3 rounded-2xl bg-card border border-border/70 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-left"
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
           >
-            <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-              <RotateCcw className="w-4 h-4" />
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconReturMaterial className="w-10 h-10" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-foreground truncate">Retur Material</p>
-              <p className="text-[10px] text-muted-foreground truncate">Kembalikan ke pusat</p>
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              Retur Material
+            </span>
+          </button>
+
+          {/* 7. Tim Petugas */}
+          <button
+            onClick={() => navigate("/cabang/pemasangan")}
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
+          >
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconTimTeknisi className="w-10 h-10" />
             </div>
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              Tim Petugas
+            </span>
+          </button>
+
+          {/* 8. Titik GIS */}
+          <button
+            onClick={() => navigate("/cabang/tracking")}
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
+          >
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconPetaGis className="w-10 h-10" />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              Titik GIS
+            </span>
+          </button>
+
+          {/* 9. SOP & Laporan */}
+          <button
+            onClick={() => navigate("/laporan/pemasangan-aksesoris")}
+            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
+          >
+            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
+              <IconBantuanCS className="w-10 h-10" />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              SOP & Laporan
+            </span>
           </button>
         </div>
       </div>
 
-      {/* ── 3. MONTHLY USAGE PROGRESS (ala "Spent this month" Image 2) ── */}
+      {/* ── 3. MONTHLY USAGE PROGRESS (Clean Solid Bar) ── */}
       <div className="px-5">
         <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs space-y-3">
           <div className="flex items-center justify-between text-xs">
@@ -318,10 +370,10 @@ export function MobileBranchHome() {
             </span>
           </div>
 
-          {/* Progress Bar (ala Image 2 green bar) */}
+          {/* Progress Bar (Clean Solid Emerald Bar) */}
           <div className="h-2.5 w-full rounded-full bg-muted/60 overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
+              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
               style={{
                 width: `${Math.min(
                   Math.round(((statsData?.installedUnitsCount ?? 12) / 100) * 100),
@@ -373,7 +425,7 @@ export function MobileBranchHome() {
               key={t.name}
               className="flex flex-col items-center gap-1.5 shrink-0"
             >
-              <div className="w-13 h-13 rounded-full bg-gradient-to-tr from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-border/80 flex items-center justify-center font-bold text-sm text-foreground shadow-xs">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-bold text-sm text-slate-800 dark:text-slate-100 shadow-2xs">
                 {t.avatar}
               </div>
               <span className="text-[10px] font-semibold text-foreground max-w-[56px] truncate text-center">

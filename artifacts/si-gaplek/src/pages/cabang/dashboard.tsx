@@ -118,8 +118,8 @@ export default function CabangDashboardPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
-      {/* ── Mobile PWA Home Experience (Khusus Layar HP / PWA ala Image 1 Screen 1) ── */}
-      <div className="block md:hidden p-4 max-w-lg mx-auto">
+      {/* ── Mobile PWA Home Experience (Khusus Layar HP / PWA) ── */}
+      <div className="block md:hidden max-w-lg mx-auto">
         <MobileBranchHome />
       </div>
 

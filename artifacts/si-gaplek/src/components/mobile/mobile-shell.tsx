@@ -75,21 +75,22 @@ export function MobileShell({ children }: MobileShellProps) {
         {children}
       </main>
 
-      {/* ── FLOATING BOTTOM DOCK (ala Image 2) ── */}
-      <div className="fixed bottom-4 inset-x-0 z-40 pointer-events-none px-4">
-        <nav className="pointer-events-auto max-w-sm mx-auto h-16 rounded-full bg-background/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-border/80 shadow-[0_12px_36px_rgba(0,0,0,0.14)] p-1.5 flex items-center justify-between">
+      {/* ── CLEAN SOLID FLOATING BOTTOM DOCK ── */}
+      <div className="fixed bottom-3 inset-x-0 z-40 pointer-events-none px-4">
+        <nav className="pointer-events-auto max-w-[360px] mx-auto h-[62px] rounded-[22px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-[0_8px_28px_rgba(15,23,42,0.08)] px-2.5 flex items-center justify-between">
           {/* Beranda */}
           <button
             onClick={() => navigate("/")}
             title="Beranda"
             className={cn(
-              "flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all",
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all",
               location === "/"
-                ? "bg-foreground text-background shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground active:scale-95"
+                ? "text-blue-600 dark:text-blue-400 font-bold bg-blue-50/80 dark:bg-blue-950/40"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >
-            <LayoutDashboard className="w-5 h-5" />
+            <LayoutDashboard className="w-4.5 h-4.5 mb-0.5" />
+            <span className="text-[9px] leading-none">Beranda</span>
           </button>
 
           {/* Stok */}
@@ -97,23 +98,24 @@ export function MobileShell({ children }: MobileShellProps) {
             onClick={() => navigate("/cabang/stok-material")}
             title="Stok Material"
             className={cn(
-              "flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all",
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all",
               location.startsWith("/cabang/stok-material")
-                ? "bg-foreground text-background shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground active:scale-95"
+                ? "text-blue-600 dark:text-blue-400 font-bold bg-blue-50/80 dark:bg-blue-950/40"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >
-            <Layers className="w-5 h-5" />
+            <Layers className="w-4.5 h-4.5 mb-0.5" />
+            <span className="text-[9px] leading-none">Stok</span>
           </button>
 
-          {/* Center Elevated Camera / Scan Button */}
+          {/* Center Clean Solid Camera / Scan Button (Zero Gradient AI Slop) */}
           <button
             onClick={() => setCameraModalOpen(true)}
-            className="w-13 h-13 -my-2 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-500 text-white shadow-lg shadow-blue-500/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
-            aria-label="Scan Barcode / QR Kamera"
+            className="w-12 h-12 -my-2.5 rounded-full bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white shadow-md shadow-slate-900/20 flex items-center justify-center active:scale-95 transition-all shrink-0"
+            aria-label="Pindai Barcode / QR Kamera"
             title="Pindai Barcode / QR"
           >
-            <Camera className="w-6 h-6 stroke-[2.2]" />
+            <Camera className="w-5 h-5 stroke-[2.2]" />
           </button>
 
           {/* Lacak */}
@@ -121,13 +123,14 @@ export function MobileShell({ children }: MobileShellProps) {
             onClick={() => navigate("/cabang/tracking")}
             title="Lacak Distribusi"
             className={cn(
-              "flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all",
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all",
               location.startsWith("/cabang/tracking")
-                ? "bg-foreground text-background shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground active:scale-95"
+                ? "text-blue-600 dark:text-blue-400 font-bold bg-blue-50/80 dark:bg-blue-950/40"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >
-            <Truck className="w-5 h-5" />
+            <Truck className="w-4.5 h-4.5 mb-0.5" />
+            <span className="text-[9px] leading-none">Lacak</span>
           </button>
 
           {/* Pengaturan / Profil */}
@@ -135,13 +138,14 @@ export function MobileShell({ children }: MobileShellProps) {
             onClick={() => navigate("/pengaturan?tab=profil")}
             title="Pengaturan"
             className={cn(
-              "flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all",
+              "flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all",
               location.startsWith("/pengaturan") || location.startsWith("/profil")
-                ? "bg-foreground text-background shadow-xs font-semibold"
-                : "text-muted-foreground hover:text-foreground active:scale-95"
+                ? "text-blue-600 dark:text-blue-400 font-bold bg-blue-50/80 dark:bg-blue-950/40"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4.5 h-4.5 mb-0.5" />
+            <span className="text-[9px] leading-none">Profil</span>
           </button>
         </nav>
       </div>
