@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
+import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import {
   ChevronLeft,
@@ -20,7 +22,8 @@ import {
   Calendar,
   X,
   Map as MapIcon,
-  Phone,
+  Navigation,
+  RefreshCw,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +31,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+
+// Fix Leaflet marker icons in bundlers
+// @ts-ignore
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+const verifiedMarkerIcon = L.divIcon({
+  className: "gis-radar-marker",
+  html: `
+    <div class="relative flex items-center justify-center w-8 h-8 cursor-pointer group">
+      <span class="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-40 animate-ping" style="animation-duration: 2.2s;"></span>
+      <span class="relative inline-flex rounded-full w-4 h-4 bg-emerald-600 border-2 border-white shadow-md transition-transform duration-200 group-hover:scale-125"></span>
+    </div>
+  `,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -16],
+});
 
 interface TrackingItem {
   id: number;
@@ -60,12 +85,25 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
   const { user } = useAuth();
   const [, navigate] = useLocation();
 
-  // Selected item for detail view (ala Image 1 left screen)
+  // URL Query view mode support (?view=map)
+  const searchParams =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
+  const initialView = searchParams.get("view") === "map" ? "map" : "list";
+
+  const [activeTab, setActiveTab] = useState<"list" | "map">(initialView);
   const [selectedItem, setSelectedItem] = useState<TrackingItem | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [gisModalOpen, setGisModalOpen] = useState(false);
+
+  // Fetch verified GIS locations from API for map view
+  const { data: gisLocationsData, isLoading: isGisLoading, refetch: refetchGis } = useQuery<any[]>({
+    queryKey: ["gis-material-locations-mobile"],
+    queryFn: () => apiFetch<any[]>("/api/gis/material-locations"),
+  });
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard?.writeText(text);
@@ -73,22 +111,53 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Branch lockdown: CABANG only sees their own branch
+  // Branch lockdown: CABANG only sees their own branch shipments
   const branchFilteredItems = useMemo(() => {
     return items.filter((item) => {
       if (user?.role === "CABANG") {
         if (user.branchId && item.branchId && item.branchId !== user.branchId) return false;
-        if (user.branchName && item.branchName && !item.branchName.toLowerCase().includes(user.branchName.toLowerCase())) return false;
+        if (
+          user.branchName &&
+          item.branchName &&
+          !item.branchName.toLowerCase().includes(user.branchName.toLowerCase())
+        )
+          return false;
       }
       return true;
     });
   }, [items, user]);
 
-  // Filter by status & search
+  // Branch lockdown: CABANG only sees verified GIS locations of their branch
+  const branchGisLocations = useMemo(() => {
+    if (!Array.isArray(gisLocationsData)) return [];
+    return gisLocationsData.filter((loc) => {
+      if (user?.role === "CABANG") {
+        if (user.branchId && loc.branchId && loc.branchId !== user.branchId) return false;
+        if (
+          user.branchName &&
+          loc.branchName &&
+          !loc.branchName.toLowerCase().includes(user.branchName.toLowerCase())
+        )
+          return false;
+      }
+      return true;
+    });
+  }, [gisLocationsData, user]);
+
+  // Filter items by status & search
   const filteredItems = useMemo(() => {
     return branchFilteredItems.filter((item) => {
-      if (filterStatus === "in_transit" && (item.status === "TERVERIFIKASI" || item.status === "DITERIMA_CABANG")) return false;
-      if (filterStatus === "delivered" && item.status !== "DITERIMA_CABANG" && item.status !== "TERVERIFIKASI") return false;
+      if (
+        filterStatus === "in_transit" &&
+        (item.status === "TERVERIFIKASI" || item.status === "DITERIMA_CABANG")
+      )
+        return false;
+      if (
+        filterStatus === "delivered" &&
+        item.status !== "DITERIMA_CABANG" &&
+        item.status !== "TERVERIFIKASI"
+      )
+        return false;
       if (filterStatus === "delayed" && item.slaStatus !== "BREACHED") return false;
 
       if (searchQuery.trim()) {
@@ -103,12 +172,12 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
     });
   }, [branchFilteredItems, filterStatus, searchQuery]);
 
-  // Helper for status badge formatting (ala Image 1 pills)
+  // Helper for status badge formatting
   const getStatusBadge = (status: string, slaStatus?: string) => {
     if (slaStatus === "BREACHED") {
       return {
         label: "Tertunda",
-        color: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/25",
+        color: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border-rose-200/80",
         dotColor: "bg-rose-500",
       };
     }
@@ -116,122 +185,126 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
       case "BARANG_KELUAR":
         return {
           label: "Dalam Perjalanan",
-          color: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25",
+          color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200/80",
           dotColor: "bg-blue-500",
         };
       case "DITERIMA_CABANG":
         return {
           label: "Tiba di Cabang",
-          color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
+          color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200/80",
           dotColor: "bg-emerald-500",
         };
       case "MENUNGGU_PEMASANGAN":
         return {
           label: "Antre Pasang",
-          color: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25",
+          color: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200/80",
           dotColor: "bg-amber-500",
         };
       case "MENUNGGU_VERIFIKASI":
         return {
           label: "Verifikasi SPI",
-          color: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25",
+          color: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 border-purple-200/80",
           dotColor: "bg-purple-500",
         };
       case "TERVERIFIKASI":
         return {
           label: "Selesai (GIS)",
-          color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
-          dotColor: "bg-emerald-500",
+          color: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300",
+          dotColor: "bg-emerald-600",
         };
       default:
         return {
           label: "Diproses",
-          color: "bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/25",
+          color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200",
           dotColor: "bg-slate-500",
         };
     }
   };
 
-  // If Detail View is open (ala Image 1 left screen)
+  // If Detail View is open
   if (selectedItem) {
     const badge = getStatusBadge(selectedItem.status, selectedItem.slaStatus);
     const isReceived = Boolean(selectedItem.receivedAt || selectedItem.status !== "BARANG_KELUAR");
-    const isInstalled = Boolean(selectedItem.installedAt || selectedItem.status === "MENUNGGU_VERIFIKASI" || selectedItem.status === "TERVERIFIKASI");
+    const isInstalled = Boolean(
+      selectedItem.installedAt ||
+        selectedItem.status === "MENUNGGU_VERIFIKASI" ||
+        selectedItem.status === "TERVERIFIKASI"
+    );
     const isVerified = selectedItem.status === "TERVERIFIKASI";
 
     return (
       <div className="space-y-4 px-4 pt-2 pb-10">
-        {/* Top Bar Navigation (ala Image 1) */}
+        {/* Top Bar Navigation */}
         <div className="flex items-center justify-between">
           <button
             onClick={() => setSelectedItem(null)}
-            className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center text-foreground hover:bg-muted active:scale-95 transition-all shadow-xs"
+            className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-center text-slate-800 dark:text-slate-100 hover:bg-slate-100 active:scale-95 transition-all shadow-2xs"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="text-center min-w-0 px-2">
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-              No. Pelacakan
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              No. Surat Jalan
             </p>
-            <p className="font-mono text-sm font-bold text-foreground truncate">
+            <p className="font-mono text-sm font-extrabold text-slate-900 dark:text-white truncate">
               #{selectedItem.referenceNo}
             </p>
           </div>
           <button
             onClick={() => copyToClipboard(selectedItem.referenceNo)}
-            className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center text-foreground hover:bg-muted active:scale-95 transition-all shadow-xs"
+            className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-center text-slate-800 dark:text-slate-100 hover:bg-slate-100 active:scale-95 transition-all shadow-2xs"
             title="Salin No. SPK"
           >
             {copiedId === selectedItem.referenceNo ? (
-              <Check className="w-4 h-4 text-emerald-500" />
+              <Check className="w-4 h-4 text-emerald-600" />
             ) : (
               <Copy className="w-4 h-4" />
             )}
           </button>
         </div>
 
-        {/* Quick Action Buttons (ala Image 1: Reschedule / Change Recipient) */}
+        {/* Quick Action Buttons */}
         <div className="grid grid-cols-2 gap-2.5">
           <button
             onClick={() => setGisModalOpen(true)}
-            className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-card border border-border/80 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-xs font-semibold text-foreground"
+            className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:border-emerald-400 active:scale-95 transition-all text-xs font-bold text-slate-800 dark:text-slate-100"
           >
-            <MapPin className="w-4 h-4 text-emerald-500" />
+            <MapPin className="w-4 h-4 text-emerald-600" />
             Peta Titik GIS
           </button>
 
           <button
             onClick={() => navigate(`/cabang/receive?shipment=${selectedItem.referenceNo}`)}
-            className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-card border border-border/80 shadow-xs hover:border-primary/40 active:scale-95 transition-all text-xs font-semibold text-foreground"
+            className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:border-blue-400 active:scale-95 transition-all text-xs font-bold text-slate-800 dark:text-slate-100"
           >
-            <Truck className="w-4 h-4 text-blue-500" />
+            <Truck className="w-4 h-4 text-blue-600" />
             Terima Barang
           </button>
         </div>
 
-        {/* Shipment Overview Card (ala Image 1 FedEx card) */}
-        <div className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs flex items-center justify-between">
+        {/* Shipment Overview Card (No Water Drops, Clean Icons) */}
+        <div className="p-4.5 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 font-bold">
-              💧
+            <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-2xs">
+              <Truck className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-mono text-sm font-bold text-foreground truncate">
+                <span className="font-mono text-sm font-extrabold text-slate-900 dark:text-white truncate">
                   #{selectedItem.referenceNo}
                 </span>
                 <button
                   onClick={() => copyToClipboard(selectedItem.referenceNo)}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-slate-400 hover:text-slate-600"
                 >
                   {copiedId === selectedItem.referenceNo ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
                   ) : (
                     <Copy className="w-3.5 h-3.5" />
                   )}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                 {selectedItem.itemName} ({selectedItem.totalQuantity || selectedItem.quantity} unit)
               </p>
             </div>
@@ -242,40 +315,40 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
           </span>
         </div>
 
-        {/* Route / Alur Perjalanan Timeline (ala Image 1 Vertical Route) */}
-        <div className="p-5 rounded-3xl bg-card border border-border/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-border/50 pb-2">
-            <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-              Alur Pengiriman (Route)
+        {/* Route / Alur Perjalanan Timeline */}
+        <div className="p-5 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+              Alur Distribusi Material
             </h3>
-            <span className="text-[11px] text-muted-foreground font-mono">
-              Cabang: {selectedItem.branchName || "Cabang Praya"}
+            <span className="text-[11px] text-slate-400 font-mono">
+              Tujuan: {selectedItem.branchName || "Cabang Praya"}
             </span>
           </div>
 
-          <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
+          <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
             {/* Step 1: SPK Created */}
             <div className="relative">
-              <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] shadow-xs">
+              <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shadow-2xs">
                 ✓
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">Surat Jalan Diterbitkan</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Gudang Pusat Perumdam • {selectedItem.createdAt ? formatDate(selectedItem.createdAt) : "Terverifikasi"}
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Surat Jalan Diterbitkan</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Gudang Utama Perumdam • {selectedItem.createdAt ? formatDate(selectedItem.createdAt) : "Terverifikasi"}
                 </p>
               </div>
             </div>
 
             {/* Step 2: Preparing */}
             <div className="relative">
-              <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] shadow-xs">
+              <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shadow-2xs">
                 ✓
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">Material Siap Dikirim</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Alokasi {selectedItem.totalQuantity || selectedItem.quantity} unit aksesoris disiapkan armada
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Material Dirilis Armada</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {selectedItem.totalQuantity || selectedItem.quantity} unit aksesoris disiapkan kurir
                 </p>
               </div>
             </div>
@@ -283,22 +356,22 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
             {/* Step 3: In Transit / Diterima */}
             <div className="relative">
               <div
-                className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-xs ${
+                className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-2xs ${
                   isReceived
-                    ? "bg-emerald-500 text-white"
-                    : "bg-blue-500 text-white animate-pulse"
+                    ? "bg-emerald-600 text-white"
+                    : "bg-blue-600 text-white animate-pulse"
                 }`}
               >
                 {isReceived ? "✓" : "●"}
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">
-                  {isReceived ? "Diterima di Cabang" : "Dalam Pengiriman ke Cabang"}
+                <p className="text-xs font-bold text-slate-900 dark:text-white">
+                  {isReceived ? "Diterima Fisik di Cabang" : "Dalam Pengiriman Menuju Cabang"}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {selectedItem.receivedAt
                     ? `Diterima: ${formatDate(selectedItem.receivedAt)}`
-                    : "Armada dalam perjalanan menuju gudang unit cabang"}
+                    : "Armada pengiriman sedang bergerak menuju lokasi cabang"}
                 </p>
               </div>
             </div>
@@ -306,24 +379,24 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
             {/* Step 4: Installation */}
             <div className="relative">
               <div
-                className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-xs ${
+                className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-2xs ${
                   isInstalled
-                    ? "bg-emerald-500 text-white"
+                    ? "bg-emerald-600 text-white"
                     : isReceived
                     ? "bg-amber-500 text-white"
-                    : "bg-muted text-muted-foreground border border-border"
+                    : "bg-slate-200 dark:bg-slate-800 text-slate-400"
                 }`}
               >
                 {isInstalled ? "✓" : "○"}
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">
-                  {isInstalled ? "Pemasangan Fisik Selesai" : "Antre Pemasangan Lapangan"}
+                <p className="text-xs font-bold text-slate-900 dark:text-white">
+                  {isInstalled ? "Pemasangan Lapangan Selesai" : "Menunggu Pemasangan Teknisi"}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {selectedItem.installedAt
-                    ? `Dipasang: ${formatDate(selectedItem.installedAt)}`
-                    : "Teknisi siap memasang di titik pelanggan"}
+                    ? `Tercatat pasang: ${formatDate(selectedItem.installedAt)}`
+                    : "Teknisi siap dialokasikan ke titik pelanggan"}
                 </p>
               </div>
             </div>
@@ -331,29 +404,29 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
             {/* Step 5: Verified GIS */}
             <div className="relative">
               <div
-                className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-xs ${
+                className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-2xs ${
                   isVerified
                     ? "bg-emerald-600 text-white"
-                    : "bg-muted text-muted-foreground border border-border"
+                    : "bg-slate-200 dark:bg-slate-800 text-slate-400"
                 }`}
               >
                 {isVerified ? "✓" : "○"}
               </div>
               <div>
-                <p className="text-xs font-bold text-foreground">
-                  {isVerified ? "Terverifikasi Audit GIS" : "Verifikasi Akhir SPI"}
+                <p className="text-xs font-bold text-slate-900 dark:text-white">
+                  {isVerified ? "Terverifikasi Audit GIS" : "Audit Verifikasi Akhir SPI"}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {selectedItem.verifiedAt
                     ? `Audit Selesai: ${formatDate(selectedItem.verifiedAt)}`
-                    : "Menunggu validasi titik koordinat oleh SPI"}
+                    : "Menunggu pencocokan titik koordinat & meter air"}
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Lightweight GIS Modal */}
+        {/* Lightweight GIS Modal with Safe Cleanup */}
         <LightweightGisMapDialog
           open={gisModalOpen}
           onClose={() => setGisModalOpen(false)}
@@ -363,106 +436,314 @@ export function MobileTrackingView({ items, isLoading }: MobileTrackingViewProps
     );
   }
 
-  // ── List View (ala Image 1 right screen) ──
+  // ── Main Mobile View (Tab Switcher: Daftar Pengiriman vs Peta Titik GIS) ──
   return (
-    <div className="space-y-4 px-4 pt-2 pb-10">
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <Input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Cari no. resi, SPK, atau material..."
-          className="pl-10 h-11 text-xs rounded-2xl bg-card border-border/80 shadow-xs font-sans"
-        />
+    <div className="space-y-3.5 px-4 pt-2 pb-10">
+      {/* ── Tab Switcher Dock: List vs Map ── */}
+      <div className="grid grid-cols-2 p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-800 text-xs font-bold">
+        <button
+          onClick={() => setActiveTab("list")}
+          className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all ${
+            activeTab === "list"
+              ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
+              : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          }`}
+        >
+          <Boxes className="w-3.5 h-3.5" />
+          Daftar Kiriman ({filteredItems.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("map")}
+          className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all ${
+            activeTab === "map"
+              ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-2xs"
+              : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          }`}
+        >
+          <MapIcon className="w-3.5 h-3.5" />
+          Peta Titik GIS ({branchGisLocations.length})
+        </button>
       </div>
 
-      {/* Filter Chips (ala Image 1) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-        {[
-          { id: "all", label: "Semua" },
-          { id: "in_transit", label: "Dalam Perjalanan" },
-          { id: "delivered", label: "Tiba di Cabang" },
-          { id: "delayed", label: "Tertunda" },
-        ].map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilterStatus(f.id)}
-            className={`px-3.5 py-1.5 rounded-full font-semibold transition-all shrink-0 text-xs ${
-              filterStatus === f.id
-                ? "bg-foreground text-background shadow-xs"
-                : "bg-card border border-border/70 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {/* ── TAB 1: PETA TITIK GIS (Clean Lightweight Interactive Map) ── */}
+      {activeTab === "map" && (
+        <div className="space-y-3">
+          <MobileBranchGisMap
+            locations={branchGisLocations}
+            isLoading={isGisLoading}
+            onRefresh={() => refetchGis()}
+            branchName={user?.branchName || "Cabang Praya"}
+          />
+        </div>
+      )}
 
-      {/* Items List (ala Image 1 cards) */}
-      {isLoading ? (
-        <div className="space-y-2.5">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 rounded-3xl bg-card/60 border border-border/40 animate-pulse" />
-          ))}
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <div className="p-8 rounded-3xl bg-card border border-dashed border-border text-center space-y-2">
-          <Truck className="w-8 h-8 mx-auto text-muted-foreground/40" />
-          <p className="text-xs font-bold text-foreground">Tidak Ada Kiriman</p>
-          <p className="text-[11px] text-muted-foreground">
-            Tidak ada pengiriman yang cocok dengan filter pelacakan saat ini.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {filteredItems.map((item) => {
-            const badge = getStatusBadge(item.status, item.slaStatus);
-            return (
-              <div
-                key={item.id}
-                onClick={() => setSelectedItem(item)}
-                className="p-4 rounded-3xl bg-card border border-border/80 shadow-xs space-y-2.5 hover:border-primary/50 active:scale-[0.99] transition-all cursor-pointer"
+      {/* ── TAB 2: DAFTAR PENGIRIMAN ── */}
+      {activeTab === "list" && (
+        <div className="space-y-3.5">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari no. resi, SPK, atau material..."
+              className="pl-10 h-11 text-xs rounded-2xl bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-2xs font-sans text-slate-900 dark:text-white"
+            />
+          </div>
+
+          {/* Filter Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+            {[
+              { id: "all", label: "Semua" },
+              { id: "in_transit", label: "Dalam Perjalanan" },
+              { id: "delivered", label: "Tiba di Cabang" },
+              { id: "delayed", label: "Tertunda" },
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFilterStatus(f.id)}
+                className={`px-3.5 py-1.5 rounded-full font-bold transition-all shrink-0 text-xs ${
+                  filterStatus === f.id
+                    ? "bg-slate-900 dark:bg-blue-600 text-white shadow-2xs"
+                    : "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
               >
-                {/* Top Row: Status badge + Tracking Number + Chevron */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${badge.color}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${badge.dotColor}`} />
-                      {badge.label}
-                    </span>
-                    <span className="font-mono text-xs font-bold text-foreground truncate">
-                      #{item.referenceNo}
-                    </span>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Items List */}
+          {isLoading ? (
+            <div className="space-y-2.5">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-28 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-2">
+              <Truck className="w-8 h-8 mx-auto text-slate-400" />
+              <p className="text-xs font-bold text-slate-900 dark:text-white">Tidak Ada Pengiriman</p>
+              <p className="text-[11px] text-slate-500">
+                Tidak ada data distribusi yang cocok dengan filter saat ini.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {filteredItems.map((item) => {
+                const badge = getStatusBadge(item.status, item.slaStatus);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedItem(item)}
+                    className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-2.5 hover:border-blue-400 active:scale-[0.99] transition-all cursor-pointer"
+                  >
+                    {/* Top Row: Status badge + Tracking Number + Chevron */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${badge.color}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${badge.dotColor}`} />
+                          {badge.label}
+                        </span>
+                        <span className="font-mono text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                          #{item.referenceNo}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                    </div>
+
+                    {/* Middle Row: Description */}
+                    <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-snug line-clamp-2">
+                      {item.itemName} ({item.totalQuantity || item.quantity} unit) • Menuju{" "}
+                      {item.branchName || "Cabang"}
+                    </p>
+
+                    {/* Bottom Row: Timestamp */}
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {item.createdAt ? formatDate(item.createdAt) : "Hari Ini"}
+                      </span>
+                      <span className="font-bold text-blue-600 dark:text-blue-400 text-[11px]">
+                        Lihat Alur & Peta →
+                      </span>
+                    </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                </div>
-
-                {/* Middle Row: Description */}
-                <p className="text-xs text-foreground font-medium leading-snug line-clamp-2">
-                  {item.itemName} ({item.totalQuantity || item.quantity} unit) • Menuju {item.branchName || "Cabang"}
-                </p>
-
-                {/* Bottom Row: Timestamp */}
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {item.createdAt ? formatDate(item.createdAt) : "Hari Ini"}
-                  </span>
-                  <span className="font-semibold text-primary text-[10px]">
-                    Detail Alur & Peta →
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-// ── Lightweight Leaflet GIS Map Dialog (Loads on Demand) ──
+// ── Interactive Native GIS Map Component (Safe Leaflet Lifecycle) ──
+function MobileBranchGisMap({
+  locations,
+  isLoading,
+  onRefresh,
+  branchName,
+}: {
+  locations: any[];
+  isLoading: boolean;
+  onRefresh: () => void;
+  branchName: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    // Guard: Do not reinitialize if already attached to Leaflet
+    if ((el as any)._leaflet_id) {
+      return;
+    }
+
+    // Default center: Praya, Lombok Tengah
+    const defaultLat = -8.7063;
+    const defaultLon = 116.2704;
+
+    const map = L.map(el, { zoomControl: false }).setView([defaultLat, defaultLon], 12);
+    L.tileLayer("https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
+      subdomains: ["0", "1", "2", "3"],
+      maxZoom: 19,
+      attribution: "&copy; Google Maps",
+    }).addTo(map);
+
+    L.control.zoom({ position: "topright" }).addTo(map);
+    mapInstanceRef.current = map;
+
+    // Add Markers for verified locations
+    const markers: L.Marker[] = [];
+    locations.forEach((loc) => {
+      const lat = parseFloat(loc.verifiedLatitude || loc.latitude);
+      const lon = parseFloat(loc.verifiedLongitude || loc.longitude);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      const marker = L.marker([lat, lon], { icon: verifiedMarkerIcon }).addTo(map);
+      marker.on("click", () => {
+        setSelectedPoint(loc);
+      });
+      markers.push(marker);
+    });
+
+    if (markers.length > 0) {
+      try {
+        const group = L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.2));
+      } catch {}
+    }
+
+    const t = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+
+    return () => {
+      clearTimeout(t);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [locations]);
+
+  return (
+    <div className="space-y-3">
+      {/* Map Header Status Banner */}
+      <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <MapPin className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-900 dark:text-white">
+              {locations.length} Titik Pemasangan Terverifikasi
+            </p>
+            <p className="text-[10px] text-slate-400">{branchName} • Lombok Tengah</p>
+          </div>
+        </div>
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="h-8 px-2.5 rounded-xl text-xs gap-1"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          Segarkan
+        </Button>
+      </div>
+
+      {/* Map Viewport */}
+      <div className="h-[360px] sm:h-[420px] w-full rounded-3xl overflow-hidden border border-slate-200/90 dark:border-slate-800 shadow-xs relative bg-slate-100 dark:bg-slate-900">
+        <div ref={containerRef} style={{ height: "100%", width: "100%", zIndex: 1 }} />
+
+        {/* Loading overlay if fetching */}
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-white/60 dark:bg-slate-950/60 backdrop-blur-2xs flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Memuat titik koordinat...
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Inspection Card when Marker is Selected */}
+      {selectedPoint && (
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-md space-y-2.5 animate-in fade-in-50 slide-in-from-bottom-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                {selectedPoint.itemName || "Material Aksesoris"}
+              </span>
+            </div>
+            <button
+              onClick={() => setSelectedPoint(null)}
+              className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div>
+              <span className="text-slate-400 block">Surat Jalan (SPK):</span>
+              <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                #{selectedPoint.referenceNo}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">Kuantitas Pasang:</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                {selectedPoint.allocationQuantity || 1} Unit
+              </span>
+            </div>
+          </div>
+
+          <div className="text-[10px] font-mono text-slate-500 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl">
+            GPS:{" "}
+            {parseFloat(selectedPoint.verifiedLatitude || selectedPoint.latitude).toFixed(6)},{" "}
+            {parseFloat(selectedPoint.verifiedLongitude || selectedPoint.longitude).toFixed(6)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Lightweight Single Item GIS Dialog (Crash Proof) ──
 function LightweightGisMapDialog({
   open,
   onClose,
@@ -473,36 +754,24 @@ function LightweightGisMapDialog({
   item: TrackingItem | null;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const leafletInstance = useRef<any>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    if (!open || !mapRef.current) return;
+    if (!open) return;
 
-    // Small delay to allow dialog DOM layout to stabilize
     const timer = setTimeout(() => {
-      if (!mapRef.current) return;
-      if (!leafletInstance.current) {
-        // Center on Praya, Lombok Tengah
-        const map = L.map(mapRef.current).setView([-8.7063, 116.2704], 13);
-        L.tileLayer("https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
-          subdomains: ["0", "1", "2", "3"],
-          maxZoom: 19,
-          attribution: "&copy; Google Maps",
-        }).addTo(map);
+      const el = mapRef.current;
+      if (!el) return;
+      if ((el as any)._leaflet_id) return;
 
-        leafletInstance.current = map;
-      }
+      const map = L.map(el, { zoomControl: false }).setView([-8.7063, 116.2704], 13);
+      L.tileLayer("https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
+        subdomains: ["0", "1", "2", "3"],
+        maxZoom: 19,
+        attribution: "&copy; Google Maps",
+      }).addTo(map);
 
-      const map = leafletInstance.current;
-      map.invalidateSize();
-
-      // Clear existing markers
-      map.eachLayer((layer: any) => {
-        if (layer instanceof L.Marker) map.removeLayer(layer);
-      });
-
-      // Place a prominent verified installation pin
-      const marker = L.marker([-8.7063, 116.2704])
+      L.marker([-8.7063, 116.2704], { icon: verifiedMarkerIcon })
         .addTo(map)
         .bindPopup(`
           <div style="font-size: 12px; line-height: 1.4; padding: 4px;">
@@ -513,35 +782,44 @@ function LightweightGisMapDialog({
           </div>
         `)
         .openPopup();
-    }, 200);
 
-    return () => clearTimeout(timer);
+      mapInstanceRef.current = map;
+      map.invalidateSize();
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
   }, [open, item]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg w-[94vw] p-0 overflow-hidden rounded-3xl border-border bg-card shadow-2xl">
-        <DialogHeader className="p-4 pb-2 border-b border-border/50 flex flex-row items-center justify-between">
-          <DialogTitle className="text-sm font-bold flex items-center gap-2">
-            <MapIcon className="w-4 h-4 text-emerald-500" />
+      <DialogContent className="max-w-lg w-[94vw] p-0 overflow-hidden rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl">
+        <DialogHeader className="p-4 pb-2 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+          <DialogTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+            <MapIcon className="w-4 h-4 text-emerald-600" />
             Peta Titik Pasang GIS #{item?.referenceNo}
           </DialogTitle>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <X className="w-4 h-4" />
           </button>
         </DialogHeader>
 
         <div className="p-4 space-y-3">
-          <div className="h-[280px] w-full rounded-2xl overflow-hidden border border-border relative bg-muted">
+          <div className="h-[280px] w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 relative bg-slate-100 dark:bg-slate-900">
             <div ref={mapRef} style={{ height: "100%", width: "100%", zIndex: 1 }} />
           </div>
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+          <div className="flex items-center justify-between text-xs text-slate-500 px-1">
             <span>Koordinat: Lombok Tengah (-8.706300, 116.270400)</span>
-            <Badge variant="outline" className="text-emerald-600 border-emerald-500/30">
+            <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50">
               Unit Terpasang
             </Badge>
           </div>

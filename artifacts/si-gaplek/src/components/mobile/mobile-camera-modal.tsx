@@ -107,6 +107,7 @@ export function MobileCameraModal({
                 open={open}
                 onClose={() => setIsScanning(false)}
                 onDetected={handleDetected}
+                embedded={true}
               />
             ) : (
               <div className="text-center p-6 space-y-2">

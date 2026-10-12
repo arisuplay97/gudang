@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useId } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { X, Camera, CameraOff, CheckCircle2, Search } from "lucide-react";
+import { X, Camera, CameraOff, CheckCircle2, Search, RefreshCw } from "lucide-react";
 
 interface BarcodeScannerProps {
     open: boolean;
@@ -10,6 +10,8 @@ interface BarcodeScannerProps {
     onDetected: (barcode: string) => void | Promise<void>;
     /** If true, scanner stays open after detection for continuous scanning */
     continuous?: boolean;
+    /** If true, renders inline without full-screen modal overlay */
+    embedded?: boolean;
 }
 
 type ScanState = "init" | "scanning" | "success" | "error";
@@ -19,6 +21,7 @@ export function BarcodeScanner({
     onClose,
     onDetected,
     continuous = false,
+    embedded = false,
 }: BarcodeScannerProps) {
     const rawId = useId();
     const elementId = `barcode-scanner-view-${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
@@ -150,6 +153,68 @@ export function BarcodeScanner({
     };
 
     if (!open) return null;
+
+    if (embedded) {
+        return (
+            <div className="relative w-full rounded-2xl overflow-hidden bg-black text-white">
+                {/* Scanner viewport */}
+                <div className="relative bg-black min-h-[240px] flex items-center justify-center">
+                    <div id={elementId} ref={containerRef} className="w-full" />
+
+                    {/* Scanning line animation */}
+                    {state === "scanning" && (
+                        <motion.div
+                            className="absolute left-6 right-6 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] pointer-events-none"
+                            initial={{ top: "20%" }}
+                            animate={{ top: ["20%", "75%", "20%"] }}
+                            transition={{
+                                duration: 2.2,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                            }}
+                        />
+                    )}
+
+                    {/* Success overlay */}
+                    <AnimatePresence>
+                        {state === "success" && (
+                            <motion.div
+                                className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 z-10"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                <CheckCircle2 className="w-14 h-14 text-emerald-400" />
+                                <p className="text-white font-mono text-xs mt-2 font-bold">{lastBarcode}</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+
+                {/* Embedded error or status helper */}
+                {state === "error" && (
+                    <div className="p-3 bg-red-950/40 border-t border-red-900/50 text-red-200 text-xs space-y-2">
+                        <div className="flex items-start gap-2">
+                            <CameraOff className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+                            <p className="leading-snug text-[11px]">{errorMsg}</p>
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full h-8 text-xs bg-slate-900 border-slate-700 text-white hover:bg-slate-800"
+                            onClick={() => {
+                                stopScanner();
+                                setTimeout(() => startScanner(), 200);
+                            }}
+                        >
+                            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Coba Nyalakan Lagi
+                        </Button>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <AnimatePresence>

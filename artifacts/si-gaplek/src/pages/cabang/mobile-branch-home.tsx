@@ -33,9 +33,7 @@ import {
   IconScanBarcode,
   IconCatatPasang,
   IconReturMaterial,
-  IconTimTeknisi,
   IconPetaGis,
-  IconBantuanCS,
 } from "@/components/mobile/mobile-feature-icons";
 
 interface BranchStockRow {
@@ -158,7 +156,7 @@ export function MobileBranchHome() {
 
   return (
     <div className="space-y-5 pb-6">
-      {/* ── 1. CLEAN GROUNDED APP HEADER (Zero Gradient AI Slop) ── */}
+      {/* ── 1. CLEAN LIGHT SAAS APP HEADER (No AI Slop, No Black Card, No SIMONA) ── */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 px-5 pt-5 pb-5 space-y-4">
         {/* Top Identity Row */}
         <div className="flex items-center justify-between">
@@ -169,7 +167,7 @@ export function MobileBranchHome() {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                  SIMONA CABANG
+                  Unit Cabang
                 </span>
                 <span className="px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                   {branchName}
@@ -196,48 +194,57 @@ export function MobileBranchHome() {
           </div>
         </div>
 
-        {/* Solid Executive Physical Stock Card */}
-        <div className="bg-slate-900 dark:bg-slate-800 text-white rounded-3xl p-5 shadow-xs border border-slate-800/80 dark:border-slate-700/80 space-y-3">
+        {/* Clean Light Executive Physical Stock Card (No Heavy Black Box) */}
+        <div className="bg-slate-50/80 dark:bg-slate-800/80 text-slate-900 dark:text-white rounded-[26px] p-5 shadow-2xs border border-slate-200/90 dark:border-slate-700/80 space-y-3.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400 font-medium">Stok Aksesoris Tersedia</span>
-            <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800 dark:bg-slate-700/80 text-slate-300 font-mono text-[11px] font-semibold border border-slate-700/60">
-              <MapPin className="w-3 h-3 text-sky-400" />
+            <span className="text-slate-500 dark:text-slate-400 font-bold">
+              Stok Aksesoris Tersedia
+            </span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white dark:bg-slate-700/90 text-blue-700 dark:text-blue-300 font-mono text-[11px] font-bold border border-slate-200/80 dark:border-slate-600/60 shadow-2xs">
+              <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               <span>{branchName}</span>
             </div>
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className="font-mono text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+            <span className="font-mono text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               {formatNumber(stockStats.totalUnits)}
             </span>
-            <span className="text-xs text-slate-400 font-medium">Unit Fisik di Cabang</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Unit Fisik di Cabang</span>
           </div>
 
-          {/* Micro metrics bar */}
-          <div className="pt-3 border-t border-slate-800/80 dark:border-slate-700/60 flex items-center justify-between text-[11px] text-slate-300">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span>{stockStats.safeCount} Item Aman ({stockStats.safePercent}%)</span>
+          {/* Micro metrics bar with soft light pastel badges */}
+          <div className="pt-3 border-t border-slate-200/80 dark:border-slate-700/70 flex items-center justify-between gap-1.5 text-[11px]">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-semibold border border-emerald-200/60 dark:border-emerald-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>{stockStats.safeCount} Item Aman</span>
             </div>
             {stockStats.lowCount > 0 ? (
-              <span className="text-amber-400 font-semibold">⚠ {stockStats.lowCount} Menipis</span>
+              <span className="px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-bold border border-amber-200/60 dark:border-amber-800">
+                ⚠ {stockStats.lowCount} Menipis
+              </span>
             ) : (
-              <span className="text-slate-400 font-normal">Stok Terjaga</span>
+              <span className="px-2.5 py-1 rounded-full bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium border border-slate-200/60 dark:border-slate-600">
+                Stok Terjaga
+              </span>
             )}
-            <span className="text-sky-400 font-medium">{pendingShipments.length} SJ Aktif</span>
+            <span className="px-2.5 py-1 rounded-full bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 font-bold border border-sky-200/60 dark:border-sky-800">
+              {pendingShipments.length} SJ Aktif
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ── 2. FEATURE SHORTCUTS GRID (3x3 Squircle Cards matching reference image) ── */}
-      <div className="px-5 space-y-2.5">
+      {/* ── 2. FEATURE SHORTCUTS GRID (6 Core Squircle Cards + Dedicated Titik GIS Hero) ── */}
+      <div className="px-5 space-y-3">
         <div className="flex items-center justify-between px-0.5">
           <p className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
             LAYANAN UTAMA
           </p>
-          <span className="text-[11px] font-medium text-slate-400">9 Modul</span>
+          <span className="text-[11px] font-medium text-slate-400">Operasional Cabang</span>
         </div>
 
+        {/* 6 Core Functional Modules (3x2 Grid matching reference image) */}
         <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
           {/* 1. Cek Stok */}
           <button
@@ -316,46 +323,35 @@ export function MobileBranchHome() {
               Retur Material
             </span>
           </button>
-
-          {/* 7. Tim Petugas */}
-          <button
-            onClick={() => navigate("/cabang/pemasangan")}
-            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
-          >
-            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
-              <IconTimTeknisi className="w-10 h-10" />
-            </div>
-            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
-              Tim Petugas
-            </span>
-          </button>
-
-          {/* 8. Titik GIS */}
-          <button
-            onClick={() => navigate("/cabang/tracking")}
-            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
-          >
-            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
-              <IconPetaGis className="w-10 h-10" />
-            </div>
-            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
-              Titik GIS
-            </span>
-          </button>
-
-          {/* 9. SOP & Laporan */}
-          <button
-            onClick={() => navigate("/laporan/pemasangan-aksesoris")}
-            className="flex flex-col items-center justify-center p-3 rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-blue-400 active:scale-95 transition-all aspect-square text-center group"
-          >
-            <div className="w-13 h-13 rounded-full bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105">
-              <IconBantuanCS className="w-10 h-10" />
-            </div>
-            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
-              SOP & Laporan
-            </span>
-          </button>
         </div>
+
+        {/* 7. Dedicated Titik GIS Interactive Hero Card */}
+        <button
+          onClick={() => navigate("/cabang/tracking?view=map")}
+          className="w-full p-4 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.03)] hover:border-emerald-400 active:scale-[0.99] transition-all flex items-center justify-between group text-left"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-[#FFF3E8] dark:bg-slate-800 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
+              <IconPetaGis className="w-9 h-9" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                  Peta Titik Pemasangan GIS
+                </span>
+                <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[9px]">
+                  Aktif
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Lihat sebaran titik koordinat & meter air terpasang di lapangan
+              </p>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-colors">
+            <ArrowUpRight className="w-4 h-4" />
+          </div>
+        </button>
       </div>
 
       {/* ── 3. MONTHLY USAGE PROGRESS (Clean Solid Bar) ── */}
