@@ -68,6 +68,7 @@ import {
   BookOpen,
   Wrench,
   Sparkles,
+  Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/auth-context";
@@ -116,6 +117,12 @@ const NAV_SECTIONS: NavSection[] = [
         label: "Sisa Stok Cabang",
         href: "/cabang/stok-material",
         icon: Layers,
+        roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
+      },
+      {
+        label: "PWA Aksesoris (Mobile)",
+        href: "/pwa",
+        icon: Smartphone,
         roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
       },
     ],

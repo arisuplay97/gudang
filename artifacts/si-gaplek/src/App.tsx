@@ -66,6 +66,19 @@ function AppRouter() {
   const { user, loading } = useAuth();
   const isMobile = useIsMobile();
 
+  // Detect PWA / Mobile mode:
+  // 1. Mobile viewport (screen width < 768px)
+  // 2. Standalone display-mode (installed PWA)
+  // 3. Query param ?mode=pwa
+  // 4. Dedicated routes /pwa or /app-cabang
+  const isPwa =
+    typeof window !== "undefined" &&
+    (isMobile ||
+      window.matchMedia("(display-mode: standalone)").matches ||
+      new URLSearchParams(window.location.search).get("mode") === "pwa" ||
+      window.location.pathname === "/pwa" ||
+      window.location.pathname.startsWith("/app-cabang"));
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -74,48 +87,24 @@ function AppRouter() {
     );
   }
 
-  // Check if opened explicitly with ?mode=pwa
-  const isExplicitPwa =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("mode") === "pwa";
-
-  // CABANG on mobile → completely separate native shell (no sidebar, no desktop chrome)
-  const useMobileShell = user?.role === "CABANG" && isMobile;
-
   return (
     <Switch>
-      {/* ── PDAM Cabang Monitoring Aksesoris PWA (Isolated to /pwa, /app-cabang, or ?mode=pwa) ── */}
+      {/* ── Dedicated PWA Routes ── */}
       <Route path="/pwa" component={PwaCabangPage} />
       <Route path="/app-cabang" component={PwaCabangPage} />
-      {isExplicitPwa && <Route path="/" component={PwaCabangPage} />}
 
       {/* Public quick scan routes */}
       <Route path="/scan/material" component={QuickMaterialScanPage} />
       <Route path="/cabang/quick-material" component={QuickMaterialScanPage} />
+
+      {/* ── When accessed on Mobile or PWA standalone mode, the default URL "/" renders the PWA Monitoring Aksesoris ── */}
+      {isPwa && <Route path="/" component={PwaCabangPage} />}
 
       {!user ? (
         <Switch>
           <Route path="/login" component={LoginPage} />
           <Route><Redirect to="/login" /></Route>
         </Switch>
-      ) : useMobileShell ? (
-        <MobileShell>
-          <Switch>
-            <Route path="/" component={MobileCabangDashboard} />
-            <Route path="/cabang/stok-material" component={StokMaterialCabangPage} />
-            <Route path="/cabang/receive" component={CabangReceivePage} />
-            <Route path="/cabang/tracking" component={CabangTrackingPage} />
-            <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
-            <Route path="/cabang/dashboard"><Redirect to="/" /></Route>
-            <Route path="/transaksi/retur" component={ReturPage} />
-            <Route path="/laporan/teknisi" component={LaporanTeknisiPage} />
-            <Route path="/laporan/pemasangan-aksesoris" component={LaporanPemasanganAksesorisPage} />
-            <Route path="/pengaturan" component={PengaturanPage} />
-            <Route path="/profil" component={PengaturanPage} />
-            <Route path="/login"><Redirect to="/" /></Route>
-            <Route><Redirect to="/" /></Route>
-          </Switch>
-        </MobileShell>
       ) : (
         <Layout>
           <GlobalSearch />
