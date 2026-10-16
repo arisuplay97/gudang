@@ -186,6 +186,7 @@ button[disabled]{opacity:.55;pointer-events:none}
   <div class="trk" style="margin-top:18px;display:flex;align-items:center;gap:14px"><div class="av" style="width:56px;height:56px;font-size:17px" id="pf-av">··</div><div style="min-width:0"><b style="font-size:17px" id="pf-name">—</b><small style="display:block" id="pf-org">PDAM Tirta Ardhia Rinjani</small></div></div>
   <div class="sec" style="margin-top:22px"><div class="sh"><h2>Tampilan</h2></div><div class="seg" id="thseg" style="grid-template-columns:repeat(3,1fr)"></div></div>
   <div class="sec"><div class="sh"><h2>Ringkasan bulan ini</h2></div><div class="trk" id="pf-sum"></div></div>
+  <div class="sec"><div class="sh"><h2>Tim lapangan</h2></div><div class="trk" style="padding:4px 18px" id="pf-team"></div></div>
   <div class="sec"><div class="sh"><h2>Sistem ERP</h2></div><button class="bk ol" style="height:46px;font-size:14px" onclick="window.top.location.href='/dashboard'">Buka Dashboard Desktop (ERP)</button></div>
   <div class="sec"><button class="bk ol" style="height:46px;font-size:14px;color:#E5484D;border-color:rgba(229,72,77,.3)" onclick="logout()">Keluar</button></div>
 </section>
@@ -231,10 +232,13 @@ button[disabled]{opacity:.55;pointer-events:none}
   <div class="av" style="width:56px;height:56px;font-size:17px;cursor:default">PD</div>
   <h1 style="font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:18px">Masuk</h1><div class="sm" style="margin-top:2px">Monitoring aksesoris cabang · PDAM Tirta Ardhia Rinjani</div>
   <form onsubmit="login(event)">
-    <div class="f"><label for="lu">Username</label><input id="lu" class="in" required autocomplete="username" autocapitalize="none"></div>
-    <div class="f"><label for="lp">Password</label><input id="lp" class="in" type="password" required autocomplete="current-password"></div>
+    <div class="f"><label for="lu">Username</label><input id="lu" class="in" required autocomplete="username" autocapitalize="none" value="cabang_praya"></div>
+    <div class="f"><label for="lp">Password</label><input id="lp" class="in" type="password" required autocomplete="current-password" value="password"></div>
     <button class="bk" style="margin-top:22px" id="lbtn">Masuk</button>
   </form>
+  <div style="margin-top:16px;text-align:center" class="sm">
+    Pilih akun demo: <button type="button" style="color:var(--ink);font-weight:600" onclick="$('lu').value='cabang_praya';$('lp').value='password'">cabang_praya</button> · <button type="button" style="color:var(--ink);font-weight:600" onclick="$('lu').value='ari';$('lp').value='password'">ari</button> · <button type="button" style="color:var(--ink);font-weight:600" onclick="$('lu').value='admin';$('lp').value='password'">admin</button>
+  </div>
 </div></div>
 <div id="toast"></div>
 
@@ -273,7 +277,7 @@ const pill=(s,i)=>{const[p,t]=PL[s.stg];return `<span class="pl ${p}">${i&&p==='
 let allocId=null;const nowT=()=>new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}).replace('.',':');
 const fT=d=>d?new Date(d).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}).replace('.',':'):'';
 const fD=d=>d?new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'';
-const BR=()=>(me&&me.branchName)||'Cabang';
+const BR=()=>(me&&me.branchName)||branch?.name||(mats.find(m=>m.branchName)?.branchName)||'Cabang Praya';
 
 /* Status tracking backend → tahap UI (1 baris tracking = 1 unit fisik) */
 const STG=u=>u.status==='MENUNGGU_DITERIMA'?1:u.status==='TERVERIFIKASI'?4:['MENUNGGU_VERIFIKASI','TERPASANG','SELESAI'].includes(u.status)?3:2;
@@ -291,13 +295,13 @@ function group(list){
   });
 }
 
-function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2600)}
+function toast(t){const e=$('toast');if(!e)return;e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2600)}
 function notif(){const n=ships.filter(way).length;toast(n?`${n} kiriman sedang dalam perjalanan`:'Tidak ada kiriman baru')}
 
 const NV=[['home','Beranda'],['stok','Stok'],['kirim','Kiriman'],['profil','Profil']];
-function go(t){tab=t;['home','stok','kirim','peta','profil'].forEach(x=>$('t-'+x).classList.toggle('on',x===t));nav();scrollTo(0,0);if(t==='peta')setTimeout(initMap,60)}
+function go(t){tab=t;['home','stok','kirim','peta','profil'].forEach(x=>{$('t-'+x)?.classList.toggle('on',x===t)});nav();scrollTo(0,0);if(t==='peta')setTimeout(initMap,60)}
 function goStok(f){go('stok');setS(f)}
-function nav(){const b=NV.map(([k,l])=>`<button class="nv ${k===tab?'on':''}" onclick="go('${k}')" aria-label="${l}">${ic(k)}${k===tab?l:''}</button>`);b.splice(2,0,`<button class="cam" onclick="openScan('stok')" aria-label="Pindai kamera">${ic('cam')}</button>`);$('nav').innerHTML=b.join('')}
+function nav(){const e=$('nav');if(!e)return;const b=NV.map(([k,l])=>`<button class="nv ${k===tab?'on':''}" onclick="go('${k}')" aria-label="${l}">${ic(k)}${k===tab?l:''}</button>`);b.splice(2,0,`<button class="cam" onclick="openScan('stok')" aria-label="Pindai kamera">${ic('cam')}</button>`);e.innerHTML=b.join('')}
 function homeSearch(v){if(v.trim().length<2)return;go('kirim');$('qk').value=v;$('qk').focus();rKirim()}
 
 const STL=[['Keluar<br>Gudang',0],['Diterima<br>Cabang',1],['Alokasi<br>Pasang',2],['Verifikasi',3]];
@@ -307,20 +311,27 @@ const card=s=>`<button class="trk" onclick="openD('${j(s.key)}')"><div class="r1
 const act=s=>`<button class="trk" onclick="openD('${j(s.key)}')"><div class="act"><div><small>ID Pelacakan:</small><b>${h(s.id)}</b></div><div><small>Material:</small><b>${h(s.item)}, ${s.n} unit</b></div><div><small>Status:</small><br>${pill(s,1)}</div><div><small>Tanggal:</small><b>${s.date}</b></div></div></button>`;
 
 function render(){
-  const tot=mats.reduce((s,m)=>s+m.qty,0),low=mats.filter(m=>ms(m)!=='Aman').length,w=ships.filter(way);
-  const smin=mats.reduce((a,m)=>a+m.min,0),ok=mats.filter(m=>ms(m)==='Aman').length,lit=smin?Math.round(Math.min(tot/smin,1)*14):0,H=[16,24,32,20,28,32,24,16,28,20,12,16,12,8],C=['#6EA0F5','#6EA0F5','#6EA0F5','#6EA0F5','#4CC38A','#4CC38A','#4CC38A','#4CC38A','#4CC38A','#F2B94B','#F2B94B','#F2B94B','#F2B94B','#F2B94B'];
-  $('hn').textContent=tot;$('p1').textContent=ok+' Aman';$('p2').textContent=low+' Atensi';$('p3').textContent=w.length+' SJ Aktif';$('dotb').style.display=w.length?'block':'none';
-  $('eq').innerHTML=H.map((hh,i)=>`<i style="height:${hh+6}px;${i<lit?'background:'+C[i]:''}"></i>`).join('');
-  $('svc').innerHTML=SV.map(([k,t,sub,a])=>`<button class="sv" onclick="${a}"><span class="ci">${ic(k)}</span><span><b>${t}</b><small>${sub()}</small></span></button>`).join('');
-  $('cur').innerHTML=ships.filter(s=>s.stg<4).slice(0,2).map(card).join('')||'<div class="empty">Tidak ada kiriman yang sedang diproses</div>';
-  $('rec').innerHTML=ships.filter(s=>s.stg===4).slice(0,3).map(act).join('')||'<div class="empty">Belum ada pemasangan terverifikasi</div>';
-  $('psub').textContent=`${gis.length} titik terpasang · ${inst} dari ${TARGET} unit bulan ini`;
-  const imv=$('im').value,itv=$('it').value;
-  $('im').innerHTML=mats.map(m=>`<option value="${h(m.code)}">${h(m.code)} · ${h(m.name)}</option>`).join('');$('it').innerHTML=TECH.map(t=>`<option>${h(t)}</option>`).join('');
-  if(imv)$('im').value=imv;if(itv)$('it').value=itv;
-  const ex=[...mats.slice(0,2).map(m=>m.code),...ships.filter(way).slice(0,1).map(s=>s.id)];
-  $('scan-ex').innerHTML=ex.length?'Contoh: '+ex.map(c=>`<button style="color:var(--ink);font-weight:600" onclick="scanned('${j(c)}')">${h(c)}</button>`).join(' · '):'';
-  rStok();rKirim();rProfile();nav();hyd()}
+  try{
+    const tot=mats.reduce((s,m)=>s+m.qty,0),low=mats.filter(m=>ms(m)!=='Aman').length,w=ships.filter(way);
+    const smin=mats.reduce((a,m)=>a+m.min,0),ok=mats.filter(m=>ms(m)==='Aman').length,lit=smin?Math.round(Math.min(tot/smin,1)*14):0,H=[16,24,32,20,28,32,24,16,28,20,12,16,12,8],C=['#6EA0F5','#6EA0F5','#6EA0F5','#6EA0F5','#4CC38A','#4CC38A','#4CC38A','#4CC38A','#4CC38A','#F2B94B','#F2B94B','#F2B94B','#F2B94B','#F2B94B'];
+    if($('hn'))$('hn').textContent=tot;if($('p1'))$('p1').textContent=ok+' Aman';if($('p2'))$('p2').textContent=low+' Atensi';if($('p3'))$('p3').textContent=w.length+' SJ Aktif';if($('dotb'))$('dotb').style.display=w.length?'block':'none';
+    if($('eq'))$('eq').innerHTML=H.map((hh,i)=>`<i style="height:${hh+6}px;${i<lit?'background:'+C[i]:''}"></i>`).join('');
+    if($('svc'))$('svc').innerHTML=SV.map(([k,t,sub,a])=>`<button class="sv" onclick="${a}"><span class="ci">${ic(k)}</span><span><b>${t}</b><small>${sub()}</small></span></button>`).join('');
+    if($('cur'))$('cur').innerHTML=ships.filter(s=>s.stg<4).slice(0,2).map(card).join('')||'<div class="empty">Tidak ada kiriman yang sedang diproses</div>';
+    if($('rec'))$('rec').innerHTML=ships.filter(s=>s.stg===4).slice(0,3).map(act).join('')||'<div class="empty">Belum ada pemasangan terverifikasi</div>';
+    if($('psub'))$('psub').textContent=`${gis.length} titik terpasang · ${inst} dari ${TARGET} unit bulan ini`;
+    const im=$('im'),it=$('it');const imv=im?im.value:'',itv=it?it.value:'';
+    if(im)im.innerHTML=mats.map(m=>`<option value="${h(m.code)}">${h(m.code)} · ${h(m.name)}</option>`).join('');if(it)it.innerHTML=TECH.map(t=>`<option>${h(t)}</option>`).join('');
+    if(imv&&im)im.value=imv;if(itv&&it)it.value=itv;
+    const ex=[...mats.slice(0,2).map(m=>m.code),...ships.filter(way).slice(0,1).map(s=>s.id)];
+    if($('scan-ex'))$('scan-ex').innerHTML=ex.length?'Contoh: '+ex.map(c=>`<button style="color:var(--ink);font-weight:600" onclick="scanned('${j(c)}')">${h(c)}</button>`).join(' · '):'';
+  }catch(e){console.error('render error:',e)}
+  try{rStok()}catch(e){}
+  try{rKirim()}catch(e){}
+  try{rProfile()}catch(e){}
+  try{nav()}catch(e){}
+  try{hyd()}catch(e){}
+}
 const chips=(l,c,fn)=>l.map(([k,t])=>`<button class="ch ${k===c?'on':''}" onclick="${fn}('${k}')">${t}</button>`).join('');
 
 function rStok(){
@@ -427,27 +438,38 @@ function saveIns(e){e.preventDefault();const form=e.target;busy($('ins-btn'),asy
 function applyTheme(){let m='auto';try{m=localStorage.getItem('pdam-theme')||'auto'}catch(e){}const d=m==='dark'||(m==='auto'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';const b=$('thb');if(b)b.innerHTML=ic(d?'sun':'moon')}
 function setTheme(m){try{localStorage.setItem('pdam-theme',m)}catch(e){}applyTheme();rProfile()}
 function toggleTheme(){setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
-function rProfile(){let m='auto';try{m=localStorage.getItem('pdam-theme')||'auto'}catch(e){}
-  $('thseg').innerHTML=[['light','Terang'],['dark','Gelap'],['auto','Otomatis']].map(([k,l])=>`<button class="${k===m?'on':''}" onclick="setTheme('${k}')">${l}</button>`).join('');
+function rProfile(){
+  let m='auto';try{m=localStorage.getItem('pdam-theme')||'auto'}catch(e){}
+  const th=$('thseg');if(th)th.innerHTML=[['light','Terang'],['dark','Gelap'],['auto','Otomatis']].map(([k,l])=>`<button class="${k===m?'on':''}" onclick="setTheme('${k}')">${l}</button>`).join('');
   const proc=ships.filter(s=>s.stg<4).length,wait=ships.filter(s=>s.stg===3).length;
-  $('pf-sum').innerHTML=[['Unit terpasang bulan ini',`${inst} dari ${TARGET}`],['Titik di peta',gis.length],['Kiriman dalam proses',proc],['Menunggu verifikasi',wait]].map(([a,b])=>`<div class="kv"><span>${a}</span><b>${b}</b></div>`).join('')+`<button class="bk" style="height:46px;font-size:14px;margin-top:8px" onclick="go('peta')">Buka peta pemasangan</button>`;
-  $('pf-team').innerHTML=TECH.length?TECH.map(t=>{const n=gis.filter(g=>String(g.tech).includes(t)).length;return `<button class="pr" onclick="openIns('${j(t)}')"><span class="av" style="width:36px;height:36px;font-size:13px">${h(t[0]||'?')}</span><span style="flex:1"><b>${h(t)}</b></span><small>${n?n+' terpasang':'Siap tugas'}</small></button>`}).join(''):'<div class="sm" style="padding:14px 0">Belum ada petugas terdaftar</div>'}
-function rUser(){if(!me)return;const nm=me.fullName||me.username||'Pengguna',ini=nm.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  $('u-av').textContent=ini;$('pf-av').textContent=ini;$('u-hi').textContent='Halo, '+nm.split(/\s+/)[0];$('pf-name').textContent=nm;
-  const loc=[BR(),branch&&branch.address].filter(Boolean).join(', ');$('u-loc').textContent=loc;$('pf-org').textContent=`${BR()} · PDAM Tirta Ardhia Rinjani`;
-  $('stok-sub').textContent='Sisa fisik di '+BR();document.title=`PDAM ${BR()} — Monitoring Aksesoris`}
-function applyDefaults(){const [la,lo]=center();$('la').value=la.toFixed(5);$('ln').value=lo.toFixed(5);gpsAcc=null}
+  const ps=$('pf-sum');if(ps)ps.innerHTML=[['Unit terpasang bulan ini',`${inst} dari ${TARGET}`],['Titik di peta',gis.length],['Kiriman dalam proses',proc],['Menunggu verifikasi',wait]].map(([a,b])=>`<div class="kv"><span>${a}</span><b>${b}</b></div>`).join('')+`<button class="bk" style="height:46px;font-size:14px;margin-top:8px" onclick="go('peta')">Buka peta pemasangan</button>`;
+  const pt=$('pf-team');if(pt)pt.innerHTML=TECH.length?TECH.map(t=>{const n=gis.filter(g=>String(g.tech).includes(t)).length;return `<button class="pr" onclick="openIns('${j(t)}')"><span class="av" style="width:36px;height:36px;font-size:13px">${h(t[0]||'?')}</span><span style="flex:1"><b>${h(t)}</b></span><small>${n?n+' terpasang':'Siap tugas'}</small></button>`}).join(''):'<div class="sm" style="padding:14px 0">Belum ada petugas terdaftar</div>';
+}
+function rUser(){
+  if(!me)return;
+  const nm=me.fullName||me.username||'Pengguna',ini=nm.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  if($('u-av'))$('u-av').textContent=ini;
+  if($('pf-av'))$('pf-av').textContent=ini;
+  if($('u-hi'))$('u-hi').textContent='Halo, '+nm.split(/\s+/)[0];
+  if($('pf-name'))$('pf-name').textContent=nm;
+  const loc=[BR(),branch&&branch.address].filter(Boolean).join(', ');
+  if($('u-loc'))$('u-loc').textContent=loc;
+  if($('pf-org'))$('pf-org').textContent=`${BR()} · PDAM Tirta Ardhia Rinjani`;
+  if($('stok-sub'))$('stok-sub').textContent='Sisa fisik di '+BR();
+  document.title=`PDAM ${BR()} — Monitoring Aksesoris`;
+}
+function applyDefaults(){const [la,lo]=center();if($('la'))$('la').value=la.toFixed(5);if($('ln'))$('ln').value=lo.toFixed(5);gpsAcc=null}
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
 
 /* ───────── Sesi & pemuatan data ───────── */
-function showLogin(){$('o-login').classList.add('on')}
-function hideLogin(){$('o-login').classList.remove('on')}
+function showLogin(){$('o-login')?.classList.add('on')}
+function hideLogin(){$('o-login')?.classList.remove('on')}
 function login(e){e.preventDefault();busy($('lbtn'),async()=>{const r=await post('/auth/login',{username:$('lu').value.trim(),password:$('lp').value});me=r.user;$('lp').value='';await afterLogin();toast('Selamat datang, '+(me.fullName||me.username))})}
 async function logout(){try{await post('/auth/logout')}catch(e){}me=null;branch=null;units=[];mats=[];ships=[];gis=[];try{localStorage.removeItem('pdam-cache')}catch(e){}render();go('home');showLogin()}
 async function afterLogin(){hideLogin();if(me.branchId){branch=await api('/branches/'+me.branchId).catch(()=>null);if(branch&&branch.data)branch=branch.data}rUser();applyDefaults();if(map)map.setView(center(),14);await load()}
 async function load(){
   const [st,tr,tc]=await Promise.all([api('/branch-stocks'),api('/tracking?limit=1000'),api('/users/technicians').catch(()=>[])]);
-  mats=(st.data||[]).map(r=>({id:r.id,itemId:r.itemId,code:r.itemCode||'',name:r.itemName||'',cat:r.categoryName||'Umum',unit:r.unitName||'unit',qty:Number(r.quantity)||0,min:Number(r.minimumStock)||0}));
+  mats=(st.data||[]).map(r=>({id:r.id,itemId:r.itemId,code:r.itemCode||'',name:r.itemName||'',cat:r.categoryName||'Umum',unit:r.unitName||'unit',qty:Number(r.quantity)||0,min:Number(r.minimumStock)||0,branchName:r.branchName||''}));
   units=tr.data||[];ships=group(units);
   TECHS=(Array.isArray(tc)?tc:[]).map(t=>({id:t.id,name:t.fullName||t.username}));if(!TECHS.length&&me)TECHS=[{id:me.id,name:me.fullName||me.username}];TECH=TECHS.map(t=>t.name);
   const n=new Date();inst=units.filter(u=>{if(!u.installedAt)return false;const d=new Date(u.installedAt);return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear()}).length;
@@ -456,9 +478,22 @@ async function load(){
   render();loadGis();
 }
 function fromCache(){try{const c=JSON.parse(localStorage.getItem('pdam-cache')||'null');if(!c)return false;({me,branch,mats,units,TECHS}=c);ships=group(units);TECH=TECHS.map(t=>t.name);rUser();applyDefaults();render();return true}catch(e){return false}}
-async function boot(){applyTheme();render();hyd();
-  try{me=await api('/auth/me');await afterLogin()}
-  catch(e){if(e.offline){if(fromCache())toast('Offline — menampilkan data terakhir');else showLogin()}else showLogin()}}
+async function boot(){
+  applyTheme();
+  render();
+  hyd();
+  try{
+    me=await api('/auth/me');
+    await afterLogin();
+  }
+  catch(e){
+    console.warn('Sesi belum aktif:', e.message);
+    if(e.offline){
+      if(fromCache())toast('Offline — menampilkan data terakhir');
+      else showLogin();
+    }else showLogin();
+  }
+}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&me&&Date.now()-lastLoad>60000)load().catch(()=>{})});
 window.addEventListener('online',()=>{if(me)load().then(()=>toast('Kembali online — data diperbarui')).catch(()=>{})});
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(()=>{}));
