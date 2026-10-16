@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PDAM Cabang — Monitoring Aksesoris</title>
+<meta name="description" content="Monitoring aksesoris cabang PDAM Tirta Ardhia Rinjani: stok, penerimaan surat jalan, pelacakan, dan pemasangan berbasis foto + GPS.">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0B0D" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Aksesoris Cabang">
+<link rel="icon" type="image/png" href="/logo-qr-icon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--pg:#ECECEE;--ap:#fff;--cd:#F5F5F6;--ink:#0A0A0B;--mut:#8A8D94;--ln:#E6E7EA;--bl:#DCE8FB;--blt:#4F7FBF;--gn:#DDF4E2;--gnt:#2B8A47;--am:#FBE9CF;--amt:#A8680F;--pn:#EEF1F8;--hb:#0A0A0B}
+html[data-theme=dark]{--pg:#000;--ap:#0B0B0D;--cd:#151517;--ink:#F4F4F5;--mut:#8D9097;--ln:#242427;--bl:#1B2A44;--blt:#8FB4EC;--gn:#15301E;--gnt:#6CCB88;--am:#3A2A12;--amt:#E2B067;--pn:#141821;--hb:#19191C}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:400 14px/1.4 Geist,system-ui,sans-serif;background:var(--pg);color:var(--ink);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}button{background:0;border:0;cursor:pointer;text-align:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.app{max-width:430px;margin:auto;min-height:100vh;background:var(--ap);padding:calc(18px + env(safe-area-inset-top)) 20px 120px;position:relative}
+.ic{display:inline-flex;flex:none}.ic svg{width:20px;height:20px}
+small,.sm{font-size:12px;color:var(--mut)}b{font-weight:600}
+.tab{display:none}.tab.on{display:block}
+h2{font-size:17px;font-weight:500;letter-spacing:-.01em}
+.sec{margin-top:26px}.sh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}.sh button{font-size:13px}
+/* header */
+.top{display:flex;align-items:center;gap:12px}
+.av{width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--ap);display:grid;place-items:center;font-weight:600;font-size:15px;flex:none}
+.top h1{font-size:17px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.top .sm{display:flex;align-items:center;gap:4px}.top .sm .ic svg{width:13px;height:13px}
+.rb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--ap);border:1px solid var(--ln);box-shadow:0 4px 12px -4px rgba(0,0,0,.12);position:relative}
+.rb:active{transform:scale(.94)}.dotb{position:absolute;top:10px;right:11px;width:8px;height:8px;border-radius:50%;background:#E5484D;border:2px solid var(--ap)}
+/* hero */
+.hero{margin-top:22px;background:var(--hb);color:#fff;border-radius:30px;padding:20px;border:1px solid rgba(255,255,255,.06)}
+.hero .l{font-size:13px;opacity:.8}.hero .n{font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1.1;margin-top:6px}.hero .n span{font-size:15px;font-weight:400;opacity:.65;margin-left:6px;letter-spacing:0}
+.wp{background:#fff;color:#0A0A0B;border-radius:999px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:0 20px;height:48px;font-size:15px;box-shadow:0 8px 18px -8px rgba(0,0,0,.5)}
+.wp:active{transform:scale(.97)}
+/* search */
+.sb{display:flex;align-items:center;gap:10px;margin-top:18px;border:1px solid var(--ln);border-radius:999px;padding:6px 6px 6px 18px;background:var(--ap)}
+.sb input{flex:1;min-width:0;border:0;outline:0;background:0;padding:8px 0;font-size:15px}.sb input::placeholder{color:var(--mut)}
+.sb .ic{color:var(--mut)}.fb{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--ap);display:grid;place-items:center;flex:none}.fb .ic{color:inherit}
+.plain{width:100%;padding:13px 18px;border:1px solid var(--ln);border-radius:999px;background:var(--ap);outline:0;font-size:15px}.plain:focus{border-color:var(--ink)}
+/* kartu */
+.trk{display:block;width:100%;background:var(--cd);border-radius:28px;padding:18px;margin-bottom:12px}
+.trk:active{transform:scale(.985)}
+.r1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.r1 b{display:block;font-size:15px;margin-top:2px}
+.pl{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:500;white-space:nowrap}
+.pl.b{background:var(--bl);color:var(--blt)}.pl.g{background:var(--gn);color:var(--gnt)}.pl.a{background:var(--am);color:var(--amt)}
+.pl.g .ic svg,.pl.a .ic svg{width:15px;height:15px}
+.ft{display:flex;justify-content:space-between;gap:12px;margin-top:18px}.ft b{display:block;font-size:15px;margin-top:3px}.ft i{font-style:normal;font-size:12px;color:var(--mut)}.ft div:last-child{text-align:right}
+.stp{position:relative;margin-top:20px}
+.stp .bar{position:absolute;left:11px;right:11px;top:10px;height:4px;border-radius:2px;background:#CFD1D6}.stp .bar i{display:block;height:100%;border-radius:2px;background:var(--ink)}
+html[data-theme=dark] .stp .bar{background:#34343A}
+.nodes{position:relative;display:flex;justify-content:space-between}
+.nd{width:24px;height:24px;border-radius:50%;background:#BFC1C7;display:grid;place-items:center;color:var(--ap)}
+.nd.d{background:var(--ink);box-shadow:0 0 0 3px var(--cd)}.nd .ic svg{width:13px;height:13px;stroke-width:2.6}
+html[data-theme=dark] .nd:not(.d){background:#3A3A40}
+.lb{display:flex;justify-content:space-between;margin-top:8px;font-size:12px}.lb div:nth-child(2){text-align:center}.lb div:last-child{text-align:right}.lb span{display:block;color:var(--mut);font-size:11px}
+.act{display:grid;grid-template-columns:1fr 1fr;row-gap:14px;column-gap:10px;margin-top:2px}.act div b{display:block;margin-top:2px}.act .pl{margin-top:4px;padding:6px 12px 6px 8px;font-size:12px}
+.empty{background:var(--cd);border-radius:28px;padding:26px;text-align:center;color:var(--mut)}
+/* chips */
+.chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:14px -20px;padding:0 20px}.chips::-webkit-scrollbar{display:none}
+.ch{flex:none;padding:9px 16px;border-radius:999px;background:var(--cd);font-size:13px;font-weight:500}.ch.on{background:var(--ink);color:var(--ap)}
+/* tombol */
+.bk{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:54px;border-radius:999px;background:var(--ink);color:var(--ap);font-weight:500;font-size:16px}
+.bk:active{transform:scale(.98)}.ol{background:var(--ap);color:var(--ink);border:1px solid var(--ln)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bar2{display:flex;gap:4px;margin:14px 0 6px}.bar2 i{flex:1;height:5px;border-radius:3px;background:#D5D7DC}.bar2 i.f{background:var(--ink)}
+html[data-theme=dark] .bar2 i:not(.f){background:#34343A}
+.hero .tp{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.hero .bx{display:flex;align-items:center;gap:10px;font-size:13px;opacity:.85}
+.hero .bx i{width:32px;height:32px;border-radius:11px;background:rgba(255,255,255,.12);display:grid;place-items:center}.hero .bx .ic svg{width:17px;height:17px}
+.hm{display:flex;justify-content:space-between;align-items:flex-end;margin-top:16px}
+.eq{display:flex;align-items:flex-end;justify-content:flex-end;gap:4px;height:44px}.eq i{width:6px;border-radius:3px;background:rgba(255,255,255,.18)}
+.eqc{font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.5;margin-top:7px;text-align:right}
+.tray{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px;margin-top:18px;border-radius:20px;background:rgba(255,255,255,.07)}
+.tray button{display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 4px;border-radius:14px;font-size:12.5px;font-weight:500;background:rgba(255,255,255,.08);white-space:nowrap}
+.tray button:active{background:rgba(255,255,255,.16)}.tray button i{width:7px;height:7px;border-radius:50%;flex:none}
+.svc{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sv{background:var(--cd);border-radius:24px;padding:16px 6px 13px;display:flex;flex-direction:column;align-items:center;gap:11px;text-align:center}
+.sv:active{transform:scale(.96)}
+.sv .ci{width:50px;height:50px;border-radius:50%;background:var(--ap);display:grid;place-items:center;border:1px solid var(--ln);box-shadow:0 4px 10px -4px rgba(0,0,0,.14)}
+.sv .ci .ic svg{width:22px;height:22px}.sv b{display:block;font-size:12.5px;font-weight:500}.sv small{display:block;font-size:11px;margin-top:1px}
+.sk{background:var(--cd);border-radius:22px;padding:14px 16px;margin-bottom:10px}
+.skr{display:flex;justify-content:space-between;align-items:center;gap:10px}.skr b{display:block;font-size:15px;margin-top:1px}
+.skq{text-align:right;line-height:1}.skq span{font-size:26px;font-weight:600;letter-spacing:-.03em}.skq small{display:block;margin-top:3px;font-size:11px}
+.sk .bar2{margin:10px 0}.sk .bar2 i{height:4px}
+.skf{display:flex;align-items:center;gap:8px}.skf .pl{padding:5px 11px;font-size:12px}.skf .sp{flex:1}
+.mb{height:34px;padding:0 14px;border-radius:999px;font-size:12.5px;font-weight:500;background:var(--ink);color:var(--ap);display:inline-flex;align-items:center}
+.mb.ol{background:var(--ap);color:var(--ink);border:1px solid var(--ln)}
+.pl.r{background:#FBE1DF;color:#B3382F}
+html[data-theme=dark] .pl.r{background:#3A1A18;color:#F08A82}
+.cam{width:58px;height:58px;border-radius:50%;background:var(--ink);color:var(--ap);display:grid;place-items:center;margin:-20px 0;border:4px solid var(--ap);box-shadow:0 12px 22px -8px rgba(0,0,0,.5);flex:none}
+.cam:active{transform:scale(.94)}.cam .ic svg{width:24px;height:24px}
+.lb{display:block;position:relative;height:50px;margin-top:10px}.lb div{position:absolute;top:0;font-size:11.5px;line-height:1.25;white-space:nowrap;text-align:left}.lb div:last-child{text-align:right}.lb span{display:block;margin-top:2px;color:var(--mut);font-size:11px}
+.top{gap:10px}.top .rb{width:42px;height:42px;flex:none}.top h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.av{border:0;cursor:pointer}
+.pr{display:flex;align-items:center;gap:12px;padding:12px 0;width:100%}.pr+.pr{border-top:1px solid var(--ln)}
+#map{height:min(58vh,440px);border-radius:28px;border:1px solid var(--ln)}
+/* nav */
+.nav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));width:calc(100% - 40px);max-width:390px;z-index:30;display:flex;align-items:center;justify-content:space-between;padding:8px;border-radius:999px;background:color-mix(in srgb,var(--ap) 88%,transparent);backdrop-filter:blur(16px);border:1px solid var(--ln);box-shadow:0 14px 30px -12px rgba(0,0,0,.28)}
+.nv{height:52px;min-width:52px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--mut);padding:0 14px;font-size:13px;font-weight:600}
+.nv.on{background:var(--ink);color:var(--ap);padding:0 20px}
+/* overlay */
+.ov{position:fixed;inset:0;z-index:50;display:none}.ov.on{display:block}
+.shade{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.sheet{position:absolute;left:0;right:0;bottom:0;margin:auto;max-width:430px;max-height:92vh;overflow:auto;background:var(--ap);border-radius:30px 30px 0 0;padding:12px 20px calc(24px + env(safe-area-inset-bottom));animation:up .22s ease-out}
+.page{position:absolute;inset:0;margin:auto;max-width:430px;background:var(--ap);overflow:auto;padding:calc(16px + env(safe-area-inset-top)) 20px 30px;animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(20px);opacity:0}}
+.gr{width:38px;height:4px;border-radius:2px;background:var(--ln);margin:0 auto 16px}
+.dh{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;text-align:center;font-weight:500;font-size:16px}
+.id{display:flex;align-items:center;gap:14px;margin-top:22px}.ib{width:52px;height:52px;border-radius:50%;background:var(--pn);display:grid;place-items:center;flex:none}
+.id b{display:block;font-size:19px;letter-spacing:-.01em}
+.pnl{background:var(--pn);border-radius:28px;padding:12px;margin-top:22px}.pnl h3{font-weight:400;color:var(--mut);display:flex;align-items:center;gap:10px;padding:8px 10px 14px;font-size:15px}
+.in2{background:var(--ap);border-radius:20px;padding:6px 18px}.kv{display:flex;justify-content:space-between;gap:16px;padding:12px 0;font-size:14px}.kv span{color:var(--mut)}.kv b{font-weight:500;text-align:right}
+.tl{background:var(--cd);border-radius:28px;padding:22px 18px;margin-top:14px}
+.ev{display:grid;grid-template-columns:70px 24px 1fr;gap:10px;position:relative;padding-bottom:22px;font-size:13px}.ev:last-child{padding-bottom:0}
+.ev .t b{display:block;font-size:15px;font-weight:500}.ev .nd{width:22px;height:22px;box-shadow:none;z-index:1}
+.ev:before{content:"";position:absolute;left:80px;top:22px;bottom:-4px;border-left:2px dotted #B9BBC1}.ev:last-child:before{display:none}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:6px}.f{margin-top:14px}
+.in{width:100%;padding:13px 16px;border-radius:16px;border:1px solid var(--ln);background:var(--ap);outline:0}.in:focus{border-color:var(--ink)}
+#view{position:relative;margin-top:14px;aspect-ratio:4/3;max-height:240px;border-radius:24px;overflow:hidden;background:#0A0A0B}
+#qr-reader{width:100%;height:100%;border:0!important}#qr-reader video{width:100%!important;height:100%!important;object-fit:cover}
+.rt{position:absolute;inset:16%;border:3px solid rgba(255,255,255,.9);border-radius:20px;pointer-events:none}
+.seg{display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:999px;background:var(--cd)}.seg button{padding:10px;border-radius:999px;text-align:center;font-weight:500;font-size:13px;color:var(--mut)}.seg .on{background:var(--ink);color:var(--ap)}
+#drop{width:100%;padding:20px;border:1.5px dashed var(--ln);border-radius:20px;text-align:center;color:var(--mut)}
+#pv{display:none}#pv img{width:100%;max-height:200px;object-fit:contain;border-radius:16px;background:#000}
+#toast{position:fixed;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--ap);padding:12px 20px;border-radius:999px;font-weight:500;font-size:13px;z-index:99;display:none;max-width:90%;text-align:center}
+button[disabled]{opacity:.55;pointer-events:none}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<script>(function(){var m="auto";try{m=localStorage.getItem("pdam-theme")||"auto"}catch(e){}var d=m==="dark"||(m==="auto"&&matchMedia("(prefers-color-scheme:dark)").matches);document.documentElement.dataset.theme=d?"dark":"light"})()</script>
+</head>
+<body>
+<div class="app">
+
+<section class="tab on" id="t-home">
+  <div class="top">
+    <button class="av" id="u-av" onclick="go('profil')" aria-label="Profil">··</button>
+    <div style="flex:1;min-width:0"><h1 id="u-hi">Halo</h1><div class="sm"><span class="ic" data-i="pin"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="u-loc">Memuat cabang…</span></div></div>
+    <button class="rb" id="thb" onclick="toggleTheme()" aria-label="Ganti tema"></button><button class="rb" onclick="notif()" aria-label="Notifikasi"><span class="ic" data-i="bell"></span><i class="dotb" id="dotb"></i></button>
+  </div>
+
+  <div class="hero">
+    <div class="tp"><div class="bx"><i><span class="ic" data-i="stok"></span></i>Stok aksesoris tersedia</div><button class="wp" style="height:38px;font-size:13px;padding:0 16px;box-shadow:none" onclick="receiveFirst()">Terima SJ</button></div>
+    <div class="hm"><div class="n"><span style="font-size:inherit;font-weight:inherit;opacity:1;margin:0" id="hn">0</span><span>unit</span></div><div><div class="eq" id="eq"></div><div class="eqc">Stok vs minimum</div></div></div>
+    <div class="tray"><button onclick="goStok('Aman')"><i style="background:#4CC38A"></i><span id="p1"></span></button><button onclick="goStok('Perhatian')"><i style="background:#F2B94B"></i><span id="p2"></span></button><button onclick="go('kirim');setK('1')"><i style="background:#6EA0F5"></i><span id="p3"></span></button></div>
+  </div>
+
+  <div class="sec" style="margin-top:24px"><div class="sh"><h2>Layanan utama</h2><small>Operasional cabang</small></div><div class="svc" id="svc"></div></div>
+
+  <div class="sb"><span class="ic" data-i="search"></span><input id="hq" placeholder="Cari kiriman" oninput="homeSearch(this.value)"><button class="fb" onclick="go('kirim')" aria-label="Filter"><span class="ic" data-i="filter"></span></button></div>
+
+  <div class="sec"><div class="sh"><h2>Pelacakan Terkini</h2><button onclick="go('kirim')">Lihat semua</button></div><div id="cur"></div></div>
+  <div class="sec"><div class="sh"><h2>Aktivitas Terbaru</h2><button onclick="go('kirim')">Lihat semua</button></div><div id="rec"></div></div>
+</section>
+
+<section class="tab" id="t-stok">
+  <h2 style="font-size:24px;font-weight:600;letter-spacing:-.02em">Stok material</h2><div class="sm" style="margin-top:2px" id="stok-sub">Sisa fisik di cabang</div>
+  <input id="qs" class="plain" style="margin-top:18px" placeholder="Cari kode atau nama material" oninput="rStok()">
+  <div class="chips" id="cs"></div><div id="ls"></div>
+</section>
+
+<section class="tab" id="t-kirim">
+  <h2 style="font-size:24px;font-weight:600;letter-spacing:-.02em">Kiriman</h2><div class="sm" style="margin-top:2px">Aksesoris dari gudang utama</div>
+  <input id="qk" class="plain" style="margin-top:18px" placeholder="Cari nomor SJ atau material" oninput="rKirim()">
+  <div class="chips" id="ck"></div><div id="lk"></div>
+</section>
+
+<section class="tab" id="t-peta">
+  <h2 style="font-size:24px;font-weight:600;letter-spacing:-.02em">Peta pemasangan</h2><div class="sm" style="margin:2px 0 18px" id="psub"></div>
+  <div id="map"></div>
+  <button class="bk" style="margin-top:16px" onclick="openIns()"><span class="ic" data-i="clip"></span>Catat titik pemasangan</button>
+</section>
+
+<section class="tab" id="t-profil">
+  <h2 style="font-size:24px;font-weight:600;letter-spacing:-.02em">Profil</h2>
+  <div class="trk" style="margin-top:18px;display:flex;align-items:center;gap:14px"><div class="av" style="width:56px;height:56px;font-size:17px" id="pf-av">··</div><div style="min-width:0"><b style="font-size:17px" id="pf-name">—</b><small style="display:block" id="pf-org">PDAM Tirta Ardhia Rinjani</small></div></div>
+  <div class="sec" style="margin-top:22px"><div class="sh"><h2>Tampilan</h2></div><div class="seg" id="thseg" style="grid-template-columns:repeat(3,1fr)"></div></div>
+  <div class="sec"><div class="sh"><h2>Ringkasan bulan ini</h2></div><div class="trk" id="pf-sum"></div></div>
+  <div class="sec"><div class="sh"><h2>Tim lapangan</h2></div><div class="trk" style="padding:4px 18px" id="pf-team"></div></div>
+  <div class="sec"><button class="bk ol" style="height:46px;font-size:14px" onclick="logout()">Keluar</button></div>
+</section>
+
+<nav class="nav" id="nav"></nav>
+</div>
+
+<!-- detail -->
+<div class="ov" id="o-det"><div class="page">
+  <div class="dh"><button class="rb" style="width:40px;height:40px" onclick="closeD()" aria-label="Kembali"><span class="ic" data-i="back"></span></button><span>Detail</span><span></span></div>
+  <div class="id"><div class="ib"><span class="ic" data-i="box"></span></div><div style="flex:1;min-width:0"><small>ID Pelacakan:</small><b id="d-id"></b></div><span class="pl" id="d-pl"></span></div>
+  <div class="trk" style="margin:22px 0 0;padding:6px 4px 4px;background:none" id="d-stp"></div>
+  <button class="bk" style="margin-top:14px" id="d-btn"></button>
+  <div class="pnl"><h3><span class="ic" data-i="truck"></span>Detail Pengiriman</h3><div class="in2" id="d-kv"></div></div>
+  <div class="tl" id="d-tl"></div>
+</div></div>
+
+<!-- pindai -->
+<div class="ov" id="o-scan"><div class="shade" onclick="closeScan()"></div><div class="sheet"><div class="gr"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><h2>Pindai kode</h2><small>Arahkan kamera ke barcode atau QR</small></div><button class="rb" style="width:40px;height:40px" onclick="closeScan()" aria-label="Tutup"><span class="ic" data-i="x"></span></button></div>
+  <div class="seg"><button id="m1" class="on" onclick="setMode('stok')">Cek stok</button><button id="m2" onclick="setMode('sj')">Terima SJ</button></div>
+  <div id="view"><div id="qr-reader"></div><div class="rt"></div></div>
+  <form onsubmit="manual(event)" style="display:flex;gap:8px;margin-top:14px"><input id="mc" class="in" style="border-radius:999px" required placeholder="Atau ketik kode material / nomor SJ"><button class="bk" style="width:auto;height:48px;padding:0 22px;font-size:14px">Cari</button></form>
+  <div class="sm" style="margin-top:12px" id="scan-ex"></div>
+</div></div>
+
+<!-- pasang -->
+<div class="ov" id="o-ins"><div class="shade" onclick="closeIns()"></div><div class="sheet"><div class="gr"></div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2>Catat pemasangan</h2><small>Stok berkurang dan titik masuk ke peta</small></div><button class="rb" style="width:40px;height:40px" onclick="closeIns()" aria-label="Tutup"><span class="ic" data-i="x"></span></button></div>
+  <form onsubmit="saveIns(event)"><div id="inote" class="pl b" style="display:none;margin-top:14px"></div>
+    <div class="g2 f"><div><label>Material</label><select id="im" class="in"></select></div><div><label>Petugas</label><select id="it" class="in"></select></div></div>
+    <div class="f"><label>Lokasi jaringan atau nomor SR</label><input id="il" class="in" required placeholder="Contoh: Jl. TGH. Lopan, DMA Tengah"></div>
+    <div class="f"><div style="display:flex;justify-content:space-between"><label>Koordinat GPS</label><button type="button" class="sm" style="color:var(--ink);font-weight:600" onclick="gps()">Gunakan lokasi saya</button></div><div class="g2"><input id="la" class="in" value="-8.70540" required inputmode="decimal"><input id="ln" class="in" value="116.27180" required inputmode="decimal"></div></div>
+    <div class="f"><label>Foto bukti (otomatis diberi kode, GPS, dan waktu)</label><input id="if" type="file" accept="image/*" capture="environment" hidden onchange="stamp(event)">
+      <button type="button" id="drop" onclick="document.getElementById('if').click()">Ambil atau pilih foto</button>
+      <div id="pv"><img id="pi" alt="Pratinjau foto bukti"><button type="button" class="sm" style="color:#E5484D;font-weight:600;margin-top:8px" onclick="clrPhoto()">Hapus foto</button></div><canvas id="cv" hidden></canvas></div>
+    <button class="bk" style="margin-top:22px" id="ins-btn">Simpan pemasangan</button>
+  </form>
+</div></div>
+
+<!-- masuk -->
+<div class="ov" id="o-login"><div class="page" style="display:flex;flex-direction:column;justify-content:center">
+  <div class="av" style="width:56px;height:56px;font-size:17px;cursor:default">PD</div>
+  <h1 style="font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:18px">Masuk</h1><div class="sm" style="margin-top:2px">Monitoring aksesoris cabang · PDAM Tirta Ardhia Rinjani</div>
+  <form onsubmit="login(event)">
+    <div class="f"><label for="lu">Username</label><input id="lu" class="in" required autocomplete="username" autocapitalize="none"></div>
+    <div class="f"><label for="lp">Password</label><input id="lp" class="in" type="password" required autocomplete="current-password"></div>
+    <button class="bk" style="margin-top:22px" id="lbtn">Masuk</button>
+  </form>
+</div></div>
+<div id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const IC={home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',stok:'<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',kirim:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>',truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>',peta:'<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',pin:'<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',search:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',filter:'<path d="M4 7h16M7 12h10M10 17h4"/>',bell:'<path d="M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15zM10 21h4"/>',back:'<path d="M19 12H5M11 6l-6 6 6 6"/>',x:'<path d="M6 6l12 12M18 6 6 18"/>',check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',box:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',clip:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',inbox:'<path d="M3 13h5l1 3h6l1-3h5M5 5h14l2 8v6H3v-6z"/>',ret:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',cam:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'};
+const ic=(n,s)=>`<span class="ic" ${s?`style="--s:${s}"`:''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg></span>`;
+const hyd=()=>document.querySelectorAll('.ic[data-i]:empty').forEach(e=>e.innerHTML=ic(e.dataset.i).replace(/^<span[^>]*>|<\/span>$/g,''));
+/* escape: h() untuk teks HTML, j() untuk string JS di dalam atribut onclick */
+const h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const j=v=>h(String(v??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"));
+
+/* ───────── API ───────── */
+const API='/api';
+async function api(path,opt={}){
+  let r;
+  try{r=await fetch(API+path,{credentials:'include',...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}})}
+  catch(e){const er=new Error('Tidak ada koneksi internet');er.offline=true;throw er}
+  if(r.status===401&&!path.startsWith('/auth/login')){showLogin();throw new Error('Sesi berakhir, silakan masuk lagi')}
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||e.message||`Terjadi kesalahan (${r.status})`)}
+  return r.status===204?null:r.json();
+}
+const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2));
+async function busy(btn,fn){if(btn)btn.disabled=true;try{return await fn()}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}}
+
+/* ───────── State (dari API) ───────── */
+let me=null,branch=null,units=[],mats=[],ships=[],gis=[],TECHS=[],TECH=[],inst=0,lastLoad=0;
+const TARGET=100; // target pemasangan per bulan (tampilan "x dari 100")
+const SV=[['stok','Cek stok',()=>mats.length+' material',"go('stok')"],['inbox','Terima SJ',()=>{const n=ships.filter(way).length;return n?n+' menunggu':'Tidak ada'},'receiveFirst()'],['kirim','Lacak kiriman',()=>ships.length+' resi',"go('kirim')"],['scan','Pindai kode',()=>'Kamera QR',"openScan('stok')"],['clip','Catat pasang',()=>'Foto dan GPS','openIns()'],['peta','Peta GIS',()=>gis.length+' titik',"go('peta')"]];
+let tab='home',fS='ALL',fK='ALL',mode='stok',cur=null,photo=null,photoAt=null,gpsAcc=null,map,layer,qr;
+const ms=m=>m.qty===0?'Habis':m.qty<m.min?'Menipis':'Aman';
+const way=s=>s.stg===1;
+const PL={1:['b','Dalam Perjalanan'],2:['b','Diterima Cabang'],3:['a','Alokasi Pasang'],4:['g','Terverifikasi']};
+const pill=(s,i)=>{const[p,t]=PL[s.stg];return `<span class="pl ${p}">${i&&p==='g'?ic('check'):''}${t}</span>`};
+let allocId=null;const nowT=()=>new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}).replace('.',':');
+const fT=d=>d?new Date(d).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}).replace('.',':'):'';
+const fD=d=>d?new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'';
+const BR=()=>(me&&me.branchName)||'Cabang';
+
+/* Status tracking backend → tahap UI (1 baris tracking = 1 unit fisik) */
+const STG=u=>u.status==='MENUNGGU_DITERIMA'?1:u.status==='TERVERIFIKASI'?4:['MENUNGGU_VERIFIKASI','TERPASANG','SELESAI'].includes(u.status)?3:2;
+const READY=u=>u.status==='DITERIMA_CABANG'||u.status==='MENUNGGU_PEMASANGAN';
+const latest=(us,f)=>us.map(u=>u[f]).filter(Boolean).sort().pop()||null;
+const earliest=(us,f)=>us.map(u=>u[f]).filter(Boolean).sort()[0]||null;
+function group(list){
+  const m=new Map();
+  list.forEach(u=>{const k=(u.referenceNo||('TRK-'+u.id))+'|'+(u.itemCode||'');if(!m.has(k))m.set(k,[]);m.get(k).push(u)});
+  return [...m].map(([key,us])=>{
+    const stg=Math.min(...us.map(STG)),a=[earliest(us,'slaStartAt')||earliest(us,'createdAt'),stg>=2?latest(us,'receivedAt'):null,stg>=3?latest(us,'installedAt'):null,stg>=4?latest(us,'verifiedAt'):null];
+    return {key,id:us[0].referenceNo||('TRK-'+us[0].id),stg,mat:us[0].itemCode||'',n:us.length,item:us[0].itemName||'Material',
+      date:fD(a[0]),est:'Batas SLA '+fD(earliest(us,'slaDeadlineAt')),dl:fD(earliest(us,'slaDeadlineAt')),recv:fD(a[1]),
+      inst:us.filter(u=>STG(u)>=3).length,t:a.map(fT),d:a.map(fD),units:us};
+  });
+}
+
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2600)}
+function notif(){const n=ships.filter(way).length;toast(n?`${n} kiriman sedang dalam perjalanan`:'Tidak ada kiriman baru')}
+
+const NV=[['home','Beranda'],['stok','Stok'],['kirim','Kiriman'],['profil','Profil']];
+function go(t){tab=t;['home','stok','kirim','peta','profil'].forEach(x=>$('t-'+x).classList.toggle('on',x===t));nav();scrollTo(0,0);if(t==='peta')setTimeout(initMap,60)}
+function goStok(f){go('stok');setS(f)}
+function nav(){const b=NV.map(([k,l])=>`<button class="nv ${k===tab?'on':''}" onclick="go('${k}')" aria-label="${l}">${ic(k)}${k===tab?l:''}</button>`);b.splice(2,0,`<button class="cam" onclick="openScan('stok')" aria-label="Pindai kamera">${ic('cam')}</button>`);$('nav').innerHTML=b.join('')}
+function homeSearch(v){if(v.trim().length<2)return;go('kirim');$('qk').value=v;$('qk').focus();rKirim()}
+
+const STL=[['Keluar<br>Gudang',0],['Diterima<br>Cabang',1],['Alokasi<br>Pasang',2],['Verifikasi',3]];
+function stepper(s){const d=s.stg;
+  return `<div class="stp"><div class="bar"><i style="width:${d===4?100:Math.min((d-1)/3*100+9,100)}%"></i></div><div class="nodes">${[0,1,2,3].map(k=>`<span class="nd ${k<d?'d':''}">${k<d?ic('check'):''}</span>`).join('')}</div></div><div class="lb">${STL.map(([a,k])=>`<div style="left:${k/3*100}%;transform:translateX(-${k/3*100}%)">${a}<span>${s.t[k]||'—'}</span></div>`).join('')}</div>`}
+const card=s=>`<button class="trk" onclick="openD('${j(s.key)}')"><div class="r1"><div><small>ID Pelacakan:</small><b>${h(s.id)}</b><small>${h(s.item)}, ${s.n} unit${s.stg===2&&s.inst?` · ${s.inst}/${s.n} dialokasikan`:''}</small></div>${pill(s)}</div><div class="ft"><div><small>Dari:</small><b>Gudang Utama</b><i>${s.date}</i></div><div><small>Ke:</small><b>${h(BR())}</b><i>${s.stg===1?s.est:'Diterima '+s.t[1]}</i></div></div>${stepper(s)}</button>`;
+const act=s=>`<button class="trk" onclick="openD('${j(s.key)}')"><div class="act"><div><small>ID Pelacakan:</small><b>${h(s.id)}</b></div><div><small>Material:</small><b>${h(s.item)}, ${s.n} unit</b></div><div><small>Status:</small><br>${pill(s,1)}</div><div><small>Tanggal:</small><b>${s.date}</b></div></div></button>`;
+
+function render(){
+  const tot=mats.reduce((s,m)=>s+m.qty,0),low=mats.filter(m=>ms(m)!=='Aman').length,w=ships.filter(way);
+  const smin=mats.reduce((a,m)=>a+m.min,0),ok=mats.filter(m=>ms(m)==='Aman').length,lit=smin?Math.round(Math.min(tot/smin,1)*14):0,H=[16,24,32,20,28,32,24,16,28,20,12,16,12,8],C=['#6EA0F5','#6EA0F5','#6EA0F5','#6EA0F5','#4CC38A','#4CC38A','#4CC38A','#4CC38A','#4CC38A','#F2B94B','#F2B94B','#F2B94B','#F2B94B','#F2B94B'];
+  $('hn').textContent=tot;$('p1').textContent=ok+' Aman';$('p2').textContent=low+' Atensi';$('p3').textContent=w.length+' SJ Aktif';$('dotb').style.display=w.length?'block':'none';
+  $('eq').innerHTML=H.map((hh,i)=>`<i style="height:${hh+6}px;${i<lit?'background:'+C[i]:''}"></i>`).join('');
+  $('svc').innerHTML=SV.map(([k,t,sub,a])=>`<button class="sv" onclick="${a}"><span class="ci">${ic(k)}</span><span><b>${t}</b><small>${sub()}</small></span></button>`).join('');
+  $('cur').innerHTML=ships.filter(s=>s.stg<4).slice(0,2).map(card).join('')||'<div class="empty">Tidak ada kiriman yang sedang diproses</div>';
+  $('rec').innerHTML=ships.filter(s=>s.stg===4).slice(0,3).map(act).join('')||'<div class="empty">Belum ada pemasangan terverifikasi</div>';
+  $('psub').textContent=`${gis.length} titik terpasang · ${inst} dari ${TARGET} unit bulan ini`;
+  const imv=$('im').value,itv=$('it').value;
+  $('im').innerHTML=mats.map(m=>`<option value="${h(m.code)}">${h(m.code)} · ${h(m.name)}</option>`).join('');$('it').innerHTML=TECH.map(t=>`<option>${h(t)}</option>`).join('');
+  if(imv)$('im').value=imv;if(itv)$('it').value=itv;
+  const ex=[...mats.slice(0,2).map(m=>m.code),...ships.filter(way).slice(0,1).map(s=>s.id)];
+  $('scan-ex').innerHTML=ex.length?'Contoh: '+ex.map(c=>`<button style="color:var(--ink);font-weight:600" onclick="scanned('${j(c)}')">${h(c)}</button>`).join(' · '):'';
+  rStok();rKirim();rProfile();nav();hyd()}
+const chips=(l,c,fn)=>l.map(([k,t])=>`<button class="ch ${k===c?'on':''}" onclick="${fn}('${k}')">${t}</button>`).join('');
+
+function rStok(){
+  const q=$('qs').value.toLowerCase(),n=k=>k==='ALL'?mats.length:k==='Perhatian'?mats.filter(m=>ms(m)!=='Aman').length:mats.filter(m=>ms(m)===k).length;
+  $('cs').innerHTML=chips([['ALL','Semua'],['Aman','Aman'],['Perhatian','Perlu isi ulang'],['Habis','Habis']].map(([k,l])=>[k,`${l} (${n(k)})`]),fS,'setS');
+  const f=mats.filter(m=>{const k=ms(m);return(fS==='ALL'||(fS==='Perhatian'?k!=='Aman':k===fS))&&(m.code.toLowerCase().includes(q)||m.name.toLowerCase().includes(q))});
+  $('ls').innerHTML=f.length?f.map(m=>{const k=ms(m);let b='';for(let i=0;i<m.min;i++)b+=`<i class="${i<m.qty?'f':''}"></i>`;
+  return `<div class="sk"><div class="skr"><div style="min-width:0"><small>${h(m.code)} · ${h(m.cat)}</small><b>${h(m.name)}</b></div><div class="skq"><span>${m.qty}</span><small>${h(m.unit)}</small></div></div><div class="bar2">${b}</div><div class="skf"><span class="pl ${k==='Aman'?'g':k==='Menipis'?'a':'r'}">${k}</span><small>Min ${m.min}</small><span class="sp"></span><button class="mb ol" onclick="toast('Label rak ${j(m.code)} siap dicetak')">Label</button><button class="mb" onclick="openIns(null,'${j(m.code)}')">Pasang</button></div></div>`}).join(''):`<div class="empty">${mats.length?'Tidak ada material yang cocok':'Belum ada stok material di cabang'}</div>`}
+function setS(f){fS=f;rStok()}
+function rKirim(){
+  const q=$('qk').value.toLowerCase();$('ck').innerHTML=chips([['ALL','Semua'],['1','Dalam Perjalanan'],['2','Diterima Cabang'],['3','Alokasi Pasang'],['4','Terverifikasi']],fK,'setK');
+  const f=ships.filter(s=>(fK==='ALL'||String(s.stg)===fK)&&(s.id.toLowerCase().includes(q)||s.item.toLowerCase().includes(q)||s.mat.toLowerCase().includes(q)));
+  $('lk').innerHTML=f.length?f.map(s=>s.stg<4?card(s):act(s)).join(''):'<div class="empty">Tidak ada kiriman yang cocok</div>';hyd()}
+function setK(f){fK=f;rKirim()}
+
+/* ───────── Detail kiriman ───────── */
+function openD(key){const s=ships.find(x=>x.key===key)||ships.find(x=>x.id.toLowerCase()===String(key).toLowerCase());if(!s){toast(`Surat jalan ${key} tidak ditemukan`);return}cur=s.key;
+  $('d-id').textContent=s.id;const p=PL[s.stg];$('d-pl').className='pl '+p[0];$('d-pl').textContent=p[1];$('d-stp').innerHTML=stepper(s);
+  const A={1:['box','Terima Barang',()=>receive(s.key)],2:['clip','Alokasikan Pemasangan',()=>alloc(s.key)],3:['check','Verifikasi Pemasangan',()=>verify(s.key)],4:['peta','Lihat di Peta',()=>{closeD();go('peta')}]}[s.stg];
+  const b=$('d-btn');b.innerHTML=ic(A[0])+A[1];b.onclick=()=>busy(b,A[2]);
+  $('d-kv').innerHTML=[['Material',s.item],['Jumlah',s.n+' unit'],['Dialokasikan',s.stg>=2?`${s.inst} dari ${s.n} unit`:'Belum'],['Asal','Gudang Utama'],['Tujuan',BR()],[s.stg===1?'Batas SLA':'Diterima cabang',s.stg===1?s.dl:s.recv]].map(([a,c])=>`<div class="kv"><span>${a}</span><b>${h(c||'—')}</b></div>`).join('');
+  const E=['Barang keluar dari Gudang Utama',`Barang diterima di ${h(BR())}. Stok bertambah.`,'Barang dialokasikan untuk pemasangan','Pemasangan diverifikasi: foto dan titik GPS sesuai'];
+  $('d-tl').innerHTML=E.slice(0,s.stg).map((t,k)=>`<div class="ev"><div class="t"><b>${s.t[k]||'—'}</b><small>${s.d[k]||s.date}</small></div><span class="nd d">${ic('check')}</span><div>${t}</div></div>`).join('');
+  $('o-det').classList.add('on');hyd()}
+function closeD(){$('o-det').classList.remove('on')}
+
+/* Terima SJ → POST /branch/receive (seluruh SJ) atau /branch/receive-unit (sisa unit bila SJ sudah diterima sebagian) */
+async function receive(key){const s=ships.find(x=>x.key===key);if(!s||s.stg!==1){toast('Kiriman ini sudah diterima');return}
+  const partial=units.some(u=>u.referenceNo===s.id&&u.status!=='MENUNGGU_DITERIMA');let msg;
+  if(!partial){const r=await post('/branch/receive',{qrToken:s.id,idempotencyKey:uid()});msg=`${s.id} diterima. Stok +${r.totalQuantity??s.n}`}
+  else{const pend=s.units.filter(u=>u.status==='MENUNGGU_DITERIMA');for(const u of pend)await post('/branch/receive-unit',{trackingUuid:u.uuid});msg=`${s.id} diterima. Stok ${s.mat||s.item} +${pend.length}`}
+  closeD();await load();toast(msg)}
+function alloc(key){const s=ships.find(x=>x.key===key);if(!s)return;closeD();openIns(null,s.mat,key)}
+/* Verifikasi → POST /spi/verify/:evidenceUuid (hanya role SPI / ADMIN) */
+async function verify(key){const s=ships.find(x=>x.key===key);if(!s)return;
+  if(!me||!['SPI','ADMIN'].includes(me.role)){toast('Bukti sudah terkirim. Verifikasi dilakukan oleh auditor SPI.');return}
+  let n=0;for(const u of s.units.filter(u=>STG(u)===3)){const d=await api('/tracking/'+encodeURIComponent(u.uuid));
+    for(const e of (d.allocations||[]).flatMap(a=>a.evidence||[]).filter(e=>e.status==='PENDING')){await post('/spi/verify/'+e.uuid,{status:'TERVERIFIKASI'});n++}}
+  closeD();await load();toast(n?`${s.id} terverifikasi`:'Tidak ada bukti yang menunggu verifikasi')}
+function receiveFirst(){const s=ships.find(way);s?openD(s.key):toast('Tidak ada kiriman dalam perjalanan')}
+
+/* ───────── Peta GIS ───────── */
+function center(){const la=parseFloat(branch&&branch.latitude),lo=parseFloat(branch&&branch.longitude);return isFinite(la)&&isFinite(lo)?[la,lo]:[-8.7072,116.2735]}
+function initMap(){
+  if(!window.L)return toast('Peta butuh koneksi internet saat pertama dibuka');
+  if(!map){map=L.map('map',{zoomControl:false}).setView(center(),14);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);L.control.zoom({position:'bottomright'}).addTo(map);layer=L.layerGroup().addTo(map)}
+  map.invalidateSize();layer.clearLayers();
+  gis.filter(p=>isFinite(p.lat)&&isFinite(p.lng)).forEach(p=>L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:'<div style="width:20px;height:20px;border-radius:50%;background:#0A0A0B;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.4)"></div>',iconSize:[20,20],iconAnchor:[10,10]})}).bindPopup(`<div style="font:12px Geist,sans-serif;min-width:150px"><b>${h(p.item)}</b><div style="color:#8A8D94">${h(p.loc)}</div><div style="margin-top:4px">${h(p.tech)} · ${h(p.date)}</div>${p.photo?`<img src="${h(p.photo)}" style="width:100%;height:84px;object-fit:cover;border-radius:8px;margin-top:6px">`:''}</div>`).addTo(layer))}
+async function loadGis(){
+  const pts=[];
+  const pend=units.filter(u=>STG(u)===3).slice(0,40); // titik yang menunggu verifikasi SPI
+  const det=await Promise.all(pend.map(u=>api('/tracking/'+encodeURIComponent(u.uuid)).catch(()=>null)));
+  det.forEach(d=>{if(!d)return;const note=(d.events||[]).filter(e=>e.eventType==='INSTALLATION_COMPLETED').map(e=>e.metadata&&e.metadata.locationNote).filter(Boolean).pop();
+    (d.allocations||[]).flatMap(a=>a.evidence||[]).filter(e=>e.status==='PENDING').forEach(e=>pts.push({item:`${(d.item&&d.item.itemName)||'Material'} (${(d.item&&d.item.itemCode)||'-'})`,tech:e.technicianNames||e.capturedByName||'-',loc:note||(d.item&&d.item.referenceNo)||'',lat:+e.latitude,lng:+e.longitude,date:fD(e.clientCaptureTime||e.createdAt),photo:e.photoAfterUrl||e.photoUrl}))});
+  try{const g=await api('/gis/material-locations');(g.features||[]).forEach(f=>{const p=f.properties||{};if(me&&me.branchId&&p.branchId!==me.branchId)return;
+    pts.push({item:`${p.itemName} (${p.itemCode})`,tech:p.technicianNames||p.capturedByName||'-',loc:p.referenceNo||'',lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],date:fD(p.installedAt),photo:p.photoAfterUrl||p.photoUrl})})}catch(e){}
+  gis=pts;render();if(tab==='peta')initMap()}
+
+/* ───────── Pindai ───────── */
+function openScan(m){$('o-scan').classList.add('on');setMode(m);if(!window.Html5Qrcode)return;if(!qr)qr=new Html5Qrcode('qr-reader');qr.start({facingMode:'environment'},{fps:10,qrbox:{width:200,height:200}},d=>scanned(d),()=>{}).catch(()=>{})}
+function closeScan(){$('o-scan').classList.remove('on');if(qr&&qr.isScanning)qr.stop().catch(()=>{})}
+function setMode(m){mode=m;$('m1').className=m==='stok'?'on':'';$('m2').className=m==='sj'?'on':''}
+function manual(e){e.preventDefault();scanned($('mc').value.trim())}
+function parseCode(raw){let c=String(raw||'').replace('#','').trim();try{const u=new URL(c);c=u.searchParams.get('token')||u.searchParams.get('qr')||u.searchParams.get('ref')||u.searchParams.get('code')||u.pathname.split('/').filter(Boolean).pop()||c}catch(e){}return c.trim()}
+function scanned(raw){closeScan();const c=parseCode(raw);if(!c)return;
+  const isSJ=mode==='sj'||/^BK-/i.test(c)||/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(c)||ships.some(s=>s.id.toLowerCase()===c.toLowerCase());
+  if(isSJ){openShip(c);return}go('stok');$('qs').value=c;rStok();toast('Hasil pencarian: '+c)}
+/* Cari SJ lokal; bila tidak ada, tanya server (QR token / no. SJ) lewat GET /branch/shipment/:tokenOrId */
+async function openShip(c){const s=ships.find(x=>x.id.toLowerCase()===c.toLowerCase());if(s)return openD(s.key);
+  try{const r=await api('/branch/shipment/'+encodeURIComponent(c));const ref=r.shipment&&r.shipment.referenceNo;await load();const f=ships.find(x=>x.id===ref);f?openD(f.key):toast(`Surat jalan ${ref||c} bukan untuk cabang ini`)}
+  catch(e){toast(`Surat jalan ${c} tidak ditemukan`)}}
+
+/* ───────── Catat pemasangan ───────── */
+function openIns(t,c,sid){allocId=sid||null;if(t)$('it').value=t;if(c)$('im').value=c;const n=$('inote'),s=sid&&ships.find(x=>x.key===sid);n.style.display=sid?'inline-flex':'none';n.textContent=sid?`Alokasi untuk kiriman ${s?s.id:sid}`:'';$('o-ins').classList.add('on')}
+function closeIns(){$('o-ins').classList.remove('on')}
+function gps(){if(!navigator.geolocation)return toast('Perangkat tidak mendukung GPS');navigator.geolocation.getCurrentPosition(p=>{$('la').value=p.coords.latitude.toFixed(5);$('ln').value=p.coords.longitude.toFixed(5);gpsAcc=p.coords.accuracy;toast('Koordinat terkunci')},()=>toast('Lokasi tidak bisa diakses. Isi koordinat manual.'),{enableHighAccuracy:true,timeout:8000})}
+function stamp(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{const im=new Image();im.onload=()=>{const c=$('cv'),x=c.getContext('2d'),k=im.width>840?840/im.width:1;c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);x.drawImage(im,0,0,c.width,c.height);
+  const bh=Math.max(64,Math.round(c.height*.15)),y=c.height-bh,a=Math.max(13,Math.round(c.width*.024)),b=Math.max(11,Math.round(c.width*.02));x.fillStyle='rgba(8,8,10,.86)';x.fillRect(0,y,c.width,bh);
+  photoAt=new Date();
+  x.font=`700 ${a}px sans-serif`;x.fillStyle='#fff';x.fillText(`PDAM ${BR()} · ${$('im').value}`,14,y+a+10);x.font=`500 ${b}px sans-serif`;x.fillStyle='#D4D6DB';x.fillText(`${$('it').value} · ${$('la').value}, ${$('ln').value} · ${photoAt.toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})}`,14,y+a+b+17);
+  photo=c.toDataURL('image/jpeg',.85);$('pi').src=photo;$('drop').style.display='none';$('pv').style.display='block';toast('Foto bukti siap')};im.src=e.target.result};r.readAsDataURL(f)}
+function clrPhoto(){photo=null;photoAt=null;$('if').value='';$('pv').style.display='none';$('drop').style.display='block'}
+/* Simpan → POST /branch/allocations (1 unit) lalu POST /branch/evidence (foto + GPS). Stok cabang berkurang di server. */
+function saveIns(e){e.preventDefault();const form=e.target;busy($('ins-btn'),async()=>{
+  const code=$('im').value,m=mats.find(x=>x.code===code);if(!m||m.qty<1)return toast(`Stok ${code} kosong. Terima SJ lebih dulu.`);
+  const sh=allocId?ships.find(x=>x.key===allocId):null;
+  if(allocId&&sh&&sh.mat!==code)return toast(`Material harus ${sh.mat} sesuai kiriman`);
+  if(!photo)return toast('Foto bukti wajib dilampirkan');
+  const lat=parseFloat($('la').value),lng=parseFloat($('ln').value);if(!isFinite(lat)||!isFinite(lng))return toast('Koordinat GPS tidak valid');
+  const pool=(sh?sh.units:units.filter(u=>u.itemCode===code)).filter(READY);
+  if(!pool.length)return toast(`Tidak ada unit ${code} yang siap dipasang. Terima SJ lebih dulu.`);
+  const my=await api('/branch/my-allocations').catch(()=>({data:[]}));
+  const open=(my.data||[]).filter(a=>!a.status||a.status==='PENDING'||a.status==='REJECTED');
+  let unit=null,allocationId=null;
+  for(const u of pool){const a=open.find(x=>x.trackingUuid===u.uuid);if(a){unit=u;allocationId=a.allocationId;break}}
+  if(!unit){unit=pool.find(u=>!u.installedQuantity)||pool[0];const a=await post('/branch/allocations',{trackingUuid:unit.uuid,quantity:1});allocationId=a.id}
+  const t=$('it').value,tech=TECHS.find(x=>x.name===t);
+  await post('/branch/evidence',{allocationId,photoBase64:photo,latitude:lat,longitude:lng,gpsAccuracy:gpsAcc,clientCaptureTime:(photoAt||new Date()).toISOString(),idempotencyKey:uid(),technicianNames:t,technicianIds:tech?String(tech.id):undefined,locationNote:$('il').value.trim()});
+  closeIns();clrPhoto();form.reset();applyDefaults();await load();go('peta');
+  const ns=sh&&ships.find(x=>x.key===sh.key);
+  toast(ns&&ns.stg===3?`Semua unit ${ns.id} dialokasikan. Menunggu verifikasi.`:`Pemasangan oleh ${t} tersimpan`)})}
+
+/* ───────── Tema & profil ───────── */
+function applyTheme(){let m='auto';try{m=localStorage.getItem('pdam-theme')||'auto'}catch(e){}const d=m==='dark'||(m==='auto'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';const b=$('thb');if(b)b.innerHTML=ic(d?'sun':'moon')}
+function setTheme(m){try{localStorage.setItem('pdam-theme',m)}catch(e){}applyTheme();rProfile()}
+function toggleTheme(){setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
+function rProfile(){let m='auto';try{m=localStorage.getItem('pdam-theme')||'auto'}catch(e){}
+  $('thseg').innerHTML=[['light','Terang'],['dark','Gelap'],['auto','Otomatis']].map(([k,l])=>`<button class="${k===m?'on':''}" onclick="setTheme('${k}')">${l}</button>`).join('');
+  const proc=ships.filter(s=>s.stg<4).length,wait=ships.filter(s=>s.stg===3).length;
+  $('pf-sum').innerHTML=[['Unit terpasang bulan ini',`${inst} dari ${TARGET}`],['Titik di peta',gis.length],['Kiriman dalam proses',proc],['Menunggu verifikasi',wait]].map(([a,b])=>`<div class="kv"><span>${a}</span><b>${b}</b></div>`).join('')+`<button class="bk" style="height:46px;font-size:14px;margin-top:8px" onclick="go('peta')">Buka peta pemasangan</button>`;
+  $('pf-team').innerHTML=TECH.length?TECH.map(t=>{const n=gis.filter(g=>String(g.tech).includes(t)).length;return `<button class="pr" onclick="openIns('${j(t)}')"><span class="av" style="width:36px;height:36px;font-size:13px">${h(t[0]||'?')}</span><span style="flex:1"><b>${h(t)}</b></span><small>${n?n+' terpasang':'Siap tugas'}</small></button>`}).join(''):'<div class="sm" style="padding:14px 0">Belum ada petugas terdaftar</div>'}
+function rUser(){if(!me)return;const nm=me.fullName||me.username||'Pengguna',ini=nm.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  $('u-av').textContent=ini;$('pf-av').textContent=ini;$('u-hi').textContent='Halo, '+nm.split(/\s+/)[0];$('pf-name').textContent=nm;
+  const loc=[BR(),branch&&branch.address].filter(Boolean).join(', ');$('u-loc').textContent=loc;$('pf-org').textContent=`${BR()} · PDAM Tirta Ardhia Rinjani`;
+  $('stok-sub').textContent='Sisa fisik di '+BR();document.title=`PDAM ${BR()} — Monitoring Aksesoris`}
+function applyDefaults(){const [la,lo]=center();$('la').value=la.toFixed(5);$('ln').value=lo.toFixed(5);gpsAcc=null}
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
+
+/* ───────── Sesi & pemuatan data ───────── */
+function showLogin(){$('o-login').classList.add('on')}
+function hideLogin(){$('o-login').classList.remove('on')}
+function login(e){e.preventDefault();busy($('lbtn'),async()=>{const r=await post('/auth/login',{username:$('lu').value.trim(),password:$('lp').value});me=r.user;$('lp').value='';await afterLogin();toast('Selamat datang, '+(me.fullName||me.username))})}
+async function logout(){try{await post('/auth/logout')}catch(e){}me=null;branch=null;units=[];mats=[];ships=[];gis=[];try{localStorage.removeItem('pdam-cache')}catch(e){}render();go('home');showLogin()}
+async function afterLogin(){hideLogin();if(me.branchId){branch=await api('/branches/'+me.branchId).catch(()=>null);if(branch&&branch.data)branch=branch.data}rUser();applyDefaults();if(map)map.setView(center(),14);await load()}
+async function load(){
+  const [st,tr,tc]=await Promise.all([api('/branch-stocks'),api('/tracking?limit=1000'),api('/users/technicians').catch(()=>[])]);
+  mats=(st.data||[]).map(r=>({id:r.id,itemId:r.itemId,code:r.itemCode||'',name:r.itemName||'',cat:r.categoryName||'Umum',unit:r.unitName||'unit',qty:Number(r.quantity)||0,min:Number(r.minimumStock)||0}));
+  units=tr.data||[];ships=group(units);
+  TECHS=(Array.isArray(tc)?tc:[]).map(t=>({id:t.id,name:t.fullName||t.username}));if(!TECHS.length&&me)TECHS=[{id:me.id,name:me.fullName||me.username}];TECH=TECHS.map(t=>t.name);
+  const n=new Date();inst=units.filter(u=>{if(!u.installedAt)return false;const d=new Date(u.installedAt);return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear()}).length;
+  lastLoad=Date.now();
+  try{localStorage.setItem('pdam-cache',JSON.stringify({me,branch,mats,units,TECHS,t:lastLoad}))}catch(e){}
+  render();loadGis();
+}
+function fromCache(){try{const c=JSON.parse(localStorage.getItem('pdam-cache')||'null');if(!c)return false;({me,branch,mats,units,TECHS}=c);ships=group(units);TECH=TECHS.map(t=>t.name);rUser();applyDefaults();render();return true}catch(e){return false}}
+async function boot(){applyTheme();render();hyd();
+  try{me=await api('/auth/me');await afterLogin()}
+  catch(e){if(e.offline){if(fromCache())toast('Offline — menampilkan data terakhir');else showLogin()}else showLogin()}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&me&&Date.now()-lastLoad>60000)load().catch(()=>{})});
+window.addEventListener('online',()=>{if(me)load().then(()=>toast('Kembali online — data diperbarui')).catch(()=>{})});
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(()=>{}));
+boot();
+</script>
+</body>
+</html>

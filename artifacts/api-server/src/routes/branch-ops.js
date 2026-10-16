@@ -573,7 +573,7 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG", "ADMIN"), 
 // ─── SUBMIT INSTALLATION EVIDENCE (Section 9.2, 9.3, 10, 13) ───
 // Supports DUAL PHOTOS: Before & After installation
 router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res) => {
-    const { allocationId, photoBase64, photoBeforeBase64, latitude, longitude, gpsAccuracy, clientCaptureTime, idempotencyKey, technicianNames, technicianIds } = req.body;
+    const { allocationId, photoBase64, photoBeforeBase64, latitude, longitude, gpsAccuracy, clientCaptureTime, idempotencyKey, technicianNames, technicianIds, locationNote } = req.body;
     if (!allocationId || !photoBase64 || latitude == null || longitude == null) {
         res.status(400).json({ error: "allocationId, foto bukti, latitude, longitude wajib diisi" });
         return;
@@ -716,6 +716,7 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
             allocationId: allocation.id,
             latitude,
             longitude,
+            locationNote: locationNote ? String(locationNote).slice(0, 300) : null,
             locationMismatch,
             locationDeviationMeters,
             isCrossDistrict: districtAudit.isCrossDistrict,

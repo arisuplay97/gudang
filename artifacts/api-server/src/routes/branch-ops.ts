@@ -668,7 +668,7 @@ router.post("/branch/allocations", requireAuth, requireRole("CABANG", "ADMIN"), 
 router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), async (req, res): Promise<void> => {
     const {
         allocationId, photoBase64, photoBeforeBase64, latitude, longitude, gpsAccuracy,
-        clientCaptureTime, idempotencyKey, technicianNames, technicianIds
+        clientCaptureTime, idempotencyKey, technicianNames, technicianIds, locationNote
     } = req.body;
 
     if (!allocationId || !photoBase64 || latitude == null || longitude == null) {
@@ -831,6 +831,7 @@ router.post("/branch/evidence", requireAuth, requireRole("CABANG", "ADMIN"), asy
             allocationId: allocation.id,
             latitude,
             longitude,
+            locationNote: locationNote ? String(locationNote).slice(0, 300) : null,
             locationMismatch,
             locationDeviationMeters,
             isCrossDistrict: districtAudit.isCrossDistrict,
