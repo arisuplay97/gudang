@@ -49,20 +49,20 @@ h2{font-size:17px;font-weight:500;letter-spacing:-.01em}
 .sb .ic{color:var(--mut)}.fb{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--ap);display:grid;place-items:center;flex:none}.fb .ic{color:inherit}
 .plain{width:100%;padding:13px 18px;border:1px solid var(--ln);border-radius:999px;background:var(--ap);outline:0;font-size:15px}.plain:focus{border-color:var(--ink)}
 /* kartu */
-.trk{display:block;width:100%;background:var(--cd);border-radius:28px;padding:18px;margin-bottom:12px}
+.trk{display:block;width:100%;background:var(--cd);border-radius:22px;padding:13px 16px;margin-bottom:10px}
 .trk:active{transform:scale(.985)}
 .r1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.r1 b{display:block;font-size:15px;margin-top:2px}
-.pl{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:500;white-space:nowrap}
+.r1 b{display:block;font-size:14px;margin-top:1px}
+.pl{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
 .pl.b{background:var(--bl);color:var(--blt)}.pl.g{background:var(--gn);color:var(--gnt)}.pl.a{background:var(--am);color:var(--amt)}
-.pl.g .ic svg,.pl.a .ic svg{width:15px;height:15px}
-.ft{display:flex;justify-content:space-between;gap:12px;margin-top:18px}.ft b{display:block;font-size:15px;margin-top:3px}.ft i{font-style:normal;font-size:12px;color:var(--mut)}.ft div:last-child{text-align:right}
-.stp{position:relative;margin-top:20px}
-.stp .bar{position:absolute;left:11px;right:11px;top:10px;height:4px;border-radius:2px;background:#CFD1D6}.stp .bar i{display:block;height:100%;border-radius:2px;background:var(--ink)}
+.pl.g .ic svg,.pl.a .ic svg{width:14px;height:14px}
+.ft{display:flex;justify-content:space-between;gap:10px;margin-top:10px}.ft b{display:block;font-size:13.5px;margin-top:2px}.ft i{font-style:normal;font-size:11px;color:var(--mut)}.ft div:last-child{text-align:right}
+.stp{position:relative;margin-top:11px}
+.stp .bar{position:absolute;left:10px;right:10px;top:9px;height:3px;border-radius:2px;background:#CFD1D6}.stp .bar i{display:block;height:100%;border-radius:2px;background:var(--ink)}
 html[data-theme=dark] .stp .bar{background:#34343A}
 .nodes{position:relative;display:flex;justify-content:space-between}
-.nd{width:24px;height:24px;border-radius:50%;background:#BFC1C7;display:grid;place-items:center;color:var(--ap)}
-.nd.d{background:var(--ink);box-shadow:0 0 0 3px var(--cd)}.nd .ic svg{width:13px;height:13px;stroke-width:2.6}
+.nd{width:20px;height:20px;border-radius:50%;background:#BFC1C7;display:grid;place-items:center;color:var(--ap)}
+.nd.d{background:var(--ink);box-shadow:0 0 0 2px var(--cd)}.nd .ic svg{width:11px;height:11px;stroke-width:2.8}
 html[data-theme=dark] .nd:not(.d){background:#3A3A40}
 .lb{display:flex;justify-content:space-between;margin-top:8px;font-size:12px}.lb div:nth-child(2){text-align:center}.lb div:last-child{text-align:right}.lb span{display:block;color:var(--mut);font-size:11px}
 .act{display:grid;grid-template-columns:1fr 1fr;row-gap:14px;column-gap:10px;margin-top:2px}.act div b{display:block;margin-top:2px}.act .pl{margin-top:4px;padding:6px 12px 6px 8px;font-size:12px}
@@ -101,7 +101,7 @@ html[data-theme=dark] .bar2 i:not(.f){background:#34343A}
 html[data-theme=dark] .pl.r{background:#3A1A18;color:#F08A82}
 .cam{width:58px;height:58px;border-radius:50%;background:var(--ink);color:var(--ap);display:grid;place-items:center;margin:-20px 0;border:4px solid var(--ap);box-shadow:0 12px 22px -8px rgba(0,0,0,.5);flex:none}
 .cam:active{transform:scale(.94)}.cam .ic svg{width:24px;height:24px}
-.lb{display:block;position:relative;height:50px;margin-top:10px}.lb div{position:absolute;top:0;font-size:11.5px;line-height:1.25;white-space:nowrap;text-align:left}.lb div:last-child{text-align:right}.lb span{display:block;margin-top:2px;color:var(--mut);font-size:11px}
+.lb{display:block;position:relative;height:34px;margin-top:6px}.lb div{position:absolute;top:0;font-size:10.5px;line-height:1.2;white-space:nowrap;text-align:left}.lb div:last-child{text-align:right}.lb span{display:block;margin-top:1px;color:var(--mut);font-size:9.5px}
 .top{gap:10px}.top .rb{width:42px;height:42px;flex:none}.top h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.av{border:0;cursor:pointer}
 .pr{display:flex;align-items:center;gap:12px;padding:12px 0;width:100%}.pr+.pr{border-top:1px solid var(--ln)}
 #map{height:min(58vh,440px);border-radius:28px;border:1px solid var(--ln)}
@@ -127,12 +127,18 @@ html[data-theme=dark] .pl.r{background:#3A1A18;color:#F08A82}
 .ev:before{content:"";position:absolute;left:80px;top:22px;bottom:-4px;border-left:2px dotted #B9BBC1}.ev:last-child:before{display:none}
 label{display:block;font-size:12px;color:var(--mut);margin-bottom:6px}.f{margin-top:14px}
 .in{width:100%;padding:13px 16px;border-radius:16px;border:1px solid var(--ln);background:var(--ap);outline:0}.in:focus{border-color:var(--ink)}
-#view{position:relative;margin-top:14px;aspect-ratio:4/3;max-height:240px;border-radius:24px;overflow:hidden;background:#0A0A0B}
-#qr-reader{width:100%;height:100%;border:0!important}#qr-reader video{width:100%!important;height:100%!important;object-fit:cover}
-.rt{position:absolute;inset:16%;border:3px solid rgba(255,255,255,.9);border-radius:20px;pointer-events:none}
+#view{position:relative;margin-top:14px;min-height:290px;max-height:340px;border-radius:24px;overflow:hidden;background:#050507;border:1px solid rgba(255,255,255,.1);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#qr-reader{width:100%;height:100%;min-height:290px;border:0!important}#qr-reader video{width:100%!important;height:100%!important;min-height:290px;object-fit:cover}
+.rt{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:250px;height:250px;max-width:84%;max-height:84%;border-radius:22px;border:2px solid rgba(255,255,255,.2);pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.45);z-index:4}
+.rt::before,.rt::after{content:"";position:absolute;inset:-3px;border-radius:22px;pointer-events:none}
+.rt::before{border-top:4px solid #38bdf8;border-bottom:4px solid #38bdf8;border-left:4px solid transparent;border-right:4px solid transparent}
+.rt::after{border-left:4px solid #38bdf8;border-right:4px solid #38bdf8;border-top:4px solid transparent;border-bottom:4px solid transparent}
+.laser{position:absolute;left:6%;right:6%;height:2.5px;background:#ef4444;box-shadow:0 0 10px #ef4444,0 0 3px #fff;border-radius:2px;animation:scanlaser 2.2s ease-in-out infinite;pointer-events:none;z-index:5}
+@keyframes scanlaser{0%,100%{top:8%;opacity:.75}50%{top:92%;opacity:1}}
+.scan-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.68);backdrop-filter:blur(8px);color:#fff;padding:6px 14px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap;pointer-events:none;z-index:6;border:1px solid rgba(255,255,255,.15)}
 .seg{display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:999px;background:var(--cd)}.seg button{padding:10px;border-radius:999px;text-align:center;font-weight:500;font-size:13px;color:var(--mut)}.seg .on{background:var(--ink);color:var(--ap)}
-#drop{width:100%;padding:20px;border:1.5px dashed var(--ln);border-radius:20px;text-align:center;color:var(--mut)}
-#pv{display:none}#pv img{width:100%;max-height:200px;object-fit:contain;border-radius:16px;background:#000}
+#drop{width:100%;padding:20px 16px;border:1.5px dashed var(--ln);border-radius:20px;text-align:center;color:var(--ink);background:var(--cd);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:13.5px;font-weight:500}
+#pv{display:none}#pv img{width:100%;max-height:280px;object-fit:cover;border-radius:18px;background:#000;box-shadow:0 6px 18px rgba(0,0,0,.15);border:1px solid var(--ln)}
 #toast{position:fixed;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--ap);padding:12px 20px;border-radius:999px;font-weight:500;font-size:13px;z-index:99;display:none;max-width:90%;text-align:center}
 button[disabled]{opacity:.55;pointer-events:none}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -208,7 +214,7 @@ button[disabled]{opacity:.55;pointer-events:none}
 <div class="ov" id="o-scan"><div class="shade" onclick="closeScan()"></div><div class="sheet"><div class="gr"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><h2>Pindai kode</h2><small>Arahkan kamera ke barcode atau QR</small></div><button class="rb" style="width:40px;height:40px" onclick="closeScan()" aria-label="Tutup"><span class="ic" data-i="x"></span></button></div>
   <div class="seg"><button id="m1" class="on" onclick="setMode('stok')">Cek stok</button><button id="m2" onclick="setMode('sj')">Terima SJ</button></div>
-  <div id="view"><div id="qr-reader"></div><div class="rt"></div></div>
+  <div id="view"><div id="qr-reader"></div><div class="rt"><div class="laser"></div></div><div class="scan-hint">Arahkan barcode / QR ke dalam kotak target</div></div>
   <form onsubmit="manual(event)" style="display:flex;gap:8px;margin-top:14px"><input id="mc" class="in" style="border-radius:999px" required placeholder="Atau ketik kode material / nomor SJ"><button class="bk" style="width:auto;height:48px;padding:0 22px;font-size:14px">Cari</button></form>
   <div class="sm" style="margin-top:12px" id="scan-ex"></div>
 </div></div>
@@ -391,7 +397,7 @@ async function loadGis(){
   gis=pts;render();if(tab==='peta')initMap()}
 
 /* ───────── Pindai ───────── */
-function openScan(m){$('o-scan').classList.add('on');setMode(m);if(!window.Html5Qrcode)return;if(!qr)qr=new Html5Qrcode('qr-reader');qr.start({facingMode:'environment'},{fps:10,qrbox:{width:200,height:200}},d=>scanned(d),()=>{}).catch(()=>{})}
+function openScan(m){$('o-scan').classList.add('on');setMode(m);if(!window.Html5Qrcode)return;if(!qr)qr=new Html5Qrcode('qr-reader');qr.start({facingMode:'environment'},{fps:12,qrbox:(w,h)=>{const min=Math.min(w,h);const sz=Math.min(260,Math.floor(min*0.82));return{width:sz,height:sz}}},d=>scanned(d),()=>{}).catch(()=>{})}
 function closeScan(){$('o-scan').classList.remove('on');if(qr&&qr.isScanning)qr.stop().catch(()=>{})}
 function setMode(m){mode=m;$('m1').className=m==='stok'?'on':'';$('m2').className=m==='sj'?'on':''}
 function manual(e){e.preventDefault();scanned($('mc').value.trim())}
