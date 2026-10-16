@@ -55,6 +55,7 @@ const queryClient = new QueryClient({
 });
 
 import QuickMaterialScanPage from "@/pages/cabang/quick-material-scan";
+import PwaCabangPage from "@/pages/cabang/pwa-cabang-page";
 
 /* ── Mobile CABANG Home — displayed inside MobileShell at "/" ── */
 function MobileCabangDashboard() {
@@ -63,7 +64,6 @@ function MobileCabangDashboard() {
 
 function AppRouter() {
   const { user, loading } = useAuth();
-  const isMobile = useIsMobile();
 
   if (loading) {
     return (
@@ -73,92 +73,83 @@ function AppRouter() {
     );
   }
 
-  // Public quick scan routes (dapat diakses langsung via kamera HP teknisi di rak gudang)
-  // CABANG on mobile → completely separate native shell (no sidebar, no desktop chrome)
-  const useMobileShell = user?.role === "CABANG" && isMobile;
-
   return (
     <Switch>
+      {/* ── PDAM Cabang Monitoring Aksesoris PWA (Root URL & PWA Entrypoint) ── */}
+      <Route path="/" component={PwaCabangPage} />
+      <Route path="/cabang" component={PwaCabangPage} />
+      <Route path="/pwa" component={PwaCabangPage} />
+      <Route path="/app-cabang" component={PwaCabangPage} />
+
+      {/* Public quick scan routes */}
       <Route path="/scan/material" component={QuickMaterialScanPage} />
       <Route path="/cabang/quick-material" component={QuickMaterialScanPage} />
 
+      {/* Login Route */}
+      <Route path="/login" component={LoginPage} />
+
+      {/* Desktop ERP Routes — Memerlukan Login */}
       {!user ? (
-        <Switch>
-          <Route path="/login" component={LoginPage} />
-          <Route><Redirect to="/login" /></Route>
-        </Switch>
-      ) : useMobileShell ? (
-        <MobileShell>
-          <Switch>
-            <Route path="/" component={MobileCabangDashboard} />
-            <Route path="/cabang/stok-material" component={StokMaterialCabangPage} />
-            <Route path="/cabang/receive" component={CabangReceivePage} />
-            <Route path="/cabang/tracking" component={CabangTrackingPage} />
-            <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
-            <Route path="/cabang/dashboard"><Redirect to="/" /></Route>
-            <Route path="/transaksi/retur" component={ReturPage} />
-            <Route path="/laporan/teknisi" component={LaporanTeknisiPage} />
-            <Route path="/laporan/pemasangan-aksesoris" component={LaporanPemasanganAksesorisPage} />
-            <Route path="/pengaturan" component={PengaturanPage} />
-            <Route path="/profil" component={PengaturanPage} />
-            <Route path="/login"><Redirect to="/" /></Route>
-            <Route><Redirect to="/" /></Route>
-          </Switch>
-        </MobileShell>
+        <Route>
+          <Redirect to="/login" />
+        </Route>
       ) : (
         <Layout>
           <GlobalSearch />
           <Switch>
-            <Route path="/" component={DashboardPage} />
-        {/* Gudang Routes - Master */}
-        <Route path="/master/barang" component={BarangPage} />
-        <Route path="/master/gudang" component={GudangPage} />
-        <Route path="/master/kategori" component={KategoriPage} />
-        <Route path="/master/satuan" component={SatuanPage} />
-        <Route path="/master/supplier" component={SupplierPage} />
-        <Route path="/master/departemen" component={DepartemenPage} />
-        <Route path="/master/lokasi" component={LokasiPage} />
-        {/* Gudang Routes - Transaksi */}
-        <Route path="/transaksi/masuk" component={BarangMasukPage} />
-        <Route path="/transaksi/keluar" component={BarangKeluarPage} />
-        <Route path="/transaksi/opname" component={OpnamePage} />
-        <Route path="/transaksi/retur" component={ReturPage} />
-        <Route path="/transaksi/mutasi" component={MutasiPage} />
-        <Route path="/transaksi/penyesuaian" component={PenyesuaianPage} />
-        {/* Laporan */}
-        <Route path="/laporan/stok" component={LaporanStokPage} />
-        <Route path="/laporan/transaksi" component={LaporanTransaksiPage} />
-        <Route path="/laporan/pemasangan-aksesoris" component={LaporanPemasanganAksesorisPage} />
-        <Route path="/laporan/teknisi" component={LaporanTeknisiPage} />
-        <Route path="/laporan/nilai" component={LaporanNilaiPage} />
-        <Route path="/laporan/log" component={AuditLogPage} />
+            <Route path="/dashboard" component={DashboardPage} />
+            <Route path="/admin"><Redirect to="/dashboard" /></Route>
 
-        {/* Cabang & Inventaris Routes */}
-        <Route path="/cabang/stok-material" component={StokMaterialCabangPage} />
-        <Route path="/inventaris/cabang" component={StokMaterialCabangPage} />
-        <Route path="/cabang/dashboard" component={CabangDashboardPage} />
-        <Route path="/cabang/receive" component={CabangReceivePage} />
-        <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
-        <Route path="/cabang/tracking" component={CabangTrackingPage} />
+            {/* Gudang Routes - Master */}
+            <Route path="/master/barang" component={BarangPage} />
+            <Route path="/master/gudang" component={GudangPage} />
+            <Route path="/master/kategori" component={KategoriPage} />
+            <Route path="/master/satuan" component={SatuanPage} />
+            <Route path="/master/supplier" component={SupplierPage} />
+            <Route path="/master/departemen" component={DepartemenPage} />
+            <Route path="/master/lokasi" component={LokasiPage} />
 
-        {/* SPI Routes */}
-        <Route path="/spi/dashboard" component={SpiDashboardPage} />
-        <Route path="/spi/verifikasi" component={SpiVerifikasiPage} />
-        <Route path="/spi/gis" component={SpiGisPage} />
-        <Route path="/spi/laporan-audit" component={LaporanAuditSpiPage} />
+            {/* Gudang Routes - Transaksi */}
+            <Route path="/transaksi/masuk" component={BarangMasukPage} />
+            <Route path="/transaksi/keluar" component={BarangKeluarPage} />
+            <Route path="/transaksi/opname" component={OpnamePage} />
+            <Route path="/transaksi/retur" component={ReturPage} />
+            <Route path="/transaksi/mutasi" component={MutasiPage} />
+            <Route path="/transaksi/penyesuaian" component={PenyesuaianPage} />
 
-        {/* AI Assistant */}
-        <Route path="/ai-assistant" component={AiAssistantPage} />
+            {/* Laporan */}
+            <Route path="/laporan/stok" component={LaporanStokPage} />
+            <Route path="/laporan/transaksi" component={LaporanTransaksiPage} />
+            <Route path="/laporan/pemasangan-aksesoris" component={LaporanPemasanganAksesorisPage} />
+            <Route path="/laporan/teknisi" component={LaporanTeknisiPage} />
+            <Route path="/laporan/nilai" component={LaporanNilaiPage} />
+            <Route path="/laporan/log" component={AuditLogPage} />
 
-        {/* Pengaturan & Profil */}
-        <Route path="/pengaturan" component={PengaturanPage} />
-        <Route path="/profil" component={PengaturanPage} />
+            {/* Cabang & Inventaris Routes */}
+            <Route path="/cabang/stok-material" component={StokMaterialCabangPage} />
+            <Route path="/inventaris/cabang" component={StokMaterialCabangPage} />
+            <Route path="/cabang/dashboard" component={CabangDashboardPage} />
+            <Route path="/cabang/receive" component={CabangReceivePage} />
+            <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
+            <Route path="/cabang/tracking" component={CabangTrackingPage} />
 
-        <Route path="/pengguna" component={PenggunaPage} />
-        <Route path="/login"><Redirect to="/" /></Route>
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+            {/* SPI Routes */}
+            <Route path="/spi/dashboard" component={SpiDashboardPage} />
+            <Route path="/spi/verifikasi" component={SpiVerifikasiPage} />
+            <Route path="/spi/gis" component={SpiGisPage} />
+            <Route path="/spi/laporan-audit" component={LaporanAuditSpiPage} />
+
+            {/* AI Assistant */}
+            <Route path="/ai-assistant" component={AiAssistantPage} />
+
+            {/* Pengaturan & Profil */}
+            <Route path="/pengaturan" component={PengaturanPage} />
+            <Route path="/profil" component={PengaturanPage} />
+
+            <Route path="/pengguna" component={PenggunaPage} />
+            <Route component={NotFound} />
+          </Switch>
+        </Layout>
       )}
     </Switch>
   );
