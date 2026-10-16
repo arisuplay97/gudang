@@ -1,13 +1,12 @@
 {
-  "name": "PDAM Cabang — Monitoring Aksesoris",
-  "short_name": "Aksesoris",
-  "description": "Monitoring aksesoris cabang PDAM Tirta Ardhia Rinjani: stok, penerimaan surat jalan, pelacakan, dan pemasangan foto + GPS.",
-  "start_url": "/",
-  "scope": "/",
+  "name": "SIMONA - Sistem Informasi Logistik PDAM",
+  "short_name": "SIMONA",
+  "description": "Sistem Informasi Manajemen Operasional & Logistik Perumdam Tirta Ardhia Rinjani",
+  "start_url": "/?mode=pwa",
   "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0284c7",
   "orientation": "portrait-primary",
-  "background_color": "#0B0B0D",
-  "theme_color": "#0A0A0B",
   "icons": [
     {
       "src": "/icon-192x192.png",
@@ -28,15 +27,36 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["utilities", "productivity", "business"],
+  "categories": ["business", "productivity", "utilities"],
   "lang": "id",
   "dir": "ltr",
   "shortcuts": [
     {
-      "name": "Monitoring Aksesoris",
-      "short_name": "Aksesoris",
-      "description": "Buka monitoring aksesoris cabang",
-      "url": "/",
+      "name": "Stok Material Cabang",
+      "short_name": "Stok Cabang",
+      "description": "Cek sisa fisik material & safety stock cabang",
+      "url": "/cabang/stok-material?mode=pwa",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Penerimaan Surat Jalan",
+      "short_name": "Terima Barang",
+      "description": "Konfirmasi barang masuk dari pusat",
+      "url": "/cabang/receive?mode=pwa",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pemasangan Fisik",
+      "short_name": "Pemasangan",
+      "description": "Catat pemasangan aksesoris oleh teknisi",
+      "url": "/cabang/pemasangan?mode=pwa",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Monitoring Aksesoris PWA",
+      "short_name": "PWA Aksesoris",
+      "description": "Monitoring aksesoris cabang PDAM",
+      "url": "/pwa",
       "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
     }
   ]

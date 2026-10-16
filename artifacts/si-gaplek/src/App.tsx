@@ -64,6 +64,7 @@ function MobileCabangDashboard() {
 
 function AppRouter() {
   const { user, loading } = useAuth();
+  const isMobile = useIsMobile();
 
   if (loading) {
     return (
@@ -73,30 +74,53 @@ function AppRouter() {
     );
   }
 
+  // Check if opened explicitly with ?mode=pwa
+  const isExplicitPwa =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("mode") === "pwa";
+
+  // CABANG on mobile → completely separate native shell (no sidebar, no desktop chrome)
+  const useMobileShell = user?.role === "CABANG" && isMobile;
+
   return (
     <Switch>
-      {/* ── PDAM Cabang Monitoring Aksesoris PWA (Root URL & PWA Entrypoint) ── */}
-      <Route path="/" component={PwaCabangPage} />
-      <Route path="/cabang" component={PwaCabangPage} />
+      {/* ── PDAM Cabang Monitoring Aksesoris PWA (Isolated to /pwa, /app-cabang, or ?mode=pwa) ── */}
       <Route path="/pwa" component={PwaCabangPage} />
       <Route path="/app-cabang" component={PwaCabangPage} />
+      {isExplicitPwa && <Route path="/" component={PwaCabangPage} />}
 
       {/* Public quick scan routes */}
       <Route path="/scan/material" component={QuickMaterialScanPage} />
       <Route path="/cabang/quick-material" component={QuickMaterialScanPage} />
 
-      {/* Login Route */}
-      <Route path="/login" component={LoginPage} />
-
-      {/* Desktop ERP Routes — Memerlukan Login */}
       {!user ? (
-        <Route>
-          <Redirect to="/login" />
-        </Route>
+        <Switch>
+          <Route path="/login" component={LoginPage} />
+          <Route><Redirect to="/login" /></Route>
+        </Switch>
+      ) : useMobileShell ? (
+        <MobileShell>
+          <Switch>
+            <Route path="/" component={MobileCabangDashboard} />
+            <Route path="/cabang/stok-material" component={StokMaterialCabangPage} />
+            <Route path="/cabang/receive" component={CabangReceivePage} />
+            <Route path="/cabang/tracking" component={CabangTrackingPage} />
+            <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
+            <Route path="/cabang/dashboard"><Redirect to="/" /></Route>
+            <Route path="/transaksi/retur" component={ReturPage} />
+            <Route path="/laporan/teknisi" component={LaporanTeknisiPage} />
+            <Route path="/laporan/pemasangan-aksesoris" component={LaporanPemasanganAksesorisPage} />
+            <Route path="/pengaturan" component={PengaturanPage} />
+            <Route path="/profil" component={PengaturanPage} />
+            <Route path="/login"><Redirect to="/" /></Route>
+            <Route><Redirect to="/" /></Route>
+          </Switch>
+        </MobileShell>
       ) : (
         <Layout>
           <GlobalSearch />
           <Switch>
+            <Route path="/" component={DashboardPage} />
             <Route path="/dashboard" component={DashboardPage} />
             <Route path="/admin"><Redirect to="/dashboard" /></Route>
 
@@ -132,6 +156,7 @@ function AppRouter() {
             <Route path="/cabang/receive" component={CabangReceivePage} />
             <Route path="/cabang/pemasangan" component={CabangPemasanganPage} />
             <Route path="/cabang/tracking" component={CabangTrackingPage} />
+            <Route path="/cabang"><Redirect to="/cabang/dashboard" /></Route>
 
             {/* SPI Routes */}
             <Route path="/spi/dashboard" component={SpiDashboardPage} />
@@ -147,6 +172,7 @@ function AppRouter() {
             <Route path="/profil" component={PengaturanPage} />
 
             <Route path="/pengguna" component={PenggunaPage} />
+            <Route path="/login"><Redirect to="/" /></Route>
             <Route component={NotFound} />
           </Switch>
         </Layout>
