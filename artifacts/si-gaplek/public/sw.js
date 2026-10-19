@@ -67,7 +67,7 @@ self.addEventListener("fetch", (event) => {
           const cachedOffline = await cache.match("/offline.html");
           if (cachedOffline) return cachedOffline;
 
-          return new Response("Mode Offline SIMONA - Koneksi terputus.", {
+          return new Response("Mode Offline Aplikasi Aksesoris - Koneksi terputus.", {
             headers: { "Content-Type": "text/plain; charset=utf-8" },
           });
         })
@@ -122,7 +122,7 @@ self.addEventListener("fetch", (event) => {
 // Push notifications
 self.addEventListener("push", (event) => {
   let data = {
-    title: "SIMONA Logistik",
+    title: "Aplikasi Aksesoris",
     body: "Pemberitahuan operasional stok cabang",
     url: "/cabang/stok-material"
   };

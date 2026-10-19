@@ -42,7 +42,7 @@ export function MobileShell({ children }: MobileShellProps) {
     location === "/transaksi/retur" ||
     location === "/scan/material" ||
     location.startsWith("/pengaturan");
-  const pageTitle = PAGE_TITLES[location] || "SIMONA Mobile";
+  const pageTitle = PAGE_TITLES[location] || "Aplikasi Aksesoris";
 
   if (!user) return null;
 

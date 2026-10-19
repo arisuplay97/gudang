@@ -1,6 +1,6 @@
 {
-  "name": "SIMONA - Sistem Informasi Logistik PDAM",
-  "short_name": "SIMONA",
+  "name": "Aplikasi Aksesoris - Perumdam Tirta Ardhia Rinjani",
+  "short_name": "Aplikasi Aksesoris",
   "description": "Sistem Informasi Manajemen Operasional & Logistik Perumdam Tirta Ardhia Rinjani",
   "start_url": "/?mode=pwa",
   "display": "standalone",
