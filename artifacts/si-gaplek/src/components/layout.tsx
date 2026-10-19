@@ -119,12 +119,6 @@ const NAV_SECTIONS: NavSection[] = [
         icon: Layers,
         roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
       },
-      {
-        label: "PWA Aksesoris (Mobile)",
-        href: "/pwa",
-        icon: Smartphone,
-        roles: ["ADMIN", "GUDANG", "CABANG", "SPI"],
-      },
     ],
   },
   {
@@ -362,13 +356,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-10 h-10 rounded-xl bg-white p-1 border border-border/80 shadow-xs flex items-center justify-center shrink-0">
             <img
               src="/logo-perumdam.png"
-              alt="Logo SIMONA"
+              alt="Logo Monitoring Aksesoris"
               className="w-full h-full object-contain"
             />
           </div>
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-sm leading-tight text-foreground">SIMONA</p>
+              <p className="font-bold text-sm leading-tight text-foreground">Monitoring Aksesoris</p>
               <p className="text-[11px] text-muted-foreground truncate">Perumdam Tirta Ardhia Rinjani</p>
             </div>
           )}
@@ -532,7 +526,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex sm:hidden items-center gap-2">
             <img src="/logo-perumdam.png" alt="Logo" className="w-6 h-6 object-contain" />
             <span className="font-bold text-sm">
-              {ROUTE_LABELS[location] || "SIMONA"}
+              {ROUTE_LABELS[location] || "Monitoring Aksesoris"}
             </span>
           </div>
 

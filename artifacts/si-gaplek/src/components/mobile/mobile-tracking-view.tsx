@@ -44,14 +44,15 @@ L.Icon.Default.mergeOptions({
 const verifiedMarkerIcon = L.divIcon({
   className: "gis-radar-marker",
   html: `
-    <div class="relative flex items-center justify-center w-8 h-8 cursor-pointer group">
-      <span class="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-40 animate-ping" style="animation-duration: 2.2s;"></span>
-      <span class="relative inline-flex rounded-full w-4 h-4 bg-emerald-600 border-2 border-white shadow-md transition-transform duration-200 group-hover:scale-125"></span>
+    <div class="relative flex items-center justify-center w-7 h-7 cursor-pointer group">
+      <span class="relative inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-white shadow-md transition-transform duration-150 group-hover:scale-115" style="border: 2.5px solid #059669; box-shadow: 0 2px 5px rgba(0,0,0,0.35);">
+        <span class="w-[7px] h-[7px] rounded-full bg-emerald-600"></span>
+      </span>
     </div>
   `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -16],
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  popupAnchor: [0, -14],
 });
 
 interface TrackingItem {

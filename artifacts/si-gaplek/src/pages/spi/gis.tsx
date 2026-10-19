@@ -28,12 +28,9 @@ import {
   Navigation,
   Eye,
   Camera,
-  Calendar,
-  Building2,
   Compass,
   Maximize2,
   Minimize2,
-  Sparkles,
   Database,
   Server,
   Network,
@@ -42,12 +39,8 @@ import {
   FileCode,
   Check,
   RefreshCw,
-  Users,
-  Package,
-  ShieldCheck,
-  UserCheck,
-  Activity,
-  Clock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   Dialog,
@@ -67,19 +60,38 @@ import {
   Circle,
   Polyline,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { toast } from "sonner";
 
-/* ─── Leaflet CSS Overrides for Radar Pulse Dots ─── */
-const RADAR_CSS = `
-.gis-radar-marker {
+/* ─── Clean GIS Map & Marker Overrides (No Leaflet Watermark, Clean White Tooltips) ─── */
+const GIS_CARTOGRAPHY_CSS = `
+.gis-vector-node {
   background: transparent !important;
   border: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+}
+.leaflet-control-attribution {
+  display: none !important;
+}
+.leaflet-container {
+  font-family: inherit;
+  background: #f1f5f9;
+}
+.leaflet-tooltip {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  color: #0f172a !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12) !important;
+}
+.leaflet-tooltip-top:before {
+  border-top-color: rgba(255, 255, 255, 0.98) !important;
 }
 `;
 
@@ -93,7 +105,6 @@ export function getAccessoryCategory(
   const cat = (categoryName || "").toLowerCase();
   const name = (itemName || "").toLowerCase();
 
-  // Valve / Gate Valve / Stop Kran
   if (
     cat.includes("valve") ||
     name.includes("valve") ||
@@ -104,7 +115,6 @@ export function getAccessoryCategory(
     return "valve";
   }
 
-  // Aksesoris / Fitting Pipa (Tee, Elbow, Clamp Saddle, Reducer, Socket, Flange, Dop)
   if (
     cat.includes("aksesoris") ||
     cat.includes("fitting") ||
@@ -122,7 +132,6 @@ export function getAccessoryCategory(
     return "fitting";
   }
 
-  // Pipa HDPE / PVC / GIPT
   if (
     cat.includes("pipa") ||
     name.includes("pipa") ||
@@ -133,7 +142,6 @@ export function getAccessoryCategory(
     return "pipa";
   }
 
-  // Meter Air / Flow Meter
   if (
     cat.includes("meter") ||
     cat.includes("alat ukur") ||
@@ -160,37 +168,37 @@ export const CATEGORY_CONFIG: Record<
   valve: {
     label: "Gate Valve & Valve",
     shortLabel: "Gate Valve",
-    color: "#2563eb", // Sapphire Blue
+    color: "#2563eb",
     borderHex: "#1d4ed8",
-    badgeClass: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30",
+    badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
   },
   pipa: {
     label: "Pipa (HDPE / PVC)",
     shortLabel: "Pipa",
-    color: "#059669", // Emerald Green
+    color: "#059669",
     borderHex: "#047857",
-    badgeClass: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
   },
   meter: {
     label: "Meter Air",
     shortLabel: "Meter Air",
-    color: "#d97706", // Amber Gold
+    color: "#d97706",
     borderHex: "#b45309",
-    badgeClass: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
   },
   fitting: {
     label: "Aksesoris & Fitting",
     shortLabel: "Aksesoris Pipa",
-    color: "#7c3aed", // Violet / Purple
+    color: "#7c3aed",
     borderHex: "#6d28d9",
-    badgeClass: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
   },
   other: {
     label: "Material Lainnya",
     shortLabel: "Lainnya",
-    color: "#0284c7", // Sky Blue
+    color: "#0284c7",
     borderHex: "#0369a1",
-    badgeClass: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30",
+    badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
   },
 };
 
@@ -231,147 +239,242 @@ interface GeoCollection {
   features: GeoFeature[];
 }
 
-type BasemapType = "google_hybrid" | "google_satellite" | "esri_clarity" | "osm" | "positron";
+/* ─── 100% Free, Zero-API-Key Basemaps (Esri, Google, OpenStreetMap) ─── */
+type BasemapType =
+  | "esri_hybrid"
+  | "google_hybrid"
+  | "osm"
+  | "google_streets"
+  | "esri_topo"
+  | "google_satellite";
+
+interface BasemapLayerSpec {
+  url: string;
+  subdomains?: string[] | string;
+  opacity?: number;
+  maxNativeZoom?: number;
+}
 
 const BASEMAP_CONFIGS: Record<
   BasemapType,
-  { name: string; url: string; subdomains?: string[] | string; attribution: string; maxZoom: number }
+  {
+    name: string;
+    shortName: string;
+    maxZoom: number;
+    layers: BasemapLayerSpec[];
+  }
 > = {
-  google_satellite: {
-    name: "Foto Murni",
-    url: "https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-    subdomains: ["0", "1", "2", "3"],
-    attribution:
-      "&copy; Google Maps Satellite",
+  esri_hybrid: {
+    name: "Satelit Hybrid Modern (Esri Imagery + Jalan)",
+    shortName: "Satelit Hybrid",
     maxZoom: 21,
-  },
-  google_hybrid: {
-    name: "Satelit Hybrid",
-    url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-    subdomains: ["0", "1", "2", "3"],
-    attribution:
-      "&copy; Google Maps Satellite",
-    maxZoom: 21,
-  },
-  esri_clarity: {
-    name: "Esri Clarity",
-    url: "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution:
-      "Tiles &copy; Esri Clarity Archive",
-    maxZoom: 19,
+    layers: [
+      {
+        url: "https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        subdomains: ["0", "1", "2", "3"],
+        maxNativeZoom: 21,
+      },
+      {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+        opacity: 0.85,
+        maxNativeZoom: 19,
+      },
+      {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        opacity: 0.95,
+        maxNativeZoom: 19,
+      },
+    ],
   },
   osm: {
-    name: "Peta Jalan (OSM)",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    name: "OpenStreetMap Standar",
+    shortName: "OpenStreetMap",
     maxZoom: 19,
+    layers: [
+      {
+        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        subdomains: ["a", "b", "c"],
+        maxNativeZoom: 19,
+      },
+    ],
   },
-  positron: {
-    name: "Minimalis Positron",
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  google_streets: {
+    name: "Google Maps Jalan",
+    shortName: "Peta Jalan",
+    maxZoom: 21,
+    layers: [
+      {
+        url: "https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+        subdomains: ["0", "1", "2", "3"],
+        maxNativeZoom: 21,
+      },
+    ],
+  },
+  esri_topo: {
+    name: "Peta Topografi GIS (Esri Topo)",
+    shortName: "Topografi",
     maxZoom: 19,
+    layers: [
+      {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        maxNativeZoom: 19,
+      },
+    ],
+  },
+  google_hybrid: {
+    name: "Google Satelit Hybrid",
+    shortName: "Google Hybrid",
+    maxZoom: 21,
+    layers: [
+      {
+        url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        subdomains: ["0", "1", "2", "3"],
+        maxNativeZoom: 21,
+      },
+    ],
+  },
+  google_satellite: {
+    name: "Foto Udara Satelit Murni",
+    shortName: "Citra Murni",
+    maxZoom: 21,
+    layers: [
+      {
+        url: "https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        subdomains: ["0", "1", "2", "3"],
+        maxNativeZoom: 21,
+      },
+    ],
   },
 };
 
-/* ─── Distinct Dot Markers (No pulse unless clicked/selected) ─── */
+/* ─── High-Visibility Crisp Ring-Dot Marker (Matches Legend, No Giant Pulse Blob) ─── */
 function createCategoryDotIcon({
   category,
   isMismatch,
+  isCrossDistrict,
   isSelected,
-  coLocatedTotal,
-  coLocatedIndex,
+  clusterTotal,
+  clusterIndex,
 }: {
   category: AccessoryCategory;
   isMismatch: boolean;
+  isCrossDistrict?: boolean;
   isSelected: boolean;
-  coLocatedTotal: number;
-  coLocatedIndex: number;
+  clusterTotal: number;
+  clusterIndex: number;
 }) {
   const conf = CATEGORY_CONFIG[category];
-  const mainColor = isMismatch ? "#ef4444" : conf.color;
-  const isMulti = coLocatedTotal > 1;
+  const hasAnomaly = isMismatch || Boolean(isCrossDistrict);
+  const mainColor = hasAnomaly ? "#e11d48" : conf.color;
+  const isMulti = clusterTotal > 1;
 
   if (isSelected) {
-    // Pulse effect ONLY when selected/clicked!
+    // Clean, clearly visible selected ring-dot (No giant animate-ping blob!)
     return L.divIcon({
-      className: "gis-radar-marker",
+      className: "gis-vector-node",
       html: `
-        <div class="relative flex items-center justify-center w-11 h-11 cursor-pointer pointer-events-auto">
-          <span class="absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping" style="background-color: ${mainColor}; animation-duration: 1.3s;"></span>
-          <span class="absolute inline-flex w-8 h-8 rounded-full opacity-35" style="background-color: ${mainColor};"></span>
-          <span class="relative inline-flex items-center justify-center w-6 h-6 rounded-full bg-white shadow-xl ring-4" style="--tw-ring-color: ${mainColor}; border: 3px solid ${mainColor};">
-            <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${mainColor};"></span>
+        <div class="relative flex items-center justify-center w-8 h-8 cursor-pointer pointer-events-auto">
+          <span class="absolute inline-flex w-7 h-7 rounded-full" style="background-color: ${mainColor}28; border: 1.5px solid ${mainColor};"></span>
+          <span class="relative inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-md" style="border: 3px solid ${mainColor};">
+            <span class="w-2 h-2 rounded-full" style="background-color: ${mainColor};"></span>
           </span>
           ${
             isMulti
-              ? `<span class="absolute -top-1 -right-1 bg-slate-900 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-sm z-20">${coLocatedIndex + 1}</span>`
+              ? `<span class="absolute -top-1 -right-1 bg-slate-900 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-xs z-20">${clusterIndex + 1}</span>`
               : ""
           }
         </div>
       `,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-      popupAnchor: [0, -22],
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16],
     });
   }
 
-  // Crisp, static, professional GIS marker (NO animate-ping)
+  // Crisp, high-visibility ring-dot (18px white circle with 2.5px colored ring + 7px inner core)
   return L.divIcon({
-    className: "gis-radar-marker",
+    className: "gis-vector-node",
     html: `
-      <div class="relative flex items-center justify-center w-8 h-8 cursor-pointer group pointer-events-auto">
-        <span class="absolute inline-flex w-6 h-6 rounded-full opacity-0 group-hover:opacity-30 transition-opacity duration-150" style="background-color: ${mainColor};"></span>
-        <span class="relative inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-150 group-hover:scale-125" style="border: 2.5px solid ${mainColor};">
-          <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${mainColor};"></span>
+      <div class="relative flex items-center justify-center w-7 h-7 cursor-pointer group pointer-events-auto">
+        <span class="relative inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-white shadow-md transition-transform duration-150 group-hover:scale-115" style="border: 2.5px solid ${mainColor}; box-shadow: 0 2px 5px rgba(0,0,0,0.35);">
+          <span class="w-[7px] h-[7px] rounded-full" style="background-color: ${mainColor};"></span>
         </span>
         ${
-          isMismatch
-            ? `<span class="absolute -top-1 -right-1 bg-rose-600 text-white text-[8px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center border border-white shadow-xs z-10">!</span>`
+          hasAnomaly && !isMulti
+            ? `<span class="absolute -top-0.5 -right-0.5 bg-rose-600 text-white text-[8px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center border border-white shadow-xs z-10">!</span>`
             : ""
         }
         ${
           isMulti
-            ? `<span class="absolute -top-1 -right-1 bg-slate-800 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center border border-white shadow-xs z-10" title="Titik ini memiliki ${coLocatedTotal} aksesoris terpasang">${coLocatedIndex + 1}</span>`
+            ? `<span class="absolute -top-0.5 -right-0.5 bg-slate-800 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center border border-white shadow-xs z-10">${clusterIndex + 1}</span>`
             : ""
         }
       </div>
     `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
   });
 }
 
 const plannedLocationDotIcon = L.divIcon({
-  className: "gis-radar-marker",
+  className: "gis-vector-node",
   html: `
-    <div class="relative flex items-center justify-center w-6 h-6 cursor-pointer opacity-85 group pointer-events-auto">
-      <span class="relative inline-flex rounded-full w-3 h-3 bg-amber-500 border-2 border-dashed border-amber-900 shadow-sm"></span>
+    <div class="relative flex items-center justify-center w-5 h-5">
+      <span class="inline-flex rounded-full w-3 h-3 bg-amber-500 border-2 border-dashed border-amber-900 shadow-xs"></span>
     </div>
   `,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -12],
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
 });
 
-/* ─── Map Controller for bounds & focusing ─── */
+const trueGpsAnchorIcon = L.divIcon({
+  className: "gis-vector-node",
+  html: `
+    <div style="width:10px;height:10px;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+      <span style="width:5px;height:5px;border-radius:9999px;background:#475569;border:1.5px solid #ffffff;box-shadow:0 1px 2px rgba(0,0,0,0.4);"></span>
+    </div>
+  `,
+  iconSize: [10, 10],
+  iconAnchor: [5, 5],
+});
+
+/* ─── Map Telemetry & Controller Hook ─── */
 function MapController({
   focusCoords,
+  focusZoom,
   fitFeatures,
+  onZoomChange,
+  onCursorMove,
+  inspectorOpen,
 }: {
   focusCoords: [number, number] | null;
+  focusZoom: number | null;
   fitFeatures: GeoFeature[] | null;
+  onZoomChange: (z: number) => void;
+  onCursorMove: (coords: [number, number] | null) => void;
+  inspectorOpen: boolean;
 }) {
   const map = useMap();
 
+  useMapEvents({
+    zoomend: () => {
+      onZoomChange(map.getZoom());
+    },
+    mousemove: (e) => {
+      onCursorMove([e.latlng.lat, e.latlng.lng]);
+    },
+    mouseout: () => {
+      onCursorMove(null);
+    },
+  });
+
   useEffect(() => {
     if (focusCoords) {
-      map.flyTo(focusCoords, Math.max(map.getZoom(), 18), { duration: 1.0 });
+      const targetZoom = focusZoom ?? Math.max(map.getZoom(), 15);
+      map.flyTo(focusCoords, targetZoom, { duration: 0.65 });
     }
-  }, [focusCoords, map]);
+  }, [focusCoords, focusZoom, map]);
 
   useEffect(() => {
     if (fitFeatures && fitFeatures.length > 0) {
@@ -384,30 +487,39 @@ function MapController({
             ]
         )
       );
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      map.fitBounds(bounds, { padding: [56, 56], maxZoom: 15 });
     }
   }, [fitFeatures, map]);
 
-  // Invalidate map size on window/container resize
   useEffect(() => {
     const timer = setTimeout(() => {
       map.invalidateSize();
-    }, 200);
+    }, 180);
     return () => clearTimeout(timer);
-  }, [map]);
+  }, [map, inspectorOpen]);
 
   return null;
 }
 
-// Center of Lombok Tengah area
 const DEFAULT_CENTER: [number, number] = [-8.7065, 116.2755];
-const DEFAULT_ZOOM = 11;
+const DEFAULT_ZOOM = 12;
 
 export interface ExternalGisConfig {
   enabled: boolean;
   serverType: "postgis_api" | "geoserver_wfs" | "custom_geojson";
   serverUrl: string;
   apiKey?: string;
+}
+
+interface DisplacedNode {
+  feature: GeoFeature;
+  rawLatLng: [number, number];
+  displayLatLng: [number, number];
+  clusterAnchorLatLng: [number, number];
+  clusterId: string;
+  clusterTotal: number;
+  clusterIndex: number;
+  isDisplaced: boolean;
 }
 
 export default function SpiGisPage() {
@@ -447,7 +559,7 @@ export default function SpiGisPage() {
   const [copiedSql, setCopiedSql] = useState(false);
   const [copiedQgisUrl, setCopiedQgisUrl] = useState(false);
 
-  const { data: gisData, isLoading, refetch, isFetching } = useQuery({
+  const { data: gisData, isLoading, refetch } = useQuery({
     queryKey: ["gis-materials", extConfig.enabled, extConfig.serverUrl],
     queryFn: async () => {
       if (extConfig.enabled && extConfig.serverUrl.trim()) {
@@ -476,40 +588,36 @@ export default function SpiGisPage() {
 
   const rawFeatures = useMemo(() => gisData?.features || [], [gisData]);
 
-  // States
-  const [activeBasemap, setActiveBasemap] = useState<BasemapType>("google_satellite");
+  // Default basemap: Satelit Hybrid (Esri Reference + Satellite, 0 API Key Required)
+  const [activeBasemap, setActiveBasemap] = useState<BasemapType>("esri_hybrid");
   const [selectedBranch, setSelectedBranch] = useState<string>("ALL");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = useState<
-    "ALL" | "VERIFIED" | "MISMATCH"
-  >("ALL");
+  const [selectedStatus, setSelectedStatus] = useState<"ALL" | "VERIFIED" | "MISMATCH">("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedFeature, setSelectedFeature] = useState<GeoFeature | null>(
-    null
-  );
-  const [focusedCoords, setFocusedCoords] = useState<[number, number] | null>(
-    null
-  );
+  const [selectedFeature, setSelectedFeature] = useState<GeoFeature | null>(null);
+  const [focusedCoords, setFocusedCoords] = useState<[number, number] | null>(null);
+  const [focusZoom, setFocusZoom] = useState<number | null>(null);
   const [fitTrigger, setFitTrigger] = useState<number>(0);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [activePhotoTab, setActivePhotoTab] = useState<"after" | "before">("after");
+  const [legendCollapsed, setLegendCollapsed] = useState<boolean>(false);
+
+  // Live Map Telemetry State
+  const [currentZoom, setCurrentZoom] = useState<number>(DEFAULT_ZOOM);
+  const [cursorCoords, setCursorCoords] = useState<[number, number] | null>(null);
 
   // Street View & Fullscreen States
-  const [streetViewFeature, setStreetViewFeature] = useState<GeoFeature | null>(
-    null
-  );
+  const [streetViewFeature, setStreetViewFeature] = useState<GeoFeature | null>(null);
   const [isStreetViewFullscreen, setIsStreetViewFullscreen] = useState(false);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [streetViewMode, setStreetViewMode] = useState<"pano" | "map">("pano");
 
-  // Listen for native fullscreen changes
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsMapFullscreen(Boolean(document.fullscreenElement));
     };
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () =>
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
   const toggleMapFullscreen = () => {
@@ -524,7 +632,7 @@ export default function SpiGisPage() {
     }
   };
 
-  // Extract unique branches from dataset
+  // Unique branches
   const branches = useMemo(() => {
     const set = new Set<string>();
     rawFeatures.forEach((f) => {
@@ -533,7 +641,7 @@ export default function SpiGisPage() {
     return Array.from(set).sort();
   }, [rawFeatures]);
 
-  // Category counts across raw dataset
+  // Category counts
   const categoryCounts = useMemo(() => {
     const counts: Record<AccessoryCategory, number> = {
       valve: 0,
@@ -553,23 +661,17 @@ export default function SpiGisPage() {
   const filteredFeatures = useMemo(() => {
     return rawFeatures.filter((f) => {
       const p = f.properties;
+      if (selectedBranch !== "ALL" && p.branchName !== selectedBranch) return false;
 
-      // Filter by Branch
-      if (selectedBranch !== "ALL" && p.branchName !== selectedBranch) {
-        return false;
-      }
-
-      // Filter by Category
       if (selectedCategory !== "ALL") {
         const cat = getAccessoryCategory(p.categoryName, p.itemName);
         if (cat !== selectedCategory) return false;
       }
 
-      // Filter by Status
-      if (selectedStatus === "VERIFIED" && p.locationMismatch) return false;
-      if (selectedStatus === "MISMATCH" && !p.locationMismatch) return false;
+      const hasAnomaly = p.locationMismatch || Boolean(p.isCrossDistrict);
+      if (selectedStatus === "VERIFIED" && hasAnomaly) return false;
+      if (selectedStatus === "MISMATCH" && !hasAnomaly) return false;
 
-      // Filter by Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = p.itemName?.toLowerCase().includes(q);
@@ -586,33 +688,130 @@ export default function SpiGisPage() {
     });
   }, [rawFeatures, selectedBranch, selectedCategory, selectedStatus, searchQuery]);
 
-  // Group features by geographic coordinate bucket (5 decimals ~ 1 meter)
-  const coordinateGroups = useMemo(() => {
-    const groups = new Map<string, GeoFeature[]>();
-    filteredFeatures.forEach((f) => {
-      const key = `${f.geometry.coordinates[1].toFixed(5)},${f.geometry.coordinates[0].toFixed(5)}`;
-      const list = groups.get(key) || [];
-      list.push(f);
-      groups.set(key, list);
-    });
-    return groups;
-  }, [filteredFeatures]);
+  /* ─── Zoom-Adaptive Screen-Space Decluttering & Spiderfy Engine ─── */
+  const { displacedNodes, clusterMap } = useMemo(() => {
+    const degPerPixel = 360 / (256 * Math.pow(2, currentZoom));
+    const collisionThresholdPx = 36;
 
-  // Find all accessories sharing coordinate with selectedFeature
+    const sorted = [...filteredFeatures].sort(
+      (a, b) => a.properties.evidenceId - b.properties.evidenceId
+    );
+
+    interface ClusterBucket {
+      id: string;
+      features: GeoFeature[];
+      sumLat: number;
+      sumLon: number;
+    }
+
+    const clusters: ClusterBucket[] = [];
+
+    sorted.forEach((feat) => {
+      const lon = feat.geometry.coordinates[0];
+      const lat = feat.geometry.coordinates[1];
+      const cosLat = Math.cos((lat * Math.PI) / 180) || 1;
+
+      let matchedCluster: ClusterBucket | null = null;
+      for (const c of clusters) {
+        const cLat = c.sumLat / c.features.length;
+        const cLon = c.sumLon / c.features.length;
+        const dLatPx = (lat - cLat) / degPerPixel;
+        const dLonPx = ((lon - cLon) * cosLat) / degPerPixel;
+        const distPx = Math.sqrt(dLatPx * dLatPx + dLonPx * dLonPx);
+
+        if (distPx < collisionThresholdPx) {
+          matchedCluster = c;
+          break;
+        }
+      }
+
+      if (matchedCluster) {
+        matchedCluster.features.push(feat);
+        matchedCluster.sumLat += lat;
+        matchedCluster.sumLon += lon;
+      } else {
+        clusters.push({
+          id: `cluster-${feat.properties.evidenceId}`,
+          features: [feat],
+          sumLat: lat,
+          sumLon: lon,
+        });
+      }
+    });
+
+    const nodes: DisplacedNode[] = [];
+    const cMap = new Map<string, GeoFeature[]>();
+
+    clusters.forEach((c) => {
+      const total = c.features.length;
+      const centerLat = c.sumLat / total;
+      const centerLon = c.sumLon / total;
+      const cosLat = Math.cos((centerLat * Math.PI) / 180) || 1;
+      cMap.set(c.id, c.features);
+
+      if (total === 1) {
+        const f = c.features[0];
+        const rawLatLng: [number, number] = [
+          f.geometry.coordinates[1],
+          f.geometry.coordinates[0],
+        ];
+        nodes.push({
+          feature: f,
+          rawLatLng,
+          displayLatLng: rawLatLng,
+          clusterAnchorLatLng: rawLatLng,
+          clusterId: c.id,
+          clusterTotal: 1,
+          clusterIndex: 0,
+          isDisplaced: false,
+        });
+      } else {
+        const radiusPx = Math.min(44, Math.max(28, 22 + total * 5));
+        const offsetDeg = radiusPx * degPerPixel;
+
+        c.features.forEach((f, idx) => {
+          const angle = (2 * Math.PI * idx) / total - Math.PI / 4;
+          const dispLat = centerLat + offsetDeg * Math.cos(angle);
+          const dispLon = centerLon + (offsetDeg * Math.sin(angle)) / cosLat;
+
+          nodes.push({
+            feature: f,
+            rawLatLng: [f.geometry.coordinates[1], f.geometry.coordinates[0]],
+            displayLatLng: [dispLat, dispLon],
+            clusterAnchorLatLng: [centerLat, centerLon],
+            clusterId: c.id,
+            clusterTotal: total,
+            clusterIndex: idx,
+            isDisplaced: true,
+          });
+        });
+      }
+    });
+
+    return { displacedNodes: nodes, clusterMap: cMap };
+  }, [filteredFeatures, currentZoom]);
+
+  // Co-located features in the same cluster as selectedFeature
   const coLocatedFeatures = useMemo(() => {
     if (!selectedFeature) return [];
-    const key = `${selectedFeature.geometry.coordinates[1].toFixed(5)},${selectedFeature.geometry.coordinates[0].toFixed(5)}`;
-    return coordinateGroups.get(key) || [selectedFeature];
-  }, [selectedFeature, coordinateGroups]);
+    const node = displacedNodes.find(
+      (n) => n.feature.properties.evidenceId === selectedFeature.properties.evidenceId
+    );
+    if (!node) return [selectedFeature];
+    return clusterMap.get(node.clusterId) || [selectedFeature];
+  }, [selectedFeature, displacedNodes, clusterMap]);
 
-  // Counts
-  const verifiedCount = useMemo(
-    () => rawFeatures.filter((f) => !f.properties.locationMismatch).length,
+  // Summary counts
+  const anomalyCount = useMemo(
+    () =>
+      rawFeatures.filter(
+        (f) => f.properties.locationMismatch || Boolean(f.properties.isCrossDistrict)
+      ).length,
     [rawFeatures]
   );
-  const mismatchCount = useMemo(
-    () => rawFeatures.filter((f) => f.properties.locationMismatch).length,
-    [rawFeatures]
+  const verifiedCount = useMemo(
+    () => rawFeatures.length - anomalyCount,
+    [rawFeatures.length, anomalyCount]
   );
 
   const resetFilters = () => {
@@ -631,16 +830,11 @@ export default function SpiGisPage() {
   const handleCopyCoords = (lat: number, lon: number) => {
     const text = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     navigator.clipboard.writeText(text);
-    toast.success("Koordinat disalin ke clipboard", {
-      description: text,
-    });
+    toast.success("Koordinat WGS84 disalin", { description: text });
   };
 
   const handleOpenGoogleMaps = (lat: number, lon: number) => {
-    window.open(
-      `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
-      "_blank"
-    );
+    window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lon}`, "_blank");
   };
 
   const handleOpenGoogleStreetView = (lat: number, lon: number) => {
@@ -707,19 +901,19 @@ export default function SpiGisPage() {
   const POSTGIS_SQL_SCHEMA = `-- 1. Aktifkan Ekstensi PostGIS di PostgreSQL
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- 2. Buat Tabel Titik Material (Kompatibel 100% QGIS & SIMONA)
+-- 2. Buat Tabel Titik Material (Kompatibel 100% QGIS & Monitoring Aksesoris)
 CREATE TABLE IF NOT EXISTS pdam_material_gis (
     id SERIAL PRIMARY KEY,
-    item_code VARCHAR(50) NOT NULL,            -- e.g. MTR-001, AKS-004
-    item_name VARCHAR(150) NOT NULL,           -- e.g. Meter Air DN 15mm
+    item_code VARCHAR(50) NOT NULL,
+    item_name VARCHAR(150) NOT NULL,
     quantity INTEGER DEFAULT 1,
-    branch_name VARCHAR(100) NOT NULL,         -- e.g. Cabang Praya
-    reference_no VARCHAR(100),                 -- No SPK / Surat Jalan
-    photo_url TEXT,                            -- Bukti foto lapangan
-    location_mismatch BOOLEAN DEFAULT FALSE,   -- Deviasi lokasi
-    deviation_meters NUMERIC(8,2) DEFAULT 0,   -- Jarak deviasi (meter)
-    geom GEOMETRY(Point, 4326),                -- Koordinat fisik riil GPS
-    geom_plan GEOMETRY(Point, 4326),           -- Koordinat rencana SPK kantor
+    branch_name VARCHAR(100) NOT NULL,
+    reference_no VARCHAR(100),
+    photo_url TEXT,
+    location_mismatch BOOLEAN DEFAULT FALSE,
+    deviation_meters NUMERIC(8,2) DEFAULT 0,
+    geom GEOMETRY(Point, 4326),
+    geom_plan GEOMETRY(Point, 4326),
     verified_at TIMESTAMP WITH TIME ZONE,
     installed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -760,89 +954,145 @@ FROM pdam_material_gis;`;
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-3 h-[calc(100vh-3.5rem)] flex flex-col animate-page-enter">
-      <style>{RADAR_CSS}</style>
+    <div className="p-3 md:p-4 space-y-2.5 h-[calc(100vh-3.5rem)] flex flex-col">
+      <style>{GIS_CARTOGRAPHY_CSS}</style>
 
-      {/* ─── Top Header & Summary Statistics ─── */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0">
-        <div>
+      {/* ─── Clean White GIS Command Bar ─── */}
+      <div className="bg-white dark:bg-card border border-slate-200/90 dark:border-border rounded-xl px-3.5 py-2.5 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 shrink-0">
+        {/* Left: Title & Status Filter Pills */}
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-base md:text-lg font-bold tracking-tight text-slate-900 dark:text-foreground">
               Peta Material (GIS)
             </h1>
             <Badge
               variant="outline"
-              className="hidden sm:inline-flex text-[11px] font-normal border-border text-muted-foreground"
+              className="text-[10px] font-medium border-slate-200 text-slate-600 bg-slate-50"
             >
               Lombok Tengah
             </Badge>
           </div>
-          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-            Monitoring geospasial real-time, verifikasi titik fisik & Street View 360° perpipaan
-          </p>
-        </div>
 
-        {/* Live Status Indicators & Fullscreen Button */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background border border-border shadow-2xs text-xs">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="text-muted-foreground">Terverifikasi:</span>
-            <span className="font-semibold text-foreground">
-              {verifiedCount}
-            </span>
-          </div>
+          <div className="h-4 w-[1px] bg-slate-200 hidden sm:block" />
 
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background border border-border shadow-2xs text-xs">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-            </span>
-            <span className="text-muted-foreground">Mismatch:</span>
-            <span
-              className={`font-semibold ${
-                mismatchCount > 0 ? "text-rose-600" : "text-foreground"
+          {/* Clean Light Segmented Status Filter */}
+          <div className="flex items-center bg-slate-100 dark:bg-muted p-0.5 rounded-lg border border-slate-200/80 dark:border-border text-xs">
+            <button
+              type="button"
+              onClick={() => setSelectedStatus("ALL")}
+              className={`px-2.5 py-1 rounded-md transition-all font-medium ${
+                selectedStatus === "ALL"
+                  ? "bg-white dark:bg-background text-slate-900 dark:text-foreground shadow-2xs"
+                  : "text-slate-600 dark:text-muted-foreground hover:text-slate-900"
               }`}
             >
-              {mismatchCount}
-            </span>
+              Semua ({rawFeatures.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatus("VERIFIED")}
+              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 font-medium ${
+                selectedStatus === "VERIFIED"
+                  ? "bg-white dark:bg-background text-emerald-700 shadow-2xs"
+                  : "text-slate-600 dark:text-muted-foreground hover:text-slate-900"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Terverifikasi ({verifiedCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatus("MISMATCH")}
+              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 font-medium ${
+                selectedStatus === "MISMATCH"
+                  ? "bg-white dark:bg-background text-rose-700 shadow-2xs"
+                  : "text-slate-600 dark:text-muted-foreground hover:text-slate-900"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Anomali ({anomalyCount})
+            </button>
           </div>
+        </div>
+
+        {/* Right: Search, Filters & Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative w-full sm:w-52">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <Input
+              placeholder="Cari material, kode, SPK..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 pr-7 h-8 text-xs bg-white dark:bg-background border-slate-200"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="w-[150px]">
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger className="h-8 text-xs bg-white dark:bg-background border-slate-200 px-2.5">
+                <SelectValue placeholder="Semua Cabang" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Semua Cabang</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b} value={b}>
+                    {b}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-[168px]">
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="h-8 text-xs bg-white dark:bg-background border-slate-200 px-2.5">
+                <SelectValue placeholder="Semua Kategori" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Semua Kategori ({rawFeatures.length})</SelectItem>
+                <SelectItem value="valve">Gate Valve ({categoryCounts.valve})</SelectItem>
+                <SelectItem value="pipa">Pipa HDPE/PVC ({categoryCounts.pipa})</SelectItem>
+                <SelectItem value="meter">Meter Air ({categoryCounts.meter})</SelectItem>
+                <SelectItem value="fitting">Aksesoris &amp; Fitting ({categoryCounts.fitting})</SelectItem>
+                {categoryCounts.other > 0 && (
+                  <SelectItem value="other">Lainnya ({categoryCounts.other})</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isFiltered && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="h-8 px-2 text-xs text-slate-500 hover:text-slate-900 gap-1"
+              title="Reset Filter"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset
+            </Button>
+          )}
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => setFitTrigger((prev) => prev + 1)}
-            className="h-8 text-xs gap-1.5"
+            className="h-8 px-2.5 text-xs gap-1.5 border-slate-200 bg-white hover:bg-slate-50"
             title="Pusatkan seluruh titik material"
           >
             <Crosshair className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Pusatkan</span>
+            <span className="hidden xl:inline">Pusatkan</span>
           </Button>
 
-          {/* Fullscreen Map Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleMapFullscreen}
-            className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
-            title={isMapFullscreen ? "Keluar dari Layar Penuh" : "Mode Layar Penuh (Fullscreen)"}
-          >
-            {isMapFullscreen ? (
-              <>
-                <Minimize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Normal</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Layar Penuh</span>
-              </>
-            )}
-          </Button>
-
-          {/* Integrasi QGIS & Server PostGIS Button */}
           <Button
             variant="outline"
             size="sm"
@@ -851,606 +1101,407 @@ FROM pdam_material_gis;`;
               setPingStatus({ testing: false });
               setQgisDialogOpen(true);
             }}
-            className={`h-8 text-xs gap-1.5 shadow-2xs ${
+            className={`h-8 px-2.5 text-xs gap-1.5 ${
               extConfig.enabled
-                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-semibold"
-                : "border-border hover:bg-muted"
+                ? "border-emerald-500/50 text-emerald-700 bg-emerald-50"
+                : "border-slate-200 bg-white hover:bg-slate-50"
             }`}
-            title="Integrasi QGIS Desktop & Database PostGIS Server IT"
+            title="Integrasi QGIS & PostGIS"
           >
             <Database className="w-3.5 h-3.5 text-sky-600" />
-            <span className="hidden sm:inline">
-              {extConfig.enabled ? "Server PostGIS: Aktif" : "QGIS & PostGIS"}
-            </span>
+            <span className="hidden xl:inline">QGIS &amp; PostGIS</span>
           </Button>
-        </div>
-      </div>
 
-      {/* ─── Interactive Filter Toolbar ─── */}
-      <div className="bg-card border border-border/80 rounded-xl p-2.5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center gap-2.5 shrink-0">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Cari material, kode barang, atau No. SPK..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 text-xs bg-background"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Branch Selector */}
-        <div className="w-full md:w-48">
-          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="h-9 text-xs bg-background">
-              <SelectValue placeholder="Semua Cabang" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Semua Cabang (Lombok Tengah)</SelectItem>
-              {branches.map((b) => (
-                <SelectItem key={b} value={b}>
-                  {b}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Category Selector */}
-        <div className="w-full md:w-52">
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="h-9 text-xs bg-background">
-              <SelectValue placeholder="Semua Kategori Aksesoris" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Semua Kategori ({rawFeatures.length})</SelectItem>
-              <SelectItem value="valve">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                  Gate Valve & Valve ({categoryCounts.valve})
-                </span>
-              </SelectItem>
-              <SelectItem value="pipa">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                  Pipa HDPE / PVC ({categoryCounts.pipa})
-                </span>
-              </SelectItem>
-              <SelectItem value="meter">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-600"></span>
-                  Meter Air ({categoryCounts.meter})
-                </span>
-              </SelectItem>
-              <SelectItem value="fitting">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-purple-600"></span>
-                  Aksesoris & Fitting ({categoryCounts.fitting})
-                </span>
-              </SelectItem>
-              {categoryCounts.other > 0 && (
-                <SelectItem value="other">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-sky-600"></span>
-                    Material Lainnya ({categoryCounts.other})
-                  </span>
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Status Filter Segment */}
-        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border/60 text-xs">
-          <button
-            type="button"
-            onClick={() => setSelectedStatus("ALL")}
-            className={`px-2.5 py-1 rounded-md transition-all font-medium ${
-              selectedStatus === "ALL"
-                ? "bg-background text-foreground shadow-2xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Semua ({rawFeatures.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatus("VERIFIED")}
-            className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 font-medium ${
-              selectedStatus === "VERIFIED"
-                ? "bg-background text-emerald-700 shadow-2xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            Terverifikasi ({verifiedCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedStatus("MISMATCH")}
-            className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 font-medium ${
-              selectedStatus === "MISMATCH"
-                ? "bg-background text-rose-700 shadow-2xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-            Mismatch ({mismatchCount})
-          </button>
-        </div>
-
-        {/* Reset Filter Button */}
-        {isFiltered && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            onClick={resetFilters}
-            className="h-9 text-xs text-muted-foreground hover:text-foreground gap-1.5 px-2.5"
+            onClick={toggleMapFullscreen}
+            className="h-8 w-8 p-0 border-slate-200 bg-white hover:bg-slate-50"
+            title={isMapFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Reset
+            {isMapFullscreen ? (
+              <Minimize2 className="w-3.5 h-3.5" />
+            ) : (
+              <Maximize2 className="w-3.5 h-3.5" />
+            )}
           </Button>
-        )}
+        </div>
       </div>
 
       {/* ─── Map Workspace Container ─── */}
       <div
         ref={mapWrapperRef}
-        className={`flex-1 overflow-hidden border border-border shadow-xs relative bg-muted flex ${
-          isMapFullscreen ? "h-screen w-screen rounded-none z-[9999]" : "rounded-2xl"
+        className={`flex-1 overflow-hidden border border-slate-200/90 dark:border-border shadow-xs relative bg-slate-100 flex ${
+          isMapFullscreen ? "h-screen w-screen rounded-none z-[9999]" : "rounded-xl"
         }`}
       >
-        {/* Loading Spinner */}
-        {isLoading && (
-          <div className="absolute inset-0 z-[1000] bg-background/60 flex items-center justify-center backdrop-blur-xs">
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-xs font-medium text-muted-foreground">
-                Memuat data geospasial Lombok Tengah...
-              </p>
+        {/* ─── Map Canvas ─── */}
+        <div className="relative flex-1 h-full min-w-0 overflow-hidden">
+          {isLoading && (
+            <div className="absolute inset-0 z-[1000] bg-white/70 flex items-center justify-center backdrop-blur-xs">
+              <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-md text-slate-700 text-xs font-medium">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span>Memuat data geospasial Lombok Tengah...</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Empty State */}
-        {filteredFeatures.length === 0 && !isLoading && (
-          <div className="absolute inset-0 z-[500] pointer-events-none flex flex-col items-center justify-center bg-background/40 backdrop-blur-2xs">
-            <div className="bg-card border border-border rounded-xl p-5 shadow-lg max-w-sm text-center pointer-events-auto">
-              <MapPin className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2.5" />
-              <p className="text-sm font-semibold text-foreground">
-                Tidak Ada Titik yang Cocok
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Ubah kata kunci pencarian atau sesuaikan filter cabang dan
-                status.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={resetFilters}
-                className="mt-3 text-xs"
-              >
-                Reset Semua Filter
-              </Button>
+          {filteredFeatures.length === 0 && !isLoading && (
+            <div className="absolute inset-0 z-[500] pointer-events-none flex items-center justify-center">
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-lg max-w-xs text-center pointer-events-auto">
+                <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-slate-800">
+                  Tidak Ada Titik yang Cocok
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Sesuaikan filter cabang, kategori, atau kata kunci pencarian.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={resetFilters}
+                  className="mt-3 h-8 text-xs"
+                >
+                  Reset Filter
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ─── Leaflet Map Container ─── */}
-        <MapContainer
-          center={DEFAULT_CENTER}
-          zoom={DEFAULT_ZOOM}
-          className="w-full h-full z-0"
-          style={{ minHeight: 450 }}
-          scrollWheelZoom
-          zoomControl={false}
-        >
-          {/* Active Basemap TileLayer */}
-          <TileLayer
-            key={activeBasemap}
-            url={BASEMAP_CONFIGS[activeBasemap].url}
-            attribution={BASEMAP_CONFIGS[activeBasemap].attribution}
-            maxZoom={BASEMAP_CONFIGS[activeBasemap].maxZoom}
-            {...(BASEMAP_CONFIGS[activeBasemap].subdomains
-              ? { subdomains: BASEMAP_CONFIGS[activeBasemap].subdomains as any }
-              : {})}
-          />
+          <MapContainer
+            center={DEFAULT_CENTER}
+            zoom={DEFAULT_ZOOM}
+            className="w-full h-full z-0"
+            style={{ minHeight: 420 }}
+            scrollWheelZoom
+            zoomControl={false}
+            attributionControl={false}
+          >
+            {/* Active Basemap Tile Layers (Zero API Key Required) */}
+            {BASEMAP_CONFIGS[activeBasemap].layers.map((layerSpec, idx) => (
+              <TileLayer
+                key={`${activeBasemap}-${idx}`}
+                url={layerSpec.url}
+                maxZoom={BASEMAP_CONFIGS[activeBasemap].maxZoom}
+                maxNativeZoom={layerSpec.maxNativeZoom ?? 19}
+                opacity={layerSpec.opacity ?? 1}
+                {...(layerSpec.subdomains ? { subdomains: layerSpec.subdomains as any } : {})}
+              />
+            ))}
 
-          {/* Map bounds and flyTo controllers */}
-          <MapController
-            focusCoords={focusedCoords}
-            fitFeatures={fitTrigger > 0 ? filteredFeatures : null}
-          />
+            <MapController
+              focusCoords={focusedCoords}
+              focusZoom={focusZoom}
+              fitFeatures={fitTrigger > 0 ? filteredFeatures : null}
+              onZoomChange={setCurrentZoom}
+              onCursorMove={setCursorCoords}
+              inspectorOpen={Boolean(selectedFeature)}
+            />
 
-          {/* ─── GeoJSON Features Rendered as Category-Aware Distinct Dots ─── */}
-          {filteredFeatures.map((feature) => {
-            const { coordinates } = feature.geometry;
-            const props = feature.properties;
-            const isMismatch = props.locationMismatch;
-            const isSelected =
-              selectedFeature?.properties.evidenceId === props.evidenceId;
-            const category = getAccessoryCategory(props.categoryName, props.itemName);
+            {/* ─── Render Zoom-Adaptive Decluttered Ring-Dot Markers ─── */}
+            {displacedNodes.map((node) => {
+              const {
+                feature,
+                rawLatLng,
+                displayLatLng,
+                clusterTotal,
+                clusterIndex,
+                isDisplaced,
+              } = node;
+              const props = feature.properties;
+              const isMismatch = props.locationMismatch;
+              const isCrossDistrict = Boolean(props.isCrossDistrict);
+              const isSelected =
+                selectedFeature?.properties.evidenceId === props.evidenceId;
+              const category = getAccessoryCategory(props.categoryName, props.itemName);
 
-            const key = `${coordinates[1].toFixed(5)},${coordinates[0].toFixed(5)}`;
-            const group = coordinateGroups.get(key) || [feature];
-            const coLocatedTotal = group.length;
-            const coLocatedIndex = group.findIndex(
-              (gf) => gf.properties.evidenceId === props.evidenceId
-            );
+              return (
+                <div key={`feat-${props.evidenceId}`}>
+                  {/* Leader Line & True GPS Pin when multiple points are close */}
+                  {isDisplaced && (
+                    <>
+                      <Polyline
+                        positions={[rawLatLng, displayLatLng]}
+                        pathOptions={{
+                          color: isSelected ? "#2563eb" : "#64748b",
+                          dashArray: "3 3",
+                          weight: isSelected ? 2 : 1.5,
+                          opacity: 0.9,
+                        }}
+                      />
+                      {clusterIndex === 0 && (
+                        <Marker
+                          position={rawLatLng}
+                          icon={trueGpsAnchorIcon}
+                          interactive={false}
+                        />
+                      )}
+                    </>
+                  )}
 
-            // If more than 1 accessory at this coordinate, apply micro-radial offset (spiderfy rosette)
-            let markerPosition: [number, number] = [
-              coordinates[1],
-              coordinates[0],
-            ];
-
-            if (coLocatedTotal > 1 && coLocatedIndex >= 0) {
-              const angle = (2 * Math.PI * coLocatedIndex) / coLocatedTotal + Math.PI / 4;
-              const offsetRadius = 0.000095; // ~10.5 meter (leluasa terpisah, tidak saling menumpuk)
-              markerPosition = [
-                coordinates[1] + offsetRadius * Math.cos(angle),
-                coordinates[0] + offsetRadius * Math.sin(angle),
-              ];
-            }
-
-            return (
-              <div key={`feat-${props.evidenceId}`}>
-                {/* Visual Anchor Halo & Spider Line when multiple accessories share coordinate */}
-                {coLocatedTotal > 1 && (
-                  <>
-                    <Polyline
-                      positions={[
-                        [coordinates[1], coordinates[0]],
-                        markerPosition,
-                      ]}
+                  {/* Spatial Deviation Geofence Circle */}
+                  {isMismatch && (
+                    <Circle
+                      center={rawLatLng}
+                      radius={
+                        props.deviationMeters ? Math.max(props.deviationMeters, 30) : 35
+                      }
                       pathOptions={{
-                        color: "#94a3b8",
-                        dashArray: "2 3",
+                        color: "#e11d48",
+                        dashArray: "4 4",
+                        fillColor: "#e11d48",
+                        fillOpacity: 0.1,
                         weight: 1.5,
-                        opacity: 0.8,
                       }}
                     />
-                    {coLocatedIndex === 0 && (
-                      <Circle
-                        center={[coordinates[1], coordinates[0]]}
-                        radius={5}
+                  )}
+
+                  {/* Planned vs Actual Vector Line */}
+                  {isMismatch && props.plannedCoordinates && (
+                    <>
+                      <Polyline
+                        positions={[
+                          [props.plannedCoordinates[1], props.plannedCoordinates[0]],
+                          rawLatLng,
+                        ]}
                         pathOptions={{
-                          color: "#64748b",
-                          dashArray: "2 2",
-                          fillColor: "#94a3b8",
-                          fillOpacity: 0.25,
+                          color: "#d97706",
+                          dashArray: "4 4",
                           weight: 1.5,
                         }}
                       />
-                    )}
-                  </>
-                )}
-
-                {/* Visual Deviasi: Circle Geofence if Mismatch */}
-                {isMismatch && (
-                  <Circle
-                    center={[coordinates[1], coordinates[0]]}
-                    radius={
-                      props.deviationMeters
-                        ? Math.max(props.deviationMeters, 35)
-                        : 40
-                    }
-                    pathOptions={{
-                      color: "#ef4444",
-                      dashArray: "4 4",
-                      fillColor: "#ef4444",
-                      fillOpacity: 0.12,
-                      weight: 1.5,
-                    }}
-                  />
-                )}
-
-                {/* Visual Deviasi: Polyline Vector from Planned to Actual */}
-                {isMismatch && props.plannedCoordinates && (
-                  <>
-                    <Polyline
-                      positions={[
-                        [
+                      <Marker
+                        position={[
                           props.plannedCoordinates[1],
                           props.plannedCoordinates[0],
-                        ],
-                        [coordinates[1], coordinates[0]],
-                      ]}
-                      pathOptions={{
-                        color: "#f59e0b",
-                        dashArray: "5 5",
-                        weight: 2,
-                      }}
-                    />
-                    <Marker
-                      position={[
-                        props.plannedCoordinates[1],
-                        props.plannedCoordinates[0],
-                      ]}
-                      icon={plannedLocationDotIcon}
-                    >
-                      <Tooltip direction="top" offset={[0, -10]}>
-                        <div className="text-[11px] font-sans">
-                          <p className="font-semibold text-amber-700">
-                            Titik Rencana Awal (SPK)
-                          </p>
-                          <p className="text-muted-foreground font-mono">
-                            {props.plannedCoordinates[1].toFixed(6)},{" "}
-                            {props.plannedCoordinates[0].toFixed(6)}
-                          </p>
-                        </div>
-                      </Tooltip>
-                    </Marker>
-                  </>
-                )}
-
-                {/* The Category Dot Marker (Distinct per accessory type, pulses ONLY when selected) */}
-                <Marker
-                  position={markerPosition}
-                  icon={createCategoryDotIcon({
-                    category,
-                    isMismatch,
-                    isSelected,
-                    coLocatedTotal,
-                    coLocatedIndex,
-                  })}
-                  eventHandlers={{
-                    click: () => {
-                      setSelectedFeature(feature);
-                      setFocusedCoords([coordinates[1], coordinates[0]]);
-                    },
-                  }}
-                >
-                  {/* Subtle Hover Tooltip */}
-                  <Tooltip direction="top" offset={[0, -16]}>
-                    <div className="text-xs font-sans space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="w-2 h-2 rounded-full inline-block"
-                          style={{ backgroundColor: CATEGORY_CONFIG[category].color }}
-                        />
-                        <p className="font-semibold text-foreground">
-                          {props.itemName}
-                        </p>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        {props.branchName} • {props.quantity} Unit •{" "}
-                        <span className="font-medium" style={{ color: CATEGORY_CONFIG[category].color }}>
-                          {CATEGORY_CONFIG[category].shortLabel}
-                        </span>
-                      </p>
-                      {coLocatedTotal > 1 && (
-                        <p className="text-[10px] text-amber-600 font-semibold">
-                          📍 Titik gabungan ({coLocatedIndex + 1} dari {coLocatedTotal} aksesoris)
-                        </p>
-                      )}
-                      {props.isCrossDistrict ? (
-                        <p className="text-[10px] text-rose-600 font-bold">
-                          Lintas Wilayah: {props.detectedDistrict}
-                        </p>
-                      ) : isMismatch ? (
-                        <p className="text-[10px] text-rose-600 font-semibold">
-                          ⚠ Deviasi{" "}
-                          {props.deviationMeters
-                            ? `${Math.round(props.deviationMeters)}m`
-                            : ""}
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-emerald-600 font-medium">
-                          ✓ Terverifikasi ({props.detectedDistrict || "Presisi"})
-                        </p>
-                      )}
-                    </div>
-                  </Tooltip>
-                </Marker>
-              </div>
-            );
-          })}
-        </MapContainer>
-
-        {/* ─── Floating Basemap Switcher & Fullscreen (Top Right) ─── */}
-        <div className="absolute top-3 right-3 z-[400] flex items-center bg-card/90 dark:bg-card/90 backdrop-blur-md p-1 rounded-xl shadow-md border border-border text-xs gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveBasemap("google_satellite")}
-            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-xs font-medium ${
-              activeBasemap === "google_satellite"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-            title="Foto Udara Satelit Murni"
-          >
-            <Satellite className="w-3.5 h-3.5" />
-            <span>Foto Murni</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveBasemap("google_hybrid")}
-            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-xs font-medium ${
-              activeBasemap === "google_hybrid"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-            title="Satelit dengan Garis dan Nama Jalan"
-          >
-            <span>Satelit Hybrid</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveBasemap("osm")}
-            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-xs font-medium ${
-              activeBasemap === "osm"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-            title="Peta Jalan Standar OpenStreetMap"
-          >
-            <MapIcon className="w-3.5 h-3.5" />
-            <span>Jalan</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveBasemap("esri_clarity")}
-            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-xs font-medium ${
-              activeBasemap === "esri_clarity"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-            title="Esri Clarity (Arsip Foto Satelit Bebas Awan)"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Esri Clarity</span>
-          </button>
-
-          <div className="w-[1px] h-4 bg-border/80 mx-0.5" />
-
-          {/* Quick Fullscreen Button on Map */}
-          <button
-            type="button"
-            onClick={toggleMapFullscreen}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-            title={isMapFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
-          >
-            {isMapFullscreen ? (
-              <Minimize2 className="w-3.5 h-3.5 text-primary" />
-            ) : (
-              <Maximize2 className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </div>
-
-        {/* ─── Modern Telemetry Radar Legend (Bottom Left) ─── */}
-        <div className="absolute bottom-3 left-3 z-[400] bg-card/95 dark:bg-card/95 backdrop-blur-md rounded-2xl p-3.5 shadow-xl border border-border text-xs space-y-2.5 max-w-[280px]">
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-primary" /> Legenda GIS
-            </span>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              {filteredFeatures.length} Titik
-            </span>
-          </div>
-
-          {/* Kategori Aksesoris */}
-          <div className="space-y-1.5">
-            <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider block">
-              Kategori Aksesoris
-            </span>
-            <div className="space-y-1 text-[11px]">
-              {(["valve", "pipa", "meter", "fitting"] as AccessoryCategory[]).map((catKey) => {
-                const conf = CATEGORY_CONFIG[catKey];
-                const count = categoryCounts[catKey] || 0;
-                const isCatActive = selectedCategory === catKey;
-                return (
-                  <button
-                    key={catKey}
-                    type="button"
-                    onClick={() =>
-                      setSelectedCategory(selectedCategory === catKey ? "ALL" : catKey)
-                    }
-                    className={`w-full flex items-center justify-between px-2 py-1 rounded-lg transition-all text-left ${
-                      isCatActive
-                        ? "bg-primary/10 text-primary font-semibold ring-1 ring-primary/30"
-                        : "hover:bg-muted/70 text-foreground"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="relative inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white shadow-xs"
-                        style={{ border: `2px solid ${conf.color}` }}
+                        ]}
+                        icon={plannedLocationDotIcon}
                       >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: conf.color }}
-                        />
-                      </span>
-                      <span className="text-[11px] truncate">{conf.label}</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-muted-foreground ml-1">
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+                        <Tooltip direction="top" offset={[0, -8]}>
+                          <div className="text-[11px]">
+                            <p className="font-semibold text-amber-700">
+                              Titik Rencana SPK
+                            </p>
+                            <p className="font-mono text-[10px] text-slate-500">
+                              {props.plannedCoordinates[1].toFixed(6)},{" "}
+                              {props.plannedCoordinates[0].toFixed(6)}
+                            </p>
+                          </div>
+                        </Tooltip>
+                      </Marker>
+                    </>
+                  )}
 
-              {categoryCounts.other > 0 && (
+                  {/* High-Visibility Ring-Dot Marker */}
+                  <Marker
+                    position={displayLatLng}
+                    icon={createCategoryDotIcon({
+                      category,
+                      isMismatch,
+                      isCrossDistrict,
+                      isSelected,
+                      clusterTotal,
+                      clusterIndex,
+                    })}
+                    eventHandlers={{
+                      click: () => {
+                        setSelectedFeature(feature);
+                        setFocusZoom(null);
+                        setFocusedCoords(rawLatLng);
+                      },
+                    }}
+                  >
+                    <Tooltip direction="top" offset={[0, -14]}>
+                      <div className="space-y-0.5 min-w-[140px]">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ backgroundColor: CATEGORY_CONFIG[category].color }}
+                            />
+                            <span className="text-xs font-semibold text-slate-900">
+                              {props.itemName}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            #{props.evidenceId}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600">
+                          {props.branchName} &bull; {props.quantity} Unit
+                        </div>
+                        {clusterTotal > 1 && (
+                          <div className="text-[10px] font-medium text-blue-600">
+                            Titik gabungan ({clusterIndex + 1} dari {clusterTotal})
+                          </div>
+                        )}
+                        {isCrossDistrict ? (
+                          <div className="text-[10px] font-semibold text-rose-600">
+                            Lintas Wilayah: {props.detectedDistrict}
+                          </div>
+                        ) : isMismatch ? (
+                          <div className="text-[10px] font-semibold text-rose-600">
+                            Deviasi{" "}
+                            {props.deviationMeters
+                              ? `${Math.round(props.deviationMeters)}m`
+                              : "Lokasi"}
+                          </div>
+                        ) : null}
+                      </div>
+                    </Tooltip>
+                  </Marker>
+                </div>
+              );
+            })}
+          </MapContainer>
+
+          {/* ─── Top-Right: Clean White Basemap Switcher (No API Key Required) ─── */}
+          <div className="absolute top-3 right-3 z-[400] flex items-center bg-white/95 dark:bg-card/95 backdrop-blur-md p-1 rounded-xl border border-slate-200/90 dark:border-border shadow-md text-xs gap-1 flex-wrap">
+            {(
+              [
+                "esri_hybrid",
+                "osm",
+                "google_streets",
+                "esri_topo",
+                "google_satellite",
+              ] as BasemapType[]
+            ).map((bmKey) => {
+              const cfg = BASEMAP_CONFIGS[bmKey];
+              const isActive = activeBasemap === bmKey;
+              return (
                 <button
+                  key={bmKey}
                   type="button"
-                  onClick={() =>
-                    setSelectedCategory(selectedCategory === "other" ? "ALL" : "other")
-                  }
-                  className={`w-full flex items-center justify-between px-2 py-1 rounded-lg transition-all text-left ${
-                    selectedCategory === "other"
-                      ? "bg-primary/10 text-primary font-semibold ring-1 ring-primary/30"
-                      : "hover:bg-muted/70 text-foreground"
+                  onClick={() => setActiveBasemap(bmKey)}
+                  className={`px-2.5 py-1.5 rounded-lg transition-all text-xs font-medium ${
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-2xs"
+                      : "text-slate-600 dark:text-muted-foreground hover:text-slate-900 hover:bg-slate-100"
                   }`}
+                  title={cfg.name}
                 >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="relative inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white shadow-xs"
-                      style={{ border: `2px solid ${CATEGORY_CONFIG.other.color}` }}
-                    >
-                      <span
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: CATEGORY_CONFIG.other.color }}
-                      />
-                    </span>
-                    <span className="text-[11px] truncate">Material Lainnya</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-muted-foreground ml-1">
-                    {categoryCounts.other}
-                  </span>
+                  {cfg.shortName}
                 </button>
-              )}
-            </div>
+              );
+            })}
           </div>
 
-          {/* Status & Panduan Simbol */}
-          <div className="pt-2 border-t border-border/60 space-y-1.5 text-[11px]">
-            <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider block">
-              Status & Simbol
+          {/* ─── Bottom-Left: Clean White Legenda GIS Card (Restored Light Style) ─── */}
+          <div className="absolute bottom-3 left-3 z-[400] w-64 bg-white/95 dark:bg-card/95 text-slate-800 dark:text-foreground backdrop-blur-md rounded-xl border border-slate-200/90 dark:border-border shadow-lg text-xs overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setLegendCollapsed(!legendCollapsed)}
+              className="w-full px-3.5 py-2.5 flex items-center justify-between border-b border-slate-200/70 dark:border-border hover:bg-slate-50/80 transition-colors"
+            >
+              <span className="font-semibold text-slate-800 dark:text-foreground text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-primary" />
+                Legenda GIS
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[11px] text-slate-500">
+                  {filteredFeatures.length} Titik
+                </span>
+                {legendCollapsed ? (
+                  <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                )}
+              </div>
+            </button>
+
+            {!legendCollapsed && (
+              <div className="p-3 space-y-2.5">
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider block px-1">
+                    Kategori Aksesoris
+                  </span>
+                  {(["valve", "pipa", "meter", "fitting"] as AccessoryCategory[]).map(
+                    (catKey) => {
+                      const conf = CATEGORY_CONFIG[catKey];
+                      const count = categoryCounts[catKey] || 0;
+                      const isCatActive = selectedCategory === catKey;
+                      return (
+                        <button
+                          key={catKey}
+                          type="button"
+                          onClick={() =>
+                            setSelectedCategory(
+                              selectedCategory === catKey ? "ALL" : catKey
+                            )
+                          }
+                          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg transition-all text-left ${
+                            isCatActive
+                              ? "bg-primary/10 text-primary font-semibold ring-1 ring-primary/30"
+                              : "hover:bg-slate-100 text-slate-700 dark:text-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="relative inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white shadow-2xs shrink-0"
+                              style={{ border: `2px solid ${conf.color}` }}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{ backgroundColor: conf.color }}
+                              />
+                            </span>
+                            <span className="text-[11px] truncate">{conf.label}</span>
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-500 ml-1">
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/70 dark:border-border space-y-1.5 text-[11px]">
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider block px-1">
+                    Status &amp; Simbol
+                  </span>
+                  <div className="flex items-center gap-2 px-1">
+                    <span className="w-3 h-3 rounded-full bg-rose-600 border border-white shadow-2xs shrink-0" />
+                    <span className="text-slate-700 dark:text-foreground">
+                      Anomali Lokasi ({anomalyCount})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 px-1">
+                    <span className="w-3.5 h-3.5 rounded-full bg-slate-800 text-white text-[8px] font-bold flex items-center justify-center border border-white shrink-0">
+                      2
+                    </span>
+                    <span className="text-slate-600 dark:text-muted-foreground">
+                      Multi-Aksesoris (Titik Gabungan)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 px-1">
+                    <span className="w-3 h-3 rounded-full border border-dashed border-amber-600 bg-amber-500/20 shrink-0" />
+                    <span className="text-slate-600 dark:text-muted-foreground">
+                      Titik Rencana SPK Awal
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ─── Bottom-Right: Clean White Coordinate Readout Bar ─── */}
+          <div className="hidden sm:flex absolute bottom-3 right-3 z-[400] items-center gap-2 bg-white/95 dark:bg-card/95 text-slate-700 dark:text-foreground backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200/90 dark:border-border text-[11px] font-mono shadow-md pointer-events-none">
+            <span>
+              {cursorCoords
+                ? `${cursorCoords[0].toFixed(6)}, ${cursorCoords[1].toFixed(6)}`
+                : `${DEFAULT_CENTER[0].toFixed(4)}, ${DEFAULT_CENTER[1].toFixed(4)}`}
             </span>
-
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-3 w-3 items-center justify-center">
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600 border border-white"></span>
-              </span>
-              <span className="text-foreground">
-                Location Mismatch ({mismatchCount})
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="w-3.5 h-3.5 rounded-full bg-slate-800 text-white text-[8px] font-bold flex items-center justify-center border border-white">
-                2
-              </span>
-              <span className="text-muted-foreground">
-                Multi-Aksesoris (1 Titik Gabungan)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full border border-dashed border-amber-600 bg-amber-500/20"></span>
-              <span className="text-muted-foreground">
-                Titik Rencana SPK Awal
-              </span>
-            </div>
+            <span className="text-slate-300">|</span>
+            <span>Zoom {currentZoom}</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-primary font-semibold">WGS84</span>
           </div>
         </div>
 
-        {/* ─── Detail Material Inspector Panel (Slide-Over Card) ─── */}
+        {/* ─── Right Pane: Clean White Detail Inspector Panel ─── */}
         {selectedFeature && (
-          <div className="absolute top-3 right-3 bottom-3 z-[450] w-80 md:w-[420px] bg-card/98 backdrop-blur-md rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in slide-in-from-right-5 duration-200">
+          <aside className="w-full sm:w-80 md:w-[370px] h-full bg-white dark:bg-card border-l border-slate-200 dark:border-border flex flex-col z-[450] shrink-0">
             {/* Inspector Header */}
             {(() => {
               const currentCat = getAccessoryCategory(
@@ -1458,37 +1509,39 @@ FROM pdam_material_gis;`;
                 selectedFeature.properties.itemName
               );
               const catConf = CATEGORY_CONFIG[currentCat];
+              const isCross = Boolean(selectedFeature.properties.isCrossDistrict);
+              const isDev = selectedFeature.properties.locationMismatch;
 
               return (
-                <div className="p-4 bg-muted/30 border-b border-border/80 flex items-start justify-between gap-3">
-                  <div className="space-y-1.5 flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {selectedFeature.properties.isCrossDistrict && (
+                <div className="p-3.5 border-b border-slate-200/80 dark:border-border bg-slate-50/60 dark:bg-muted/20 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      {isCross ? (
                         <Badge
-                          variant="destructive"
-                          className="text-[10px] px-2 py-0.5 gap-1 font-semibold bg-rose-600 shadow-2xs"
+                          variant="outline"
+                          className="text-[10px] px-2 py-0 border-rose-300 bg-rose-50 text-rose-700 font-semibold"
                         >
-                          <AlertTriangle className="w-3 h-3" /> Lintas Kecamatan
+                          Lintas Kecamatan
                         </Badge>
-                      )}
-                      {selectedFeature.properties.locationMismatch && !selectedFeature.properties.isCrossDistrict && (
+                      ) : isDev ? (
                         <Badge
-                          variant="destructive"
-                          className="text-[10px] px-2 py-0.5 gap-1 font-semibold shadow-2xs"
+                          variant="outline"
+                          className="text-[10px] px-2 py-0 border-amber-300 bg-amber-50 text-amber-700 font-semibold"
                         >
-                          <AlertTriangle className="w-3 h-3" /> Deviasi Lokasi
+                          Deviasi Lokasi
                         </Badge>
-                      )}
-                      {!selectedFeature.properties.locationMismatch && !selectedFeature.properties.isCrossDistrict && (
-                        <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] px-2 py-0.5 gap-1 font-medium shadow-2xs">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Terverifikasi Resmi
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-2 py-0 border-emerald-300 bg-emerald-50 text-emerald-700 font-semibold"
+                        >
+                          Terverifikasi
                         </Badge>
                       )}
 
-                      {/* Category Badge */}
                       <Badge
                         variant="outline"
-                        className={`text-[10px] px-2 py-0.5 font-medium ${catConf.badgeClass}`}
+                        className={`text-[10px] px-2 py-0 font-medium ${catConf.badgeClass}`}
                       >
                         <span
                           className="w-1.5 h-1.5 rounded-full mr-1 inline-block"
@@ -1497,75 +1550,76 @@ FROM pdam_material_gis;`;
                         {catConf.shortLabel}
                       </Badge>
 
-                      <span className="text-[11px] font-mono text-muted-foreground ml-auto">
+                      <span className="font-mono text-slate-400 ml-auto">
                         #{selectedFeature.properties.evidenceId}
                       </span>
                     </div>
 
-                    <h3 className="font-bold text-base text-foreground leading-snug tracking-tight">
+                    <h3 className="font-bold text-base text-slate-900 dark:text-foreground leading-tight truncate">
                       {selectedFeature.properties.itemName}
                     </h3>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      Kode: <span className="text-foreground font-medium">{selectedFeature.properties.itemCode}</span> • SPK:{" "}
-                      <span className="text-foreground font-medium">{selectedFeature.properties.referenceNo}</span>
-                    </p>
+                    <div className="text-xs font-mono text-slate-500 flex items-center gap-2">
+                      <span>Kode: {selectedFeature.properties.itemCode}</span>
+                      <span>&bull;</span>
+                      <span>SPK: {selectedFeature.properties.referenceNo}</span>
+                    </div>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
+                  <button
+                    type="button"
                     onClick={() => setSelectedFeature(null)}
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl shrink-0"
+                    className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-500 hover:text-slate-900 transition-colors"
+                    title="Tutup"
                   >
                     <X className="w-4 h-4" />
-                  </Button>
+                  </button>
                 </div>
               );
             })()}
 
-            {/* Co-located Accessories Switcher (If multiple items share this coordinate) */}
+            {/* Cluster Node Switcher */}
             {coLocatedFeatures.length > 1 && (
-              <div className="px-4 py-2.5 bg-muted/50 border-b border-border/70 space-y-1.5 shrink-0">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-foreground flex items-center gap-1.5 text-[11px]">
-                    <Layers className="w-3.5 h-3.5 text-primary" />
-                    Titik Ini Memiliki {coLocatedFeatures.length} Aksesoris Terpasang
+              <div className="px-3.5 py-2.5 bg-slate-50 dark:bg-muted/35 border-b border-slate-200/80 dark:border-border space-y-1.5 shrink-0">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-semibold text-slate-700 dark:text-foreground">
+                    Titik Gabungan ({coLocatedFeatures.length} Aksesoris)
                   </span>
-                  <span className="text-[10px] text-muted-foreground">Pilih material</span>
+                  <span className="text-[10px] text-slate-400">Pilih titik</span>
                 </div>
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
                   {coLocatedFeatures.map((item, idx) => {
                     const itemCat = getAccessoryCategory(
                       item.properties.categoryName,
                       item.properties.itemName
                     );
                     const isCurrent =
-                      item.properties.evidenceId === selectedFeature.properties.evidenceId;
+                      item.properties.evidenceId ===
+                      selectedFeature.properties.evidenceId;
                     return (
                       <button
                         key={item.properties.evidenceId}
+                        type="button"
                         onClick={() => {
                           setSelectedFeature(item);
+                          setFocusZoom(null);
                           setFocusedCoords([
                             item.geometry.coordinates[1],
                             item.geometry.coordinates[0],
                           ]);
                         }}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-all ${
+                        className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 shrink-0 border transition-all ${
                           isCurrent
-                            ? "bg-primary text-primary-foreground shadow-xs ring-2 ring-primary/30"
-                            : "bg-background border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                            ? "bg-primary text-primary-foreground border-primary font-semibold shadow-2xs"
+                            : "bg-white border-slate-200 text-slate-600 hover:text-slate-900"
                         }`}
                       >
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
                           style={{ backgroundColor: CATEGORY_CONFIG[itemCat].color }}
                         />
-                        <span className="truncate max-w-[130px] font-sans">
+                        <span>#{idx + 1}</span>
+                        <span className="truncate max-w-[100px]">
                           {item.properties.itemName}
-                        </span>
-                        <span className="text-[10px] opacity-75 font-mono">
-                          #{item.properties.evidenceId}
                         </span>
                       </button>
                     );
@@ -1574,47 +1628,42 @@ FROM pdam_material_gis;`;
               </div>
             )}
 
-            {/* Inspector Body (Scrollable) */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-              {/* Evidence Installation Photo with Before/After Switcher */}
-              <div className="space-y-2">
+            {/* Inspector Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 text-xs">
+              {/* Evidence Photo */}
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Camera className="w-3.5 h-3.5 text-primary" /> Foto Bukti Lapangan
+                  <span className="text-xs font-semibold text-slate-800 dark:text-foreground">
+                    Foto Bukti Lapangan
                   </span>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-medium flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> GPS Watermark Verified
-                  </span>
+                  {selectedFeature.properties.photoBeforeUrl &&
+                    selectedFeature.properties.photoAfterUrl && (
+                      <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setActivePhotoTab("after")}
+                          className={`px-2 py-0.5 rounded-md transition-all ${
+                            activePhotoTab === "after"
+                              ? "bg-white text-slate-900 font-medium shadow-2xs"
+                              : "text-slate-500 hover:text-slate-900"
+                          }`}
+                        >
+                          Terpasang
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActivePhotoTab("before")}
+                          className={`px-2 py-0.5 rounded-md transition-all ${
+                            activePhotoTab === "before"
+                              ? "bg-white text-slate-900 font-medium shadow-2xs"
+                              : "text-slate-500 hover:text-slate-900"
+                          }`}
+                        >
+                          Sebelum
+                        </button>
+                      </div>
+                    )}
                 </div>
-
-                {/* Photo Tab Toggle (if before & after exist) */}
-                {selectedFeature.properties.photoBeforeUrl &&
-                  selectedFeature.properties.photoAfterUrl && (
-                    <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border text-xs mb-1">
-                      <button
-                        type="button"
-                        onClick={() => setActivePhotoTab("after")}
-                        className={`flex-1 py-1 rounded-md text-xs font-medium transition-all ${
-                          activePhotoTab === "after"
-                            ? "bg-background text-foreground shadow-xs"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Foto Sesudah (Terpasang)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActivePhotoTab("before")}
-                        className={`flex-1 py-1 rounded-md text-xs font-medium transition-all ${
-                          activePhotoTab === "before"
-                            ? "bg-background text-foreground shadow-xs"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Foto Sebelum (Galian)
-                      </button>
-                    </div>
-                  )}
 
                 {(() => {
                   const displayPhotoUrl =
@@ -1626,244 +1675,190 @@ FROM pdam_material_gis;`;
 
                   return displayPhotoUrl ? (
                     <div
-                      className="relative rounded-xl overflow-hidden border border-border group cursor-pointer aspect-video bg-muted shadow-xs"
+                      className="relative rounded-xl overflow-hidden border border-slate-200 group cursor-pointer aspect-[16/10] bg-slate-100"
                       onClick={() => setPreviewPhoto(displayPhotoUrl)}
                     >
                       <img
                         src={displayPhotoUrl}
-                        alt="Foto Pemasangan Material"
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
+                        alt="Foto Pemasangan"
+                        className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent flex items-end p-3">
-                        <div className="text-[11px] text-white space-y-0.5">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-2.5 flex items-end justify-between text-[11px] text-white">
+                        <div>
                           <p className="font-mono font-semibold">
                             {selectedFeature.geometry.coordinates[1].toFixed(6)},{" "}
                             {selectedFeature.geometry.coordinates[0].toFixed(6)}
                           </p>
-                          <p className="text-white/80 text-[10px]">
-                            {selectedFeature.properties.branchName} •{" "}
-                            {activePhotoTab === "before" ? "Kondisi Sebelum" : "Kondisi Terpasang"}
+                          <p className="text-[10px] text-white/80">
+                            {selectedFeature.properties.branchName}
                           </p>
                         </div>
-                      </div>
-                      <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white rounded-lg p-1.5 backdrop-blur-xs">
-                        <Eye className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-medium text-emerald-300">
+                          GPS Terverifikasi
+                        </span>
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 text-center space-y-1.5">
-                      <Camera className="w-7 h-7 mx-auto text-muted-foreground/40" />
-                      <p className="text-xs text-muted-foreground font-medium">
-                        Foto evidence fisik tersimpan di arsip digital cabang
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
+                      <p className="text-xs text-slate-400">
+                        Foto fisik belum dilampirkan
                       </p>
                     </div>
                   );
                 })()}
               </div>
 
-              {/* Deviasi Alert Box (If Location Mismatch) */}
-              {selectedFeature.properties.locationMismatch && (
-                <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-xl p-3.5 space-y-1.5 text-rose-900 dark:text-rose-200">
-                  <div className="flex items-center gap-1.5 font-semibold text-xs text-rose-700 dark:text-rose-300">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    Peringatan Deviasi Geospasial
-                  </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Terpasang sejauh{" "}
-                    <strong>
-                      {selectedFeature.properties.deviationMeters
-                        ? `${Math.round(selectedFeature.properties.deviationMeters)} meter`
-                        : "signifikan"}
-                    </strong>{" "}
-                    dari koordinat perencanaan teknis SPK awal.
+              {/* Clean Anomaly Notice (If applicable) */}
+              {(selectedFeature.properties.isCrossDistrict ||
+                selectedFeature.properties.locationMismatch) && (
+                <div className="border-l-3 border-rose-500 bg-rose-50/70 dark:bg-rose-950/20 px-3 py-2.5 rounded-r-lg border border-rose-200/70 space-y-1">
+                  <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">
+                    {selectedFeature.properties.isCrossDistrict
+                      ? "Anomali Lintas Kecamatan"
+                      : "Deviasi Lokasi SPK"}
                   </p>
-                  <p className="text-[10px] text-rose-700/80 dark:text-rose-300/80">
-                    Rekomendasi SPI: Sesuaikan dokumen as-built drawing jaringan dan validasi pipa cabang.
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                    {selectedFeature.properties.isCrossDistrict ? (
+                      <>
+                        Material milik{" "}
+                        <strong>{selectedFeature.properties.branchName}</strong>{" "}
+                        terdeteksi berada di{" "}
+                        <strong>
+                          {selectedFeature.properties.detectedDistrict ||
+                            "Kecamatan Lain"}
+                        </strong>
+                        .
+                      </>
+                    ) : (
+                      <>
+                        Bergeser{" "}
+                        <strong>
+                          {selectedFeature.properties.deviationMeters
+                            ? `${Math.round(selectedFeature.properties.deviationMeters)} meter`
+                            : "cukup jauh"}
+                        </strong>{" "}
+                        dari titik rencana awal.
+                      </>
+                    )}
                   </p>
                 </div>
               )}
 
-              {/* Anomali Lintas Kecamatan Banner */}
-              {selectedFeature.properties.isCrossDistrict && (
-                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs space-y-1 text-red-700 dark:text-red-300">
-                  <div className="flex items-center gap-1.5 font-bold text-red-600 dark:text-red-400">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Temuan: Anomali Lintas Kecamatan</span>
+              {/* Clean White Attribute Table */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-800 dark:text-foreground block">
+                  Informasi Teknis &amp; Lokasi
+                </span>
+
+                <div className="border border-slate-200/90 dark:border-border rounded-xl divide-y divide-slate-100 dark:divide-border bg-white dark:bg-background text-xs overflow-hidden">
+                  <div className="grid grid-cols-[115px_1fr] px-3 py-2 items-center">
+                    <span className="text-slate-500">Cabang</span>
+                    <span className="font-semibold text-slate-900 dark:text-foreground text-right truncate">
+                      {selectedFeature.properties.branchName}
+                    </span>
                   </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Material tercatat milik <strong>{selectedFeature.properties.branchName}</strong>, namun koordinat GPS terdeteksi berada di{" "}
-                    <strong>{selectedFeature.properties.detectedDistrict || "Kecamatan Lain"}</strong>.
-                  </p>
-                  {selectedFeature.properties.crossDistrictNotes && (
-                    <p className="text-[10px] font-mono text-muted-foreground pt-0.5">
-                      {selectedFeature.properties.crossDistrictNotes}
-                    </p>
+
+                  <div className="grid grid-cols-[115px_1fr] px-3 py-2 items-center">
+                    <span className="text-slate-500">Petugas Pasang</span>
+                    <span className="font-medium text-slate-800 dark:text-foreground text-right truncate">
+                      {selectedFeature.properties.technicianNames ||
+                        selectedFeature.properties.capturedByName ||
+                        "Tim Lapangan Cabang"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[115px_1fr] px-3 py-2 items-center">
+                    <span className="text-slate-500">Jumlah Pasang</span>
+                    <span className="font-semibold text-slate-900 dark:text-foreground text-right">
+                      {selectedFeature.properties.quantity} Unit
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[115px_1fr] px-3 py-2 items-center">
+                    <span className="text-slate-500">Waktu Pasang</span>
+                    <span className="font-medium text-slate-800 dark:text-foreground text-right">
+                      {(() => {
+                        const dateVal =
+                          selectedFeature.properties.installedAt ||
+                          selectedFeature.properties.clientCaptureTime ||
+                          selectedFeature.properties.verifiedAt;
+                        if (!dateVal) return "-";
+                        try {
+                          const d = new Date(dateVal);
+                          return `${d.toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}, ${d.toLocaleTimeString("id-ID", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`;
+                        } catch {
+                          return String(dateVal);
+                        }
+                      })()}
+                    </span>
+                  </div>
+
+                  {selectedFeature.properties.detectedDistrict && (
+                    <div className="grid grid-cols-[115px_1fr] px-3 py-2 items-center">
+                      <span className="text-slate-500">Wilayah GPS</span>
+                      <span className="font-medium text-slate-800 dark:text-foreground text-right">
+                        {selectedFeature.properties.detectedDistrict}
+                      </span>
+                    </div>
                   )}
-                </div>
-              )}
 
-              {/* ─── DATA TEKNIS & LOKASI (Clean Enterprise Inspector) ─── */}
-              <div className="bg-card border border-border rounded-xl p-3.5 space-y-3 text-xs shadow-2xs">
-                <div className="flex items-center justify-between border-b border-border/70 pb-2">
-                  <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-primary" /> Data Teknis & Lokasi
-                  </span>
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    SIMONA GIS
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  {/* Siapa Yang Pasang */}
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] font-medium">
-                      Petugas / Teknisi Pemasang
-                    </span>
-                    <span className="font-semibold text-foreground flex items-center gap-1.5 mt-1">
-                      <Users className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="truncate" title={selectedFeature.properties.technicianNames || selectedFeature.properties.capturedByName || "Tim Lapangan Cabang"}>
-                        {selectedFeature.properties.technicianNames ||
-                          selectedFeature.properties.capturedByName ||
-                          "Tim Lapangan Cabang"}
-                      </span>
+                  <div className="grid grid-cols-[115px_1fr] px-3 py-2 items-center">
+                    <span className="text-slate-500">Akurasi GPS</span>
+                    <span className="font-medium text-emerald-600 text-right">
+                      {selectedFeature.properties.gpsAccuracy
+                        ? `±${selectedFeature.properties.gpsAccuracy.toFixed(1)} meter`
+                        : "Presisi Tinggi (<5m)"}
                     </span>
                   </div>
 
-                  {/* Tanggal Dipasang */}
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] font-medium">
-                      Tanggal & Waktu Dipasang
-                    </span>
-                    <span className="font-semibold text-foreground flex items-center gap-1.5 mt-1">
-                      <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="truncate">
-                        {(() => {
-                          const dateVal =
-                            selectedFeature.properties.installedAt ||
-                            selectedFeature.properties.clientCaptureTime ||
-                            selectedFeature.properties.verifiedAt;
-                          if (!dateVal) return "-";
-                          try {
-                            const d = new Date(dateVal);
-                            return `${d.toLocaleDateString("id-ID", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}, ${d.toLocaleTimeString("id-ID", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })} WITA`;
-                          } catch {
-                            return String(dateVal);
-                          }
-                        })()}
-                      </span>
-                    </span>
-                  </div>
-
-                  {/* Cabang Pelaksana */}
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] font-medium">
-                      Cabang Pelaksana
-                    </span>
-                    <span className="font-semibold text-foreground flex items-center gap-1.5 mt-1">
-                      <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span className="truncate">{selectedFeature.properties.branchName}</span>
-                    </span>
-                  </div>
-
-                  {/* Jumlah Terpasang */}
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] font-medium">
-                      Jumlah Terpasang
-                    </span>
-                    <span className="font-semibold text-foreground flex items-center gap-1.5 mt-1">
-                      <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span>{selectedFeature.properties.quantity} Unit</span>
-                    </span>
-                  </div>
-
-                  {/* Waktu Verifikasi SPI */}
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] font-medium">
-                      Waktu Verifikasi SPI
-                    </span>
-                    <span className="font-medium text-foreground flex items-center gap-1.5 mt-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>
-                        {selectedFeature.properties.verifiedAt
-                          ? new Date(selectedFeature.properties.verifiedAt).toLocaleDateString("id-ID", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "-"}
-                      </span>
-                    </span>
-                  </div>
-
-                  {/* Akurasi GPS */}
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] font-medium">
-                      Akurasi GPS Perangkat
-                    </span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mt-1">
-                      <Crosshair className="w-3.5 h-3.5 shrink-0" />
-                      <span>
-                        {selectedFeature.properties.gpsAccuracy
-                          ? `±${selectedFeature.properties.gpsAccuracy.toFixed(2)} meter`
-                          : "High Precision (<5m)"}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Field Koordinat Lapangan WGS84 */}
-                <div className="pt-2.5 border-t border-border/70 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1 font-medium">
-                      <Compass className="w-3 h-3" /> Koordinat Lapangan (WGS84)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleCopyCoords(
-                          selectedFeature.geometry.coordinates[1],
-                          selectedFeature.geometry.coordinates[0]
-                        )
-                      }
-                      className="text-primary hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <Copy className="w-3 h-3" /> Salin
-                    </button>
-                  </div>
-                  <div className="font-mono text-xs bg-muted/60 px-3 py-2 rounded-lg border border-border/80 text-foreground flex items-center justify-between">
-                    <span>
+                  <div className="px-3 py-2.5 bg-slate-50/70 dark:bg-muted/20 space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Koordinat WGS84</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyCoords(
+                            selectedFeature.geometry.coordinates[1],
+                            selectedFeature.geometry.coordinates[0]
+                          )
+                        }
+                        className="text-primary hover:underline flex items-center gap-1 font-medium"
+                      >
+                        <Copy className="w-3 h-3" /> Salin
+                      </button>
+                    </div>
+                    <div className="font-mono text-xs text-slate-800 dark:text-foreground select-all">
                       {selectedFeature.geometry.coordinates[1].toFixed(7)},{" "}
                       {selectedFeature.geometry.coordinates[0].toFixed(7)}
-                    </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Inspector Footer Action Buttons */}
-            <div className="p-3.5 bg-muted/30 border-t border-border/80 flex items-center gap-2">
+            {/* Clean Footer Actions */}
+            <div className="p-3 border-t border-slate-200/80 dark:border-border bg-slate-50/50 dark:bg-muted/15 flex items-center gap-2 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 h-9 text-xs gap-1.5 border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 font-medium"
+                className="flex-1 h-8 text-xs gap-1.5 border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
                 onClick={() => setStreetViewFeature(selectedFeature)}
-                title="Buka panorama 360° kondisi jalan & fisik di titik pipa"
               >
                 <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                Street View 360°
+                Street View 360&deg;
               </Button>
 
               <Button
                 variant="default"
                 size="sm"
-                className="flex-1 h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs font-medium"
+                className="flex-1 h-8 text-xs gap-1.5"
                 onClick={() =>
                   handleOpenGoogleMaps(
                     selectedFeature.geometry.coordinates[1],
@@ -1878,92 +1873,80 @@ FROM pdam_material_gis;`;
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 w-9 p-0 text-xs shrink-0"
-                onClick={() =>
+                className="h-8 w-8 p-0 shrink-0 border-slate-200 bg-white hover:bg-slate-50"
+                onClick={() => {
+                  setFocusZoom(18);
                   setFocusedCoords([
                     selectedFeature.geometry.coordinates[1],
                     selectedFeature.geometry.coordinates[0],
-                  ])
-                }
-                title="Pusatkan kamera ke titik ini"
+                  ]);
+                }}
+                title="Perbesar ke titik ini"
               >
-                <Crosshair className="w-4 h-4" />
+                <Crosshair className="w-3.5 h-3.5" />
               </Button>
             </div>
-          </div>
+          </aside>
         )}
 
-        {/* ─── Interactive Street View 360° Dialog ─── */}
+        {/* ─── Street View 360° Modal ─── */}
         {streetViewFeature && (
-          <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[3000] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 md:p-6">
             <div
-              className={`relative bg-card rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
+              className={`relative bg-white dark:bg-card rounded-xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden ${
                 isStreetViewFullscreen
                   ? "w-full h-full rounded-none"
-                  : "w-full max-w-5xl h-[88vh]"
+                  : "w-full max-w-5xl h-[86vh]"
               }`}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Street View Dialog Header */}
-              <div className="p-3.5 md:p-4 bg-muted/50 border-b border-border flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                    <Eye className="w-5 h-5" />
+              <div className="px-4 py-3 bg-slate-50 dark:bg-muted/40 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-foreground">
+                      Street View 360&deg; Panorama
+                    </h2>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                      {streetViewFeature.geometry.coordinates[1].toFixed(6)},{" "}
+                      {streetViewFeature.geometry.coordinates[0].toFixed(6)}
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm md:text-base font-semibold text-foreground">
-                        Street View 360° Panorama
-                      </h2>
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] font-mono border-emerald-500/40 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
-                      >
-                        Live Telemetry
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {streetViewFeature.properties.itemName} •{" "}
-                      {streetViewFeature.properties.branchName} • GPS:{" "}
-                      <span className="font-mono text-foreground">
-                        {streetViewFeature.geometry.coordinates[1].toFixed(6)},{" "}
-                        {streetViewFeature.geometry.coordinates[0].toFixed(6)}
-                      </span>
-                    </p>
-                  </div>
+                  <p className="text-xs text-slate-500 truncate">
+                    {streetViewFeature.properties.itemName} &bull;{" "}
+                    {streetViewFeature.properties.branchName}
+                  </p>
                 </div>
 
-                {/* Street View Header Actions */}
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center bg-slate-200/70 p-0.5 rounded-lg border border-slate-200 text-xs">
                     <button
                       type="button"
                       onClick={() => setStreetViewMode("pano")}
-                      className={`px-2.5 py-1 rounded-md transition-all font-medium text-xs ${
+                      className={`px-2.5 py-1 rounded-md font-medium text-xs ${
                         streetViewMode === "pano"
-                          ? "bg-primary text-primary-foreground shadow-2xs"
-                          : "text-muted-foreground hover:text-foreground"
+                          ? "bg-white text-slate-900 shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
-                      Panorama 360°
+                      Panorama 360&deg;
                     </button>
                     <button
                       type="button"
                       onClick={() => setStreetViewMode("map")}
-                      className={`px-2.5 py-1 rounded-md transition-all font-medium text-xs ${
+                      className={`px-2.5 py-1 rounded-md font-medium text-xs ${
                         streetViewMode === "map"
-                          ? "bg-primary text-primary-foreground shadow-2xs"
-                          : "text-muted-foreground hover:text-foreground"
+                          ? "bg-white text-slate-900 shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
-                      Google Maps 3D
+                      Peta Detail
                     </button>
                   </div>
 
                   <Button
-                    variant="default"
+                    variant="outline"
                     size="sm"
-                    className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                    className="h-8 text-xs gap-1"
                     onClick={() =>
                       handleOpenGoogleStreetView(
                         streetViewFeature.geometry.coordinates[1],
@@ -1972,35 +1955,26 @@ FROM pdam_material_gis;`;
                     }
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Buka Google Maps Penuh
+                    Buka Google Maps
                   </Button>
 
-                  {/* Toggle Fullscreen Modal */}
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 rounded-lg"
-                    onClick={() =>
-                      setIsStreetViewFullscreen(!isStreetViewFullscreen)
-                    }
-                    title={
-                      isStreetViewFullscreen
-                        ? "Keluar Layar Penuh"
-                        : "Layar Penuh (Fullscreen)"
-                    }
+                    className="h-8 w-8"
+                    onClick={() => setIsStreetViewFullscreen(!isStreetViewFullscreen)}
                   >
                     {isStreetViewFullscreen ? (
-                      <Minimize2 className="w-4 h-4 text-primary" />
+                      <Minimize2 className="w-3.5 h-3.5" />
                     ) : (
-                      <Maximize2 className="w-4 h-4" />
+                      <Maximize2 className="w-3.5 h-3.5" />
                     )}
                   </Button>
 
-                  {/* Close Dialog */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg"
+                    className="h-8 w-8"
                     onClick={() => {
                       setStreetViewFeature(null);
                       setIsStreetViewFullscreen(false);
@@ -2011,8 +1985,7 @@ FROM pdam_material_gis;`;
                 </div>
               </div>
 
-              {/* Street View Iframe Body */}
-              <div className="flex-1 relative bg-black flex flex-col overflow-hidden">
+              <div className="flex-1 relative bg-black">
                 <iframe
                   key={`${streetViewFeature.properties.evidenceId}-${streetViewMode}`}
                   title="Street View 360"
@@ -2025,32 +1998,6 @@ FROM pdam_material_gis;`;
                   allowFullScreen
                   loading="lazy"
                 />
-
-                {/* Subtle Interactive Instruction Bar */}
-                <div className="absolute bottom-3 left-3 right-3 pointer-events-none flex justify-center">
-                  <div className="bg-black/85 backdrop-blur-md text-white text-[11px] px-4 py-2 rounded-full shadow-lg border border-white/10 flex items-center gap-2.5 pointer-events-auto">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <span>
-                      {streetViewMode === "pano"
-                        ? "Putar panorama 360° dengan mouse/sentuhan • Jika jalan belum tercover mobil Google:"
-                        : "Peta lokasi presisi koordinat GPS material • Untuk panorama 360°:"}
-                    </span>
-                    <button
-                      onClick={() =>
-                        handleOpenGoogleStreetView(
-                          streetViewFeature.geometry.coordinates[1],
-                          streetViewFeature.geometry.coordinates[0]
-                        )
-                      }
-                      className="text-emerald-400 hover:text-emerald-300 font-semibold underline flex items-center gap-1"
-                    >
-                      Buka di Google Maps <ExternalLink className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -2059,23 +2006,23 @@ FROM pdam_material_gis;`;
         {/* ─── Photo Lightbox Modal ─── */}
         {previewPhoto && (
           <div
-            className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+            className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4"
             onClick={() => setPreviewPhoto(null)}
           >
             <div
-              className="relative max-w-3xl max-h-[85vh] rounded-2xl overflow-hidden shadow-2xl bg-card border border-border"
+              className="relative max-w-3xl max-h-[85vh] rounded-xl overflow-hidden shadow-2xl bg-white border border-slate-200"
               onClick={(e) => e.stopPropagation()}
             >
               <img
                 src={previewPhoto}
-                alt="Detail Evidence Pemasangan"
-                className="w-full h-auto max-h-[80vh] object-contain"
+                alt="Observasi Pemasangan"
+                className="w-full h-auto max-h-[82vh] object-contain"
               />
               <Button
                 variant="secondary"
                 size="icon"
                 onClick={() => setPreviewPhoto(null)}
-                className="absolute top-3 right-3 rounded-full h-8 w-8 bg-black/60 text-white hover:bg-black/80"
+                className="absolute top-3 right-3 rounded-full h-8 w-8 bg-black/70 text-white hover:bg-black"
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -2086,31 +2033,31 @@ FROM pdam_material_gis;`;
         {/* ─── Dialog Integrasi QGIS & Server Database PostGIS ─── */}
         <Dialog open={qgisDialogOpen} onOpenChange={setQgisDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
-            <DialogHeader className="p-5 pb-3 border-b border-border bg-muted/20">
+            <DialogHeader className="p-4 border-b border-border bg-muted/20">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-gradient-to-tr from-sky-500/15 to-emerald-500/15 text-sky-600 border border-sky-500/20 shadow-2xs">
-                  <Database className="w-5 h-5" />
+                <div className="p-2 rounded-lg bg-sky-50 border border-sky-200 text-sky-600">
+                  <Database className="w-4 h-4" />
                 </div>
                 <div>
-                  <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                    Integrasi Server PostGIS & QGIS Desktop
-                    <Badge variant="outline" className="text-[10px] py-0 border-sky-500/30 text-sky-600">
-                      Enterprise GIS
+                  <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                    Integrasi Server PostGIS &amp; QGIS Desktop
+                    <Badge variant="outline" className="text-[10px] font-mono py-0">
+                      EPSG:4326
                     </Badge>
                   </DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                    Sinkronisasi dua arah antara QGIS, database PostgreSQL/PostGIS server IT, dan peta tracking SIMONA.
+                    Sinkronisasi dua arah antara QGIS Desktop, PostgreSQL/PostGIS, dan Peta Monitoring Aksesoris.
                   </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
 
             <Tabs defaultValue="server" className="flex-1 flex flex-col overflow-hidden">
-              <div className="px-5 pt-3 border-b border-border bg-card">
-                <TabsList className="grid grid-cols-3 h-9 text-xs">
+              <div className="px-4 pt-2.5 border-b border-border bg-card">
+                <TabsList className="grid grid-cols-3 h-8 text-xs">
                   <TabsTrigger value="server" className="gap-1.5 text-xs">
                     <Server className="w-3.5 h-3.5" />
-                    Sumber Server IT
+                    Server GIS IT
                   </TabsTrigger>
                   <TabsTrigger value="qgis" className="gap-1.5 text-xs">
                     <Network className="w-3.5 h-3.5" />
@@ -2123,13 +2070,17 @@ FROM pdam_material_gis;`;
                 </TabsList>
               </div>
 
-              {/* TAB 1: Sumber Server IT */}
-              <TabsContent value="server" className="flex-1 overflow-y-auto p-5 space-y-4 m-0 text-xs">
-                <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between gap-3">
+              <TabsContent
+                value="server"
+                className="flex-1 overflow-y-auto p-4 space-y-3.5 m-0 text-xs"
+              >
+                <div className="p-3 rounded-lg border border-border bg-muted/20 flex items-center justify-between gap-3">
                   <div className="space-y-0.5">
-                    <p className="font-semibold text-foreground text-xs">Gunakan Server GIS IT Mandiri</p>
+                    <p className="font-semibold text-foreground text-xs">
+                      Gunakan Endpoint Server GIS Eksternal
+                    </p>
                     <p className="text-[11px] text-muted-foreground">
-                      Jika diaktifkan, peta akan membaca titik koordinat langsung dari endpoint server IT kantor Anda.
+                      Baca layer GeoJSON langsung dari server PostGIS / GeoServer instansi.
                     </p>
                   </div>
                   <Switch
@@ -2140,212 +2091,183 @@ FROM pdam_material_gis;`;
                   />
                 </div>
 
-                <div className="space-y-3 pt-1">
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-foreground">Protokol / Tipe Server</label>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="font-medium text-foreground">Tipe Layanan Spasial</label>
                     <Select
                       value={tempExtConfig.serverType}
                       onValueChange={(val: any) =>
                         setTempExtConfig({ ...tempExtConfig, serverType: val })
                       }
                     >
-                      <SelectTrigger className="h-9 text-xs">
+                      <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="postgis_api">REST API PostgreSQL / PostGIS (GeoJSON)</SelectItem>
-                        <SelectItem value="geoserver_wfs">GeoServer WFS Service (JSON)</SelectItem>
-                        <SelectItem value="custom_geojson">Endpoint Web Kustom (GeoJSON URL)</SelectItem>
+                        <SelectItem value="postgis_api">
+                          REST API PostgreSQL / PostGIS (GeoJSON)
+                        </SelectItem>
+                        <SelectItem value="geoserver_wfs">
+                          GeoServer WFS Output (GeoJSON)
+                        </SelectItem>
+                        <SelectItem value="custom_geojson">
+                          Custom GeoJSON Endpoint
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-foreground flex items-center justify-between">
-                      <span>URL Endpoint Server GIS IT</span>
-                      <span className="text-[10px] text-muted-foreground font-normal">Mendukung IP Lokal / Domain</span>
-                    </label>
+                  <div className="space-y-1">
+                    <label className="font-medium text-foreground">URL Endpoint GeoJSON</label>
                     <Input
-                      placeholder="Contoh: http://192.168.1.50:8000/api/gis/materials atau https://gis.pdam.co.id/api/pipes"
+                      placeholder="https://gis.pdam.go.id/api/gis/materials"
                       value={tempExtConfig.serverUrl}
                       onChange={(e) =>
                         setTempExtConfig({ ...tempExtConfig, serverUrl: e.target.value })
                       }
-                      className="h-9 text-xs font-mono"
+                      className="h-8 text-xs font-mono"
                     />
-                    <p className="text-[10px] text-muted-foreground">
-                      Endpoint harus mengembalikan format standar <code>FeatureCollection</code> GeoJSON (WGS84 / EPSG:4326).
-                    </p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-foreground">Token Otorisasi / API Key (Opsional)</label>
+                  <div className="space-y-1">
+                    <label className="font-medium text-foreground">
+                      Bearer Token / API Key (Opsional)
+                    </label>
                     <Input
-                      placeholder="Bearer token atau API Key jika server IT dilindungi otentikasi..."
+                      placeholder="Token otorisasi..."
                       value={tempExtConfig.apiKey || ""}
                       onChange={(e) =>
                         setTempExtConfig({ ...tempExtConfig, apiKey: e.target.value })
                       }
-                      className="h-9 text-xs font-mono"
+                      className="h-8 text-xs font-mono"
                     />
                   </div>
 
-                  {/* Test Ping Status Box */}
-                  <div className="pt-2">
+                  <div className="pt-1">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="font-semibold text-foreground text-[11px]">Uji Komunikasi Server</span>
+                      <span className="font-medium text-muted-foreground text-[11px]">
+                        Diagnostik Koneksi
+                      </span>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={handleTestPing}
                         disabled={pingStatus.testing}
-                        className="h-8 text-xs gap-1.5"
+                        className="h-7 text-xs gap-1.5"
                       >
                         {pingStatus.testing ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <Loader2 className="w-3 h-3 animate-spin" />
                         ) : (
-                          <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                          <RefreshCw className="w-3 h-3" />
                         )}
-                        <span>{pingStatus.testing ? "Memeriksa..." : "Uji Koneksi (Test Ping)"}</span>
+                        <span>Test Ping</span>
                       </Button>
                     </div>
 
                     {pingStatus.message && (
                       <div
-                        className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                        className={`p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
                           pingStatus.success
-                            ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
-                            : "bg-rose-50/50 dark:bg-rose-950/20 border-rose-500/30 text-rose-800 dark:text-rose-300"
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                            : "bg-rose-50 border-rose-200 text-rose-800"
                         }`}
                       >
                         {pingStatus.success ? (
-                          <Wifi className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <Wifi className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         ) : (
-                          <WifiOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <WifiOff className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         )}
-                        <div className="space-y-0.5">
-                          <p className="font-semibold">
-                            {pingStatus.success ? "Koneksi Berhasil" : "Koneksi Bermasalah"}
-                          </p>
-                          <p className="text-[11px] leading-relaxed">{pingStatus.message}</p>
-                        </div>
+                        <p className="text-[11px]">{pingStatus.message}</p>
                       </div>
                     )}
                   </div>
                 </div>
               </TabsContent>
 
-              {/* TAB 2: Koneksi QGIS Desktop */}
-              <TabsContent value="qgis" className="flex-1 overflow-y-auto p-5 space-y-4 m-0 text-xs">
-                <div className="space-y-3">
-                  <div className="p-3.5 rounded-xl border border-sky-500/20 bg-sky-50/50 dark:bg-sky-950/20 space-y-2">
-                    <p className="font-bold text-sky-900 dark:text-sky-200 text-xs flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-                      Cara 1: Sambung Live Feed SIMONA Langsung ke QGIS (Instan)
-                    </p>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      QGIS memuat layer titik material langsung via protokol GeoJSON:
-                    </p>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <Input
-                        readOnly
-                        value={qgisFeedUrl}
-                        className="h-8 text-[11px] font-mono bg-background"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        onClick={handleCopyQgisUrl}
-                        className="h-8 text-xs shrink-0 gap-1.5"
-                      >
-                        {copiedQgisUrl ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Disalin
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" /> Salin URL
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <ol className="list-decimal list-inside text-[11px] space-y-1 text-muted-foreground pt-1">
-                      <li>Buka <strong>QGIS Desktop</strong> di laptop kantor.</li>
-                      <li>Pilih menu <strong>Layer &rarr; Add Layer &rarr; Add Vector Layer...</strong></li>
-                      <li>Pilih <strong>Source Type: Protocol (HTTP(S), cloud, etc.)</strong>.</li>
-                      <li>Tempelkan URL di atas ke kolom <strong>URI</strong> &rarr; klik <strong>Add</strong>.</li>
-                    </ol>
+              <TabsContent
+                value="qgis"
+                className="flex-1 overflow-y-auto p-4 space-y-3 m-0 text-xs"
+              >
+                <div className="p-3 rounded-lg border border-border bg-muted/20 space-y-2">
+                  <p className="font-semibold text-foreground text-xs">
+                    Live GeoJSON Protocol Feed (QGIS Desktop)
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      readOnly
+                      value={qgisFeedUrl}
+                      className="h-8 text-[11px] font-mono bg-background"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleCopyQgisUrl}
+                      className="h-8 text-xs shrink-0 gap-1"
+                    >
+                      {copiedQgisUrl ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" /> Disalin
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" /> Salin
+                        </>
+                      )}
+                    </Button>
                   </div>
-
-                  <div className="p-3.5 rounded-xl border border-border bg-card space-y-2">
-                    <p className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                      <Database className="w-3.5 h-3.5 text-emerald-600" />
-                      Cara 2: Koneksi Native QGIS ke Database PostgreSQL Server IT
-                    </p>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Jika server IT sudah menjalankan PostgreSQL + PostGIS, Anda bisa mengedit data langsung dari QGIS:
-                    </p>
-                    <ul className="list-disc list-inside text-[11px] space-y-1 text-muted-foreground">
-                      <li>Di panel <strong>Browser</strong> sebelah kiri QGIS, klik kanan pada ikon <strong>PostGIS</strong> &rarr; pilih <strong>New Connection</strong>.</li>
-                      <li>Isi <strong>Host</strong> (IP server kantor), <strong>Port: 5432</strong>, <strong>Database</strong>, dan Akun PostgreSQL Anda.</li>
-                      <li>Klik <strong>Test Connection</strong>, lalu seret tabel <code>pdam_material_gis</code> ke kanvas peta.</li>
-                      <li>Gunakan <strong>Rule-based Symbology</strong>: Beri warna <strong>Hijau</strong> untuk <code>location_mismatch = false</code> dan <strong>Merah</strong> untuk <code>location_mismatch = true</code>.</li>
-                    </ul>
-                  </div>
+                  <ol className="list-decimal list-inside text-[11px] space-y-1 text-muted-foreground pt-1">
+                    <li>
+                      Buka <strong>QGIS Desktop</strong> &rarr;{" "}
+                      <strong>Layer &rarr; Add Vector Layer</strong>.
+                    </li>
+                    <li>
+                      Pilih <strong>Protocol: HTTP(S), cloud, etc.</strong> dan tipe{" "}
+                      <strong>GeoJSON</strong>.
+                    </li>
+                    <li>Tempelkan URI di atas lalu klik Add.</li>
+                  </ol>
                 </div>
               </TabsContent>
 
-              {/* TAB 3: Skema SQL PostGIS */}
-              <TabsContent value="sql" className="flex-1 overflow-y-auto p-5 space-y-3 m-0 text-xs">
+              <TabsContent
+                value="sql"
+                className="flex-1 overflow-y-auto p-4 space-y-2.5 m-0 text-xs"
+              >
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-foreground text-xs">Skrip DDL SQL PostgreSQL + PostGIS</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Jalankan skrip ini di pgAdmin / DBeaver pada server IT kantor Anda.
-                    </p>
-                  </div>
+                  <span className="font-semibold text-foreground text-xs">
+                    DDL Tabel Spasial PostGIS (EPSG:4326)
+                  </span>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     onClick={handleCopySql}
-                    className="h-8 text-xs gap-1.5 shrink-0"
+                    className="h-7 text-xs gap-1.5"
                   >
                     {copiedSql ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Disalin
+                        <Check className="w-3 h-3" /> Disalin
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" /> Salin Skrip SQL
+                        <Copy className="w-3 h-3" /> Salin SQL
                       </>
                     )}
                   </Button>
                 </div>
-
-                <div className="relative rounded-xl border border-border bg-zinc-950 p-3.5 text-zinc-100 font-mono text-[11px] overflow-x-auto leading-relaxed max-h-72">
+                <div className="rounded-lg border border-border bg-slate-950 p-3 text-slate-100 font-mono text-[11px] overflow-x-auto max-h-64">
                   <pre>{POSTGIS_SQL_SCHEMA}</pre>
                 </div>
-
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Tabel di atas memiliki kolom geometri <code>geom</code> bertipe Point EPSG:4326 yang otomatis dikenali oleh QGIS sebagai layer spasial dan mendukung pengeluaran format GeoJSON standar untuk web SIMONA.
-                </p>
               </TabsContent>
             </Tabs>
 
-            <DialogFooter className="p-3.5 border-t border-border bg-muted/20 flex items-center justify-between sm:justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground">
-                Status:{" "}
-                <strong>
-                  {tempExtConfig.enabled
-                    ? "Server IT Mandiri Aktif"
-                    : "Database Lokal SIMONA Aktif"}
-                </strong>
-              </p>
-              <div className="flex items-center gap-2">
+            <DialogFooter className="p-3 border-t border-border bg-muted/20 flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">
+                Status: {tempExtConfig.enabled ? "Server Eksternal Aktif" : "Database Lokal Aktif"}
+              </span>
+              <div className="flex items-center gap-1.5">
                 <Button
                   type="button"
                   variant="outline"
@@ -2353,15 +2275,15 @@ FROM pdam_material_gis;`;
                   onClick={() => setQgisDialogOpen(false)}
                   className="text-xs h-8"
                 >
-                  Tutup
+                  Batal
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   onClick={handleSaveExtConfig}
-                  className="text-xs h-8 bg-primary text-primary-foreground"
+                  className="text-xs h-8"
                 >
-                  Simpan & Terapkan
+                  Simpan
                 </Button>
               </div>
             </DialogFooter>
